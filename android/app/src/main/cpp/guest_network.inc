@@ -22,7 +22,9 @@ constexpr uint32_t wsaEinval=10022,wsaEwouldblock=10035,wsaEnotsock=10038,wsaEfa
     wsaEtimedout=10060,wsaEafnosupport=10047,wsaNotinitialised=10093,wsaHostNotFound=11001,wsaNoData=11004;
 constexpr char localHostName[]="nfsu2-android";
 // icmp: a Windows raw ICMP socket (ping) on an unprivileged Linux ping socket; see icmpReceive.
-struct Socket{int fd;bool guestNonBlocking=false,connecting=false,icmp=false;uint16_t icmpId=0;uint32_t recvTimeout=0,sendTimeout=0;};
+struct Socket{int fd;bool guestNonBlocking=false,connecting=false,icmp=false;uint16_t icmpId=0;uint32_t recvTimeout=0,sendTimeout=0;std::set<std::string> peersLogged;
+    struct Counter{uint32_t sentPackets=0,sentBytes=0,receivedPackets=0,receivedBytes=0;};
+    std::map<std::string,Counter> traffic;std::chrono::steady_clock::time_point nextSummary{};};
 std::map<uint32_t,Socket> sockets;
 uint32_t nextHandle=0x1000,startups=0,hostent=0;
 
@@ -123,6 +125,30 @@ void noteIcmpSend(Socket& socket,const void* data,uint32_t length){
     auto* bytes=static_cast<const uint8_t*>(data);
     if(socket.icmp&&length>=8)socket.icmpId=uint16_t(bytes[4]<<8|bytes[5]);
 }
+// Peer-to-peer diagnostics: the first datagrams of each socket and every hard error.
+std::string describe(const sockaddr_storage& address){
+    if(address.ss_family!=AF_INET)return "?";
+    auto* in=reinterpret_cast<const sockaddr_in*>(&address);char text[INET_ADDRSTRLEN]{};inet_ntop(AF_INET,&in->sin_addr,text,sizeof text);
+    return std::string(text)+":"+std::to_string(ntohs(in->sin_port));
+}
+// Logs each peer address a socket talks to the first time it appears (up to 32 per socket).
+void notePeer(Socket& socket,const char* direction,const std::string& peer,ssize_t bytes){
+    if(socket.peersLogged.size()>=32||!socket.peersLogged.insert(std::string(direction)+peer).second)return;
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: %s %s (primer paquete, %d bytes)",direction,peer.c_str(),int(bytes));
+}
+// Per-peer datagram counters, summarized every 5 s while a socket is active.
+void count(uint32_t handle,Socket& socket,const std::string& peer,bool sent,ssize_t bytes){
+    if(bytes<0)return;
+    auto& counter=socket.traffic[peer];
+    if(sent){++counter.sentPackets;counter.sentBytes+=uint32_t(bytes);}else{++counter.receivedPackets;counter.receivedBytes+=uint32_t(bytes);}
+    auto now=std::chrono::steady_clock::now();
+    if(now<socket.nextSummary)return;
+    socket.nextSummary=now+std::chrono::seconds(5);
+    for(auto& [address,value]:socket.traffic)
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: trafico %08x %s envia %u paq/%u B, recibe %u paq/%u B",handle,address.c_str(),value.sentPackets,value.sentBytes,value.receivedPackets,value.receivedBytes);
+    socket.traffic.clear();
+}
+bool hardError(ssize_t result){return result<0&&errno!=EAGAIN&&errno!=EWOULDBLOCK;}
 bool localName(const std::string& name){return name==localHostName||name=="localhost";}
 std::vector<in_addr> interfaceAddresses(bool includeLoopback){
     std::vector<in_addr> found;ifaddrs* list=nullptr;
@@ -195,7 +221,11 @@ void socketBind(){
     auto* socket=net::find(arg(0));if(!socket){ret(net::fail(net::wsaEnotsock),3);return;}
     sockaddr_storage address;socklen_t length=net::guestAddress(arg(1),arg(2),address);
     if(!length){ret(net::fail(net::wsaEfault),3);return;}
-    ret(::bind(socket->fd,reinterpret_cast<sockaddr*>(&address),length)?net::failErrno():0,3);
+    // A raw ICMP socket ignores the port; on a ping socket it is the echo id and low ones need privileges.
+    if(socket->icmp&&address.ss_family==AF_INET)reinterpret_cast<sockaddr_in*>(&address)->sin_port=0;
+    int status=::bind(socket->fd,reinterpret_cast<sockaddr*>(&address),length);int error=errno;
+    NFS_RUNTIME_LOG(status?ANDROID_LOG_WARN:ANDROID_LOG_INFO,"NFSU2","Winsock: bind %08x %s%s%s",arg(0),net::describe(address).c_str(),status?" fallo: ":"",status?std::strerror(error):"");
+    errno=error;ret(status?net::failErrno():0,3);
 }
 void socketListen(){
     auto* socket=net::find(arg(0));if(!socket){ret(net::fail(net::wsaEnotsock),2);return;}
@@ -247,6 +277,13 @@ void socketSendTo(){
     net::noteIcmpSend(*socket,data,length);
     ssize_t sent=net::blocking(*socket,POLLOUT,socket->sendTimeout,[&](int fd){
         return ::sendto(fd,data,length,int(flags&7)|MSG_NOSIGNAL,addressLength?reinterpret_cast<sockaddr*>(&address):nullptr,addressLength);});
+    socket=net::find(arg(0));  // the call may have waited with the machine released
+    if(socket){
+        int error=errno;
+        if(net::hardError(sent))NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: sendto %08x -> %s fallo: %s",arg(0),addressLength?net::describe(address).c_str():"(conectado)",std::strerror(error));
+        else if(sent>=0&&addressLength){net::notePeer(*socket,"envia a",net::describe(address),sent);net::count(arg(0),*socket,net::describe(address),true,sent);}
+        errno=error;
+    }
     ret(sent<0?net::failErrno():uint32_t(sent),6);
 }
 void socketRecvFrom();
@@ -273,6 +310,7 @@ void socketRecvFrom(){
             peerLength=sizeof peer;return ::recvfrom(fd,message.data(),message.size(),int(flags&2),reinterpret_cast<sockaddr*>(&peer),&peerLength);});
         if(received<0){ret(net::failErrno(),6);return;}
         message.resize(size_t(received));
+        if(auto* current=net::find(arg(0))){net::notePeer(*current,"ping: respuesta de",net::describe(peer),received);net::count(arg(0),*current,net::describe(peer),false,received);}
         auto packet=net::icmpPacket(*net::find(arg(0)),std::move(message),*reinterpret_cast<sockaddr_in*>(&peer));
         if(peerLength&&!net::storeAddress(address,lengthPointer,peer,std::min<socklen_t>(peerLength,16))){ret(net::fail(net::wsaEfault),6);return;}
         if(length)std::memcpy(data,packet.data(),std::min<size_t>(length,packet.size()));
@@ -282,7 +320,10 @@ void socketRecvFrom(){
     // MSG_TRUNC reports the full datagram size: Windows fails a short buffer with WSAEMSGSIZE.
     ssize_t received=net::blocking(*socket,POLLIN,socket->recvTimeout,[&](int fd){
         peerLength=sizeof peer;return ::recvfrom(fd,data,length,int(flags&3)|MSG_TRUNC,reinterpret_cast<sockaddr*>(&peer),&peerLength);});
+    if(net::hardError(received)){int error=errno;NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: recvfrom %08x fallo: %s",arg(0),std::strerror(error));errno=error;}
     if(received<0){ret(net::failErrno(),6);return;}
+    socket=net::find(arg(0));
+    if(socket&&peerLength){net::notePeer(*socket,"recibe de",net::describe(peer),received);net::count(arg(0),*socket,net::describe(peer),false,received);}
     if(peerLength&&!net::storeAddress(address,lengthPointer,peer,std::min<socklen_t>(peerLength,16))){ret(net::fail(net::wsaEfault),6);return;}
     if(uint32_t(received)>length){ret(net::fail(net::wsaEmsgsize),6);return;}
     ret(uint32_t(received),6);

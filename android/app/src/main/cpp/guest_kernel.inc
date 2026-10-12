@@ -309,7 +309,12 @@ void windowRect(){
     if(arg(0)!=desktopWindow){auto window=windows.find(arg(0));if(window==windows.end()){lastError=1400;ret(0,2);return;}auto& value=window->second;rectangle[0]=value.x;rectangle[1]=value.y;rectangle[2]=value.x+value.width;rectangle[3]=value.y+value.height;}
     std::memcpy(ptr(arg(1),16),rectangle,16);ret(1,2);
 }
-void cursorPosition(){uint32_t point[2]={0,0};std::memcpy(ptr(arg(0),8),point,8);ret(1,1);}
+// Screen position of the touch pointer (the game maps it through GetWindowRect/GetClientRect).
+void cursorPosition(){
+    auto point=pointerInWindow();int32_t screen[2]={point.first,point.second};
+    if(auto window=windows.find(activeWindow);window!=windows.end()){screen[0]+=window->second.x;screen[1]+=window->second.y;}
+    std::memcpy(ptr(arg(0),8),screen,8);ret(1,1);
+}
 void clientRect(){auto window=windows.find(arg(0));if(window==windows.end()){lastError=1400;ret(0,2);return;}int32_t rect[4]={0,0,window->second.width,window->second.height};std::memcpy(ptr(arg(1),16),rect,16);ret(1,2);}
 void loadIcon(){lastError=1813;ret(0,2);} // PE icon resources are not materialized as Android objects.
 void loadCursor(){
@@ -353,6 +358,7 @@ const std::map<std::string,recomp_func_t> windowFunctions={
     {"GetWindowLongA",getWindowLong},{"SetWindowLongA",setWindowLong},
     {"LoadIconA",loadIcon},{"LoadCursorA",loadCursor},
     {"GetDesktopWindow",desktopHandle},{"GetWindowRect",windowRect},
+    {"SetCapture",setCapture},{"ReleaseCapture",releaseCapture},
     {"GetClientRect",clientRect},{"GetCursorPos",cursorPosition},{"GetSystemMetrics",systemMetrics}
 };
 // Guest threads run one at a time under the machine lock, so plain accesses are atomic to them.

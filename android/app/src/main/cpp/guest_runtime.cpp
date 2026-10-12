@@ -1,3 +1,4 @@
+#include <set>
 #include <condition_variable>
 #include "guest_runtime.h"
 #include "android_resolution.h"
@@ -786,6 +787,11 @@ void setGuestFrameLimit(unsigned framesPerSecond){
 }
 void setGuestKey(unsigned scan,bool down){if(scan>=256)return;std::lock_guard<std::mutex> lock(inputMutex);if(bool(inputKeys[scan])==down)return;inputKeys[scan]=down?0x80:0;recordInputKey(scan,down);enqueueGuestKey(scan,down);}
 void clearGuestInput(){std::lock_guard<std::mutex> lock(inputMutex);for(unsigned scan=0;scan<256;++scan)if(inputKeys[scan]){recordInputKey(scan,false);enqueueGuestKey(scan,false);}inputKeys.fill(0);inputMouseButtons.fill(0);inputMouseX=inputMouseY=inputMouseZ=0;}
+void setGuestPointer(float x,float y,int phase){
+    guestPointerX=std::clamp(x,0.f,1.f);guestPointerY=std::clamp(y,0.f,1.f);
+    if(phase!=1){std::lock_guard<std::mutex> lock(inputMutex);inputMouseButtons[0]=phase==0?0x80:0;}
+    enqueueGuestPointer(phase);
+}
 void typeGuestText(const std::vector<uint32_t>& characters){enqueueGuestText(characters);}
 void setGuestOnlineServer(const std::string& host){std::lock_guard<MachineMutex> lock(machine);if(!memory&&!host.empty())onlineServer=host;}
 void setGuestWidescreen(bool enabled){std::lock_guard<MachineMutex> lock(machine);if(!memory)guestWidescreen=enabled;}

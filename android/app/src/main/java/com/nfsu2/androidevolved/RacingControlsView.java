@@ -24,10 +24,15 @@ import java.util.HashMap;
  */
 final class RacingControlsView extends View {
     interface Keys { void set(int scan, boolean down); }
+    /** Touches outside every control drive the game's mouse: x/y as fractions of the view, phase 0 down, 1 move, 2 up. */
+    interface Pointer { void touch(float x, float y, int phase); }
     // Special controls that do not map to a DirectInput scan code.
     private static final int MODE = -1, TEXT = -2, STICK = -3, EDIT = -5;
     private static final int ROUND = 0, PEDAL = 1, WHEEL = 2;
     private final Keys keys;
+    private Pointer pointer;
+    private int pointerId=-1;
+    private float pointerX, pointerY;
     private final Runnable textInput;
     private final Runnable configureTilt;
     private final Runnable configureFrameLimit;
@@ -387,7 +392,13 @@ final class RacingControlsView extends View {
         c.steering=Math.max(-1,Math.min(1,(x/scale-c.area.centerX())/(c.area.width()/2)));
         keys.set(0xcb,c.steering<-.18f);keys.set(0xcd,c.steering>.18f);
     }
-    void releaseAll() { for(Control c:fingers.values()) release(c); fingers.clear(); invalidate(); }
+    void setPointer(Pointer pointer) { this.pointer=pointer; }
+    private void pointerTouch(float x,float y,int phase) {
+        if(pointer==null||getWidth()==0||getHeight()==0)return;
+        pointerX=x;pointerY=y;pointer.touch(x/getWidth(),y/getHeight(),phase);
+    }
+    private void pointerRelease() { if(pointerId>=0){pointerId=-1;pointerTouch(pointerX,pointerY,2);} }
+    void releaseAll() { for(Control c:fingers.values()) release(c); fingers.clear(); pointerRelease(); invalidate(); }
     @Override public boolean onTouchEvent(MotionEvent e) {
         if(editing)return editTouch(e);
         int action=e.getActionMasked(),index=e.getActionIndex(),id=e.getPointerId(index);
@@ -398,10 +409,13 @@ final class RacingControlsView extends View {
         if(action==MotionEvent.ACTION_CANCEL) { releaseAll(); return true; }
         if(action==MotionEvent.ACTION_DOWN||action==MotionEvent.ACTION_POINTER_DOWN) {
             Control c=hit(e.getX(index),e.getY(index));if(c!=null&&c.scan==STICK&&c.held>0)c=null;
+            if(c==null&&pointerId<0&&hit(e.getX(index),e.getY(index))==null){pointerId=id;pointerTouch(e.getX(index),e.getY(index),0);}
             fingers.put(id,c);hold(c);if(c!=null&&c.scan==STICK)steer(c,e.getX(index));
         } else if(action==MotionEvent.ACTION_MOVE) {
             for(int i=0;i<e.getPointerCount();++i) {
-                int pointer=e.getPointerId(i); Control old=fingers.get(pointer),next=hit(e.getX(i),e.getY(i));
+                int pointer=e.getPointerId(i);
+                if(pointer==pointerId){pointerTouch(e.getX(i),e.getY(i),1);continue;}
+                Control old=fingers.get(pointer),next=hit(e.getX(i),e.getY(i));
                 if(old!=null&&old.scan==STICK) {steer(old,e.getX(i));continue;}
                 // Menu-style buttons do not slide; pedals and arrows follow the thumb.
                 if(old!=null&&old.scan<0)continue;
@@ -409,6 +423,7 @@ final class RacingControlsView extends View {
                 if(old!=next) {release(old);fingers.put(pointer,next);hold(next);if(next!=null&&next.scan==STICK)steer(next,e.getX(i));}
             }
         } else if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_POINTER_UP) {
+            if(id==pointerId){pointerId=-1;pointerTouch(e.getX(index),e.getY(index),2);}
             Control c=fingers.remove(id); release(c);
             if(c!=null && c==hit(e.getX(index),e.getY(index))) {
                 if(c.scan==MODE) {racing=!racing;layoutControls();}

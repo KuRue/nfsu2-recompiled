@@ -275,6 +275,9 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
     __android_log_print(ANDROID_LOG_INFO,"NFSU2","Android touch DIK=%02x down=%d",unsigned(scan),int(down));
 }
 extern "C" JNIEXPORT jboolean JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeDrivingControls(JNIEnv*,jclass){return guestDrivingControls()?JNI_TRUE:JNI_FALSE;}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativePointer(JNIEnv*,jclass,jfloat x,jfloat y,jint phase){
+    setGuestPointer(x,y,phase);
+}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeTypeText(JNIEnv* env,jclass,jstring value,jboolean replace){
     if(!value)return;
     const jchar* chars=env->GetStringChars(value,nullptr);if(!chars)return;

@@ -115,6 +115,7 @@ public final class GameActivity extends NativeActivity {
         }
     };
     private static native void nativeTypeText(String value, boolean replace);
+    private static native void nativePointer(float x, float y, int phase);
     private static native void nativeLanguage(String language);
     private static native void nativeResolution(int width, int height);
     private static native void nativeFrameLimit(int framesPerSecond);
@@ -213,6 +214,7 @@ public final class GameActivity extends NativeActivity {
                 ViewGroup.LayoutParams.WRAP_CONTENT, false);
         statusWindow.setTouchable(false);
         touchControls = new RacingControlsView(this, this::setTouchKey, this::showTextInput,this::showTiltOptions,this::showFrameLimitOptions);
+        touchControls.setPointer(GameActivity::nativePointer);
         controlsWindow = new PopupWindow(touchControls, ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT, false);
         controlsWindow.setClippingEnabled(false);
@@ -254,8 +256,21 @@ public final class GameActivity extends NativeActivity {
             controlsWindow.showAtLocation(getWindow().getDecorView(), Gravity.TOP | Gravity.START, 0, 0);
         }
     }
+    // LAN games announce and discover themselves with UDP broadcasts on port 9999;
+    // without this lock many devices drop incoming Wi-Fi broadcasts to save power.
+    private android.net.wifi.WifiManager.MulticastLock lanBroadcasts;
+    private void holdLanBroadcasts(boolean hold) {
+        if (lanBroadcasts == null) {
+            android.net.wifi.WifiManager wifi = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+            if (wifi == null) return;
+            lanBroadcasts = wifi.createMulticastLock("nfsu2-lan");
+            lanBroadcasts.setReferenceCounted(false);
+        }
+        if (hold) lanBroadcasts.acquire(); else lanBroadcasts.release();
+    }
     @Override protected void onPause() {
         foreground=false;
+        holdLanBroadcasts(false);
         updateTiltSensor();
         if(inputManager!=null)inputManager.unregisterInputDeviceListener(gamepadListener);
         if (statusWindow != null) statusWindow.dismiss();
@@ -266,6 +281,7 @@ public final class GameActivity extends NativeActivity {
     @Override protected void onResume() {
         super.onResume();
         foreground=true;
+        holdLanBroadcasts(true);
         updateTiltSensor();
         if(inputManager!=null){inputManager.registerInputDeviceListener(gamepadListener,null);updateGamepads();}
         if(touchControls!=null) {touchControls.removeCallbacks(updateControlMode);touchControls.post(updateControlMode);}
