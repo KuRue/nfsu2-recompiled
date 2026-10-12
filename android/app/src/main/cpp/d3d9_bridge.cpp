@@ -237,14 +237,25 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
             parameters.Windowed=p[8];parameters.EnableAutoDepthStencil=p[9];parameters.AutoDepthStencilFormat=static_cast<D3DFORMAT>(p[10]);parameters.Flags=p[11];parameters.FullScreen_RefreshRateInHz=p[12];parameters.PresentationInterval=D3DPRESENT_INTERVAL_IMMEDIATE;
             IDirect3DDevice9* device=nullptr;HRESULT status=d3d->CreateDevice(args[1],static_cast<D3DDEVTYPE>(args[2]),window,args[4],&parameters,&device);
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","D3D9 backbuffer %ux%u CreateDevice result=%08x",parameters.BackBufferWidth,parameters.BackBufferHeight,uint32_t(status));
-            write(args[6],SUCCEEDED(status)?wrap(device,Kind::Device):0);return status;
+            // Without a device the game carries on and faults later in its own
+            // code (PowerVR GE8322 reports): after its retry also fails, stop
+            // here with the reason instead.
+            static unsigned failures=0;failures=FAILED(status)?failures+1:0;
+            if(FAILED(status)&&failures<2)return status;
+            if(FAILED(status))throw std::runtime_error("La GPU no pudo crear el dispositivo grafico (Vulkan, CreateDevice "+
+                std::to_string(uint32_t(status))+"). Usa \"Probar driver\" en el launcher para ver que le falta.");
+            write(args[6],wrap(device,Kind::Device));return status;
         }
         }
     }
     if(kind==2){auto device=static_cast<IDirect3DDevice9*>(object);switch(method){
         case 9:{*argumentCount=2;D3DDEVICE_CREATION_PARAMETERS p{};HRESULT status=device->GetCreationParameters(&p);if(SUCCEEDED(status)){write(args[1],p.AdapterOrdinal);write(args[1]+4,p.DeviceType);write(args[1]+8,0xf0000301);write(args[1]+12,p.BehaviorFlags);}return status;}
         case 13:{*argumentCount=3;auto p=presentation(args[1]);IDirect3DSwapChain9* result=nullptr;HRESULT status=device->CreateAdditionalSwapChain(&p,&result);write(args[2],SUCCEEDED(status)?wrap(result,Kind::SwapChain):0);return status;}
-        case 16:{*argumentCount=2;auto p=presentation(args[1]);auto status=device->Reset(&p);
+        case 16:{*argumentCount=2;auto p=presentation(args[1]);HRESULT status;
+            // DXVK throws (DxvkError) when it cannot rebuild the swap chain; Windows
+            // would report a lost device, which the game retries (Mali G615 report).
+            try{status=device->Reset(&p);}catch(...){
+                NFS_RUNTIME_LOG(ANDROID_LOG_ERROR,"NFSU2","D3D9 Reset raised a DXVK error; reporting a lost device");status=D3DERR_DEVICELOST;}
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","D3D9 Reset backbuffer %ux%u result=%08x",p.BackBufferWidth,p.BackBufferHeight,uint32_t(status));return status;}
         case 23:{*argumentCount=9;if(args[8])throw std::runtime_error("Shared texture handle pending");if(!args[7])return D3DERR_INVALIDCALL;
             auto original=static_cast<D3DFORMAT>(args[5]),format=nativeTextureFormat(device,original,args[4],D3DRTYPE_TEXTURE);IDirect3DTexture9* texture=nullptr;

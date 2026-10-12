@@ -329,7 +329,18 @@ void systemMetrics(){
     }
     ret(value,1);
 }
+// MessageBoxA(hwnd, text, caption, type): no dialog on Android. The text goes to
+// the log (tester reports) and the box answers its default button.
+void messageBox(){
+    auto text=guestString(arg(1)),caption=guestString(arg(2));uint32_t type=arg(3)&0xf;
+    NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Guest MessageBoxA from %08x: [%s] %s",g_cur_func,caption.c_str(),text.c_str());
+    // MB_OK/OKCANCEL -> IDOK, ABORTRETRYIGNORE -> IDIGNORE, YESNO(CANCEL) -> IDYES,
+    // RETRYCANCEL -> IDCANCEL, CANCELTRYCONTINUE -> IDCONTINUE.
+    static constexpr uint32_t answers[]={1,1,5,6,6,2,11};
+    ret(type<7?answers[type]:1,4);
+}
 const std::map<std::string,recomp_func_t> windowFunctions={
+    {"MessageBoxA",messageBox},
     {"PeekMessageA",peekMessage},{"GetMessageA",getMessage},{"TranslateMessage",translateMessage},{"DispatchMessageA",dispatchMessage},
     {"PostMessageA",postMessage},{"PostQuitMessage",postQuitMessage},{"SendMessageA",sendMessage},
     {"wvsprintfA",winFormatA},

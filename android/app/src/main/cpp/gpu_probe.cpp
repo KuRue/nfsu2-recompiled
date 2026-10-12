@@ -75,19 +75,16 @@ std::string probe(const char* hooks, const char* temp, const char* directory, co
     auto require = [&](bool supported, const char* name) { if (!supported) missing.emplace_back(name); };
     require(props.apiVersion >= VK_API_VERSION_1_1, "Vulkan 1.1");
     require(hasExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME), "VK_KHR_swapchain");
-    // Enabled unconditionally by the d3d9 device in this DXVK build.
+    // Enabled unconditionally by the d3d9 device in this DXVK build (clip/cull distance,
+    // geometry shaders and sample-rate shading are optional here: Mali/PowerVR lack them).
     require(features.robustBufferAccess, "robustBufferAccess");
     require(features.fullDrawIndexUint32, "fullDrawIndexUint32");
     require(features.imageCubeArray, "imageCubeArray");
     require(features.independentBlend, "independentBlend");
-    require(features.geometryShader, "geometryShader");
-    require(features.sampleRateShading, "sampleRateShading");
     require(features.depthClamp, "depthClamp");
     require(features.depthBiasClamp, "depthBiasClamp");
     require(features.fillModeNonSolid, "fillModeNonSolid");
     require(features.occlusionQueryPrecise, "occlusionQueryPrecise");
-    require(features.shaderClipDistance, "shaderClipDistance");
-    require(features.shaderCullDistance, "shaderCullDistance");
     require(features.shaderStorageImageWriteWithoutFormat, "shaderStorageImageWriteWithoutFormat");
 
     // DXT1/3/5 textures: on the GPU when BC is supported, otherwise decoded on the CPU (slower).
