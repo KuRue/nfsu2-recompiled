@@ -119,6 +119,7 @@ public final class GameActivity extends NativeActivity {
     private static native void nativeResolution(int width, int height);
     private static native void nativeFrameLimit(int framesPerSecond);
     private static native void nativeWidescreen(boolean enabled);
+    private static native void nativeOnlineServer(String host);
     private static native void nativeGamepadConnected(boolean connected);
     private static native void nativeMinimapTop(boolean top);
     private static native void nativeBackBuffers(int count);
@@ -138,9 +139,9 @@ public final class GameActivity extends NativeActivity {
     private void showTextInput() {
         EditText name = new EditText(this);
         name.setSingleLine(true);
-        name.setHint("Nombre del perfil");
-        name.setFilters(new InputFilter[]{new InputFilter.LengthFilter(16)});
-        name.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS |
+        name.setHint("Nombre, correo o contraseña");
+        name.setFilters(new InputFilter[]{new InputFilter.LengthFilter(40)});
+        name.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD |
                 InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         name.setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         CheckBox replace = new CheckBox(this);
@@ -155,8 +156,8 @@ public final class GameActivity extends NativeActivity {
                 .create();
         dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(button -> {
             String value = name.getText().toString();
-            if (value.isEmpty() || !value.matches("[A-Za-z0-9 ]{1,16}")) {
-                name.setError("Usa de 1 a 16 letras sin tildes, números o espacios");
+            if (value.isEmpty() || !value.matches("[A-Za-z0-9 .,=/;_+?:!@#$%&*()-]{1,40}")) {
+                name.setError("Hasta 40 caracteres: letras sin tildes, números y . , - _ @ + ! # $ % & * ( ) = ? / ; :");
                 return;
             }
             nativeTypeText(value, replace.isChecked());
@@ -192,6 +193,8 @@ public final class GameActivity extends NativeActivity {
         nativeLanguage(language != null ? language : GameOptions.language(this));
         nativeFrameLimit(launch.getIntExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS))));
         nativeWidescreen(launch.getBooleanExtra("widescreen", GameOptions.get(this, GameOptions.WIDESCREEN).equals("on")));
+        String server = launch.getStringExtra("onlineServer");
+        nativeOnlineServer(GameOptions.validServer(server) ? server : GameOptions.onlineServer(this));
         nativeMinimapTop(launch.getBooleanExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top")));
         nativeBackBuffers(launch.getIntExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY))));
         nativeCpuTextures(launch.getBooleanExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu")));

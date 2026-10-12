@@ -355,6 +355,9 @@ const std::map<std::string,recomp_func_t> windowFunctions={
     {"GetDesktopWindow",desktopHandle},{"GetWindowRect",windowRect},
     {"GetClientRect",clientRect},{"GetCursorPos",cursorPosition},{"GetSystemMetrics",systemMetrics}
 };
+// Guest threads run one at a time under the machine lock, so plain accesses are atomic to them.
+void interlockedExchange(){uint32_t target=arg(0),old=read32(target);write32(target,arg(1));ret(old,2);}
+void interlockedCompareExchange(){uint32_t target=arg(0),old=read32(target);if(old==arg(2))write32(target,arg(1));ret(old,3);}
 const std::map<std::string,recomp_func_t> kernelFunctions={
     {"IsBadReadPtr",isBadReadPtr},{"IsBadWritePtr",isBadWritePtr},{"VirtualProtect",virtualProtect},
     {"CreateMutexA",createMutex},{"ReleaseMutex",releaseMutex},
@@ -364,7 +367,8 @@ const std::map<std::string,recomp_func_t> kernelFunctions={
     {"LoadLibraryA",loadLibrary},{"FreeLibrary",freeLibrary},
     {"SetErrorMode",setErrorMode},
     {"CreateEventA",createEvent},{"SetEvent",setEvent},{"ResetEvent",resetEvent},
-    {"CreateThread",createThread},{"ResumeThread",resumeThread},{"GetExitCodeThread",threadExitCode},{"WaitForSingleObject",waitThread},{"SetThreadPriority",setThreadPriority},
+    {"CreateThread",createThread},{"ResumeThread",resumeThread},{"GetExitCodeThread",threadExitCode},{"WaitForSingleObject",waitThread},{"WaitForMultipleObjects",waitMultiple},{"ExitThread",exitThread},
+    {"InterlockedExchange",interlockedExchange},{"InterlockedCompareExchange",interlockedCompareExchange},{"SetThreadPriority",setThreadPriority},
     {"CreateToolhelp32Snapshot",toolhelpSnapshot},{"Module32First",moduleFirst},{"Module32Next",moduleNext},{"CloseHandle",closeHandle},
     {"Process32First",processFirst},{"Process32Next",processNext},
     {"DuplicateHandle",duplicateHandle},

@@ -279,25 +279,11 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
     if(!value)return;
     const jchar* chars=env->GetStringChars(value,nullptr);if(!chars)return;
     jsize length=env->GetStringLength(value);
-    static constexpr unsigned letterScans[]={0x1e,0x30,0x2e,0x20,0x12,0x21,0x22,0x23,0x17,0x24,0x25,0x26,0x32,0x31,0x18,0x19,0x10,0x13,0x1f,0x14,0x16,0x2f,0x11,0x2d,0x15,0x2c};
-    std::vector<unsigned> sequence;if(replace==JNI_TRUE)sequence.insert(sequence.end(),8,0xe);
-    for(jsize i=0;i<length&&i<16;++i){
-        unsigned ch=chars[i],scan=0;
-        if(ch>='a'&&ch<='z')ch-='a'-'A';
-        if(ch>='A'&&ch<='Z')scan=letterScans[ch-'A'];
-        else if(ch>='0'&&ch<='9')scan=ch=='0'?0xb:ch-'0'+1;
-        else if(ch==' ')scan=0x39;
-        if(scan)sequence.push_back(scan);
-    }
+    std::vector<uint32_t> characters;if(replace==JNI_TRUE)characters.assign(40,8);
+    for(jsize i=0;i<length&&i<40;++i)if(chars[i]>=0x20&&chars[i]<0x7f)characters.push_back(chars[i]);
     env->ReleaseStringChars(value,chars);
-    std::thread([sequence=std::move(sequence),length]{
-        std::this_thread::sleep_for(std::chrono::milliseconds(180));
-        for(unsigned scan:sequence){
-            setGuestKey(scan,true);std::this_thread::sleep_for(std::chrono::milliseconds(70));
-            setGuestKey(scan,false);std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-        __android_log_print(ANDROID_LOG_INFO,"NFSU2","Android text delivered to guest: %d characters",int(length));
-    }).detach();
+    typeGuestText(characters);
+    __android_log_print(ANDROID_LOG_INFO,"NFSU2","Android text delivered to guest: %d characters",int(length));
 }
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeLanguage(JNIEnv* env,jclass,jstring language){
     const char* value=env->GetStringUTFChars(language,nullptr);if(!value)return;
@@ -308,6 +294,9 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadConnected(JNIEnv*,jclass,jboolean connected){setGuestPadConnected(connected==JNI_TRUE);}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeWidescreen(JNIEnv*,jclass,jboolean enabled){setGuestWidescreen(enabled==JNI_TRUE);}
 // Minimap at the top-left: the bottom-left corner sits under the steering thumb.
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeOnlineServer(JNIEnv* env,jclass,jstring host){
+    const char* text=env->GetStringUTFChars(host,nullptr);setGuestOnlineServer(text?text:"");env->ReleaseStringUTFChars(host,text);
+}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeMinimapTop(JNIEnv*,jclass,jboolean top){nfs_widescreen_set_minimap_offset(top==JNI_TRUE?-230.0f:0.0f);}
 static bool compatCpuTextures=false;static unsigned compatBackBuffers=2;
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeBackBuffers(JNIEnv*,jclass,jint count){

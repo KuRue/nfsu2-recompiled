@@ -264,12 +264,14 @@ void d3dDispatch(){uint32_t args[32];std::memcpy(args,ptr(g_esp+4,sizeof args),s
             frames=0;since=now;bridgeTime=presentTime=std::chrono::nanoseconds{};bridgeCalls=0;}
     }ret(result,count);}
 #endif
-uint32_t callGuest(uint32_t va,const std::vector<uint32_t>& args,uint32_t cleanup=0);
+// threadStart: a thread procedure may be stdcall or cdecl; Windows exits the thread right after either.
+uint32_t callGuest(uint32_t va,const std::vector<uint32_t>& args,uint32_t cleanup=0,bool threadStart=false);
 #include "guest_threads.inc"
 #include "guest_files.inc"
 #include "guest_kernel.inc"
 #include "guest_input.inc"
 #include "guest_audio.inc"
+#include "guest_network.inc"
 void testGuestScheduling(){
     State original;original.save();uint32_t savedError=lastError,savedTLS=tlsValues[1087];
     g_eax=0x11223344;g_fs_base=0x21000000;g_st[0]=123.5;g_xmm[7].u64[0]=0x123456789abcdef0ull;
@@ -306,6 +308,10 @@ recomp_func_t resolveFunction(const std::string& dll, const std::string& name) {
     if(dll=="advapi32.dll"&&name=="RegCloseKey")return regCloseKey;
     if(dll=="advapi32.dll"&&name=="RegQueryValueExA")return regQueryValueExA;
     if(dll=="advapi32.dll"&&name=="RegSetValueExA")return regSetValueExA;
+    if(dll=="ws2_32.dll"||dll=="wsock32.dll"){auto found=networkFunctions.find(name);if(found!=networkFunctions.end())return found->second;}
+    if(dll=="netapi32.dll"&&name=="Netbios")return netbios;
+    if(dll=="tapi32.dll"&&name=="lineInitialize")return lineInitialize;
+    if(dll=="tapi32.dll"&&name=="lineShutdown")return lineShutdown;
     if(dll=="user32.dll") {auto found=windowFunctions.find(name);if(found!=windowFunctions.end())return found->second;}
     if(dll=="winmm.dll") {auto found=timerFunctions.find(name);if(found!=timerFunctions.end())return found->second;}
     if (dll == "kernel32.dll") {
@@ -407,7 +413,7 @@ void loadImage(const char* path) {
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest PE mapped: base=%08x size=%08x entry=%08x; %zu imports bound; %u lifted functions",
         imageBase,imageSize,entry,imports.size(),recomp_dispatch_count);
 }
-uint32_t callGuest(uint32_t va, const std::vector<uint32_t>& args, uint32_t cleanup) {
+uint32_t callGuest(uint32_t va, const std::vector<uint32_t>& args, uint32_t cleanup, bool threadStart) {
     State saved; saved.save();
     try {
         recomp_func_t fn=recomp_lookup_manual(va);if(!fn)fn=recomp_lookup(va);
@@ -416,7 +422,7 @@ uint32_t callGuest(uint32_t va, const std::vector<uint32_t>& args, uint32_t clea
         for (auto it=args.rbegin();it!=args.rend();++it) { g_esp-=4; write32(g_esp,*it); }
         g_esp-=4; write32(g_esp,RECOMP_RETADDR);
         fn(); g_esp+=cleanup;
-        if (g_esp!=saved.esp) throw GuestStop("Guest call stack imbalance at " + hex(va));
+        if (g_esp!=saved.esp&&!(threadStart&&g_esp+4u*uint32_t(args.size())==saved.esp)) throw GuestStop("Guest call stack imbalance at " + hex(va));
         uint32_t result=g_eax; saved.load(); return result;
     } catch (...) { saved.load(); throw; }
 }
@@ -780,6 +786,8 @@ void setGuestFrameLimit(unsigned framesPerSecond){
 }
 void setGuestKey(unsigned scan,bool down){if(scan>=256)return;std::lock_guard<std::mutex> lock(inputMutex);if(bool(inputKeys[scan])==down)return;inputKeys[scan]=down?0x80:0;recordInputKey(scan,down);enqueueGuestKey(scan,down);}
 void clearGuestInput(){std::lock_guard<std::mutex> lock(inputMutex);for(unsigned scan=0;scan<256;++scan)if(inputKeys[scan]){recordInputKey(scan,false);enqueueGuestKey(scan,false);}inputKeys.fill(0);inputMouseButtons.fill(0);inputMouseX=inputMouseY=inputMouseZ=0;}
+void typeGuestText(const std::vector<uint32_t>& characters){enqueueGuestText(characters);}
+void setGuestOnlineServer(const std::string& host){std::lock_guard<MachineMutex> lock(machine);if(!memory&&!host.empty())onlineServer=host;}
 void setGuestWidescreen(bool enabled){std::lock_guard<MachineMutex> lock(machine);if(!memory)guestWidescreen=enabled;}
 void setGuestLanguage(const char* language){
     std::lock_guard<MachineMutex> lock(machine);if(memory)return;

@@ -191,6 +191,7 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Idioma", languageLabel(), this::chooseLanguage));
         for (GameOptions.Option option : GameOptions.ALL)
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
+        optionsList.addView(optionRow("Servidor online", GameOptions.onlineServer(this), this::chooseOnlineServer));
         optionsList.addView(optionRow("Buscar actualizaciones",
                 checkingUpdates ? "Comprobando GitHub…" : "Versión " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
         optionsList.addView(optionRow("Reportar un problema", "Log completo a GitHub", () -> prepareReport(null)));
@@ -237,6 +238,32 @@ public final class LauncherActivity extends Activity {
                     GameOptions.set(this, option.key, option.values[which]);
                     dialog.dismiss(); refreshOptions();
                 }).setNegativeButton("Cancelar", null).show();
+    }
+
+    private void chooseOnlineServer() {
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setSingleLine(true);
+        input.setText(GameOptions.onlineServer(this));
+        input.setSelection(input.getText().length());
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        android.widget.FrameLayout box = new android.widget.FrameLayout(this);
+        int pad = (int) (20 * getResources().getDisplayMetrics().density);
+        box.setPadding(pad, pad / 2, pad, 0);
+        box.addView(input);
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Servidor online")
+                .setMessage("El modo online del juego (EA Nation) se conecta a este servidor de la comunidad en lugar de los servidores de EA, ya cerrados.")
+                .setView(box)
+                .setPositiveButton("Guardar", (dialog, which) -> {
+                    String value = input.getText().toString().trim();
+                    if (!GameOptions.validServer(value)) { message("Servidor online", "\"" + value + "\" no es un nombre de servidor válido."); return; }
+                    GameOptions.prefs(this).edit().putString(GameOptions.ONLINE_SERVER, value).apply();
+                    refreshOptions();
+                })
+                .setNeutralButton("Restaurar", (dialog, which) -> {
+                    GameOptions.prefs(this).edit().remove(GameOptions.ONLINE_SERVER).apply();
+                    refreshOptions();
+                })
+                .setNegativeButton("Cancelar", null).show();
     }
 
     private void chooseDriver() {
@@ -422,6 +449,7 @@ public final class LauncherActivity extends Activity {
                 .putExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top"))
                 .putExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY)))
                 .putExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu"))
+                .putExtra("onlineServer", GameOptions.onlineServer(this))
                 .putExtra("driverLoader", loader));
     }
 

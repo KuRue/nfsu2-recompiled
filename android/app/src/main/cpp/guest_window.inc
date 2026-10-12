@@ -90,6 +90,12 @@ void enqueueGuestKey(unsigned scan,bool down){
     if(!key)return;uint32_t flags=1|((scan&0x7f)<<16)|((scan&0x80)?1u<<24:0)|(!down?0xc0000000u:0);
     std::lock_guard<std::mutex> lock(messageMutex);windowMessages.push_back({0,down?0x100u:0x101u,key,flags,messageTime()});
 }
+// Android text entry: the game's window procedure reads typed text from WM_CHAR
+// (wParam is the character as-is, 8 = backspace), so post the characters directly.
+void enqueueGuestText(const std::vector<uint32_t>& characters){
+    std::lock_guard<std::mutex> lock(messageMutex);
+    for(uint32_t ch:characters)windowMessages.push_back({0,0x102u,ch,1u,messageTime()});
+}
 bool takeWindowMessage(uint32_t output,uint32_t handle,uint32_t minimum,uint32_t maximum,bool remove){
     std::lock_guard<std::mutex> lock(messageMutex);
     for(auto it=windowMessages.begin();it!=windowMessages.end();++it){

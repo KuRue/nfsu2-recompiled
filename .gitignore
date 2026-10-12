@@ -28,3 +28,6 @@ work/
 *.i64
 *.gzf
 *.dxvk-cache
+
+# Third-party online mod binaries (local reference only)
+onlinemod/
