@@ -215,12 +215,19 @@ void getVersion() {
     if (bytes==156) { auto* p=static_cast<unsigned char*>(ptr(out+148,8)); p[6]=1; }
     ret(1,1);
 }
+// guest_modules.inc (game DLLs run as lifted code) needs callGuest, so it comes later.
+uint32_t loadGuestModule(const std::string& name);
+bool freeGuestModule(uint32_t handle);
+uint32_t guestModuleHandle(const std::string& name);
+bool guestModuleExport(uint32_t handle,const std::string& name,uint32_t& va);
+bool isGuestModule(uint32_t handle);
 void moduleHandle() {
     if(!arg(0)) { ret(imageBase,1); return; }
     auto name=lower(guestString(arg(0)));
     auto separator=name.find_last_of("/\\"); if(separator!=std::string::npos) name=name.substr(separator+1);
     if(name=="speed2.exe") { ret(imageBase,1); return; }
     if(name.find('.')==std::string::npos) name+=".dll";
+    if(uint32_t loaded=guestModuleHandle(name)) { ret(loaded,1); return; }
     auto module=modules.find(name);
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Module lookup %s",name.c_str());
     if(module==modules.end()) lastError=126;
@@ -334,8 +341,9 @@ recomp_func_t resolveFunction(const std::string& dll, const std::string& name) {
 void getProcAddress() {
     uint32_t module=arg(0),namePointer=arg(1);
     auto found=std::find_if(modules.begin(),modules.end(),[&](auto& m){return m.second==module;});
-    if(found==modules.end()) { lastError=126; ret(0,2); return; }
     auto name=namePointer<=0xffff?"#"+std::to_string(namePointer):guestString(namePointer);
+    if(uint32_t va;found==modules.end()&&guestModuleExport(module,name,va)) { ret(va,2); return; }
+    if(found==modules.end()) { lastError=isGuestModule(module)?127:126; ret(0,2); return; }
     auto full=found->first+"!"+name;
     for(uint32_t i=0;i<imports.size();++i) if(imports[i].name==full) { ret(importBase+i*16,2); return; }
     // Only advertise exports that are actually implemented, not permissive stubs.
@@ -349,15 +357,44 @@ template<class T> T fileStruct(const std::vector<unsigned char>& file, uint64_t 
     if (offset > file.size() || sizeof(T) > file.size()-offset) throw GuestStop("Truncated PE structure");
     T value{}; std::memcpy(&value,file.data()+offset,sizeof value); return value;
 }
-void imageRange(uint32_t rva, uint64_t bytes) {
-    if (rva > imageSize || bytes > uint64_t(imageSize)-rva) throw GuestStop("PE image range invalid");
+void moduleRange(uint32_t size, uint32_t rva, uint64_t bytes) {
+    if (rva > size || bytes > uint64_t(size)-rva) throw GuestStop("PE image range invalid");
 }
-std::string imageString(uint32_t rva) {
-    imageRange(rva,1); std::string value;
-    for (uint32_t i=rva; i<imageSize && value.size()<512; ++i) {
-        char c = *static_cast<char*>(ptr(imageBase+i,1)); if (!c) return value; value.push_back(c);
+std::string moduleString(uint32_t base, uint32_t size, uint32_t rva) {
+    moduleRange(size,rva,1); std::string value;
+    for (uint32_t i=rva; i<size && value.size()<512; ++i) {
+        char c = *static_cast<char*>(ptr(base+i,1)); if (!c) return value; value.push_back(c);
     }
     throw GuestStop("Unterminated PE import name");
+}
+void imageRange(uint32_t rva, uint64_t bytes) { moduleRange(imageSize,rva,bytes); }
+// Writes an import token into every IAT slot of a mapped image (SPEED2.EXE or a game DLL).
+void bindImports(uint32_t base, uint32_t size, uint32_t directoryRva, uint32_t directorySize) {
+    moduleRange(size,directoryRva,directorySize);
+    bool terminated=false;
+    for (uint32_t offset=0; uint64_t(offset)+sizeof(pe_import_descriptor)<=directorySize; offset+=sizeof(pe_import_descriptor)) {
+        pe_import_descriptor descriptor{};
+        std::memcpy(&descriptor,ptr(base+directoryRva+offset,sizeof descriptor),sizeof descriptor);
+        if (!descriptor.Name && !descriptor.FirstThunk) { terminated=true; break; }
+        auto dll=moduleString(base,size,descriptor.Name);
+        std::transform(dll.begin(),dll.end(),dll.begin(),[](unsigned char c){return char(std::tolower(c));});
+        if(!modules.count(dll)) modules[dll]=0x71000000u+uint32_t(modules.size())*0x10000u;
+        uint32_t names=descriptor.OriginalFirstThunk ? descriptor.OriginalFirstThunk : descriptor.FirstThunk;
+        for (uint32_t i=0;;++i) {
+            uint64_t nameRva=uint64_t(names)+i*4ull, iatRva=uint64_t(descriptor.FirstThunk)+i*4ull;
+            if (nameRva>UINT32_MAX || iatRva>UINT32_MAX) throw GuestStop("PE thunk overflow");
+            moduleRange(size,uint32_t(nameRva),4); moduleRange(size,uint32_t(iatRva),4);
+            uint32_t thunk=read32(base+uint32_t(nameRva)); if (!thunk) break;
+            std::string name;
+            if (thunk&PE_ORDINAL_FLAG) name="#"+std::to_string(thunk&0xffff);
+            else { moduleRange(size,thunk,3); name=moduleString(base,size,thunk+2); }
+            if (imports.size()>=4096) throw GuestStop("Too many PE imports");
+            uint32_t va=importBase+uint32_t(imports.size())*16;
+            imports.push_back({dll+"!"+name,resolveFunction(dll,name)});
+            write32(base+uint32_t(iatRva),va);
+        }
+    }
+    if (!terminated) throw GuestStop("Unterminated PE import descriptors");
 }
 void loadImage(const char* path) {
     std::ifstream stream(path,std::ios::binary);
@@ -386,31 +423,8 @@ void loadImage(const char* path) {
     entry=imageBase+opt.AddressOfEntryPoint;
     // Guest VAs stay fixed; the 64-bit host base is ADDR's offset. No PE
     // relocation toward the host address and no executable x86 mapping.
-    auto directory=opt.DataDirectory[PE_DIR_IMPORT]; imageRange(directory.VirtualAddress,directory.Size);
-    bool terminated=false;
-    for (uint32_t offset=0; uint64_t(offset)+sizeof(pe_import_descriptor)<=directory.Size; offset+=sizeof(pe_import_descriptor)) {
-        pe_import_descriptor descriptor{};
-        std::memcpy(&descriptor,ptr(imageBase+directory.VirtualAddress+offset,sizeof descriptor),sizeof descriptor);
-        if (!descriptor.Name && !descriptor.FirstThunk) { terminated=true; break; }
-        auto dll=imageString(descriptor.Name);
-        std::transform(dll.begin(),dll.end(),dll.begin(),[](unsigned char c){return char(std::tolower(c));});
-        if(!modules.count(dll)) modules[dll]=0x71000000u+uint32_t(modules.size())*0x10000u;
-        uint32_t names=descriptor.OriginalFirstThunk ? descriptor.OriginalFirstThunk : descriptor.FirstThunk;
-        for (uint32_t i=0;;++i) {
-            uint64_t nameRva=uint64_t(names)+i*4ull, iatRva=uint64_t(descriptor.FirstThunk)+i*4ull;
-            if (nameRva>UINT32_MAX || iatRva>UINT32_MAX) throw GuestStop("PE thunk overflow");
-            imageRange(uint32_t(nameRva),4); imageRange(uint32_t(iatRva),4);
-            uint32_t thunk=read32(imageBase+uint32_t(nameRva)); if (!thunk) break;
-            std::string name;
-            if (thunk&PE_ORDINAL_FLAG) name="#"+std::to_string(thunk&0xffff);
-            else { imageRange(thunk,3); name=imageString(thunk+2); }
-            if (imports.size()>=4096) throw GuestStop("Too many PE imports");
-            uint32_t va=importBase+uint32_t(imports.size())*16;
-            imports.push_back({dll+"!"+name,resolveFunction(dll,name)});
-            write32(imageBase+uint32_t(iatRva),va);
-        }
-    }
-    if (!terminated) throw GuestStop("Unterminated PE import descriptors");
+    auto directory=opt.DataDirectory[PE_DIR_IMPORT];
+    bindImports(imageBase,imageSize,directory.VirtualAddress,directory.Size);
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest PE mapped: base=%08x size=%08x entry=%08x; %zu imports bound; %u lifted functions",
         imageBase,imageSize,entry,imports.size(),recomp_dispatch_count);
 }
@@ -427,6 +441,7 @@ uint32_t callGuest(uint32_t va, const std::vector<uint32_t>& args, uint32_t clea
         uint32_t result=g_eax; saved.load(); return result;
     } catch (...) { saved.load(); throw; }
 }
+#include "guest_modules.inc"
 void testLiftedCopy() {
     uint32_t source=allocate(128), dest=allocate(128);
     for (unsigned i=0;i<128;++i) static_cast<unsigned char*>(ptr(source,128))[i]=static_cast<unsigned char>(i^0xa5);
@@ -581,6 +596,10 @@ void testGeneratedCallbacks(){
 }
 } // namespace
 
+#ifdef NFS_SERVER_DLL
+extern "C" const recomp_dispatch_entry_t server_recomp_dispatch_table[];
+extern "C" const uint32_t server_recomp_dispatch_count;
+#endif
 namespace {
 // Every indirect call and virtual method resolves its target here, so use an
 // open-addressing table (built once, read-only afterwards) instead of a binary
@@ -590,13 +609,21 @@ struct DispatchHash {
     std::unique_ptr<uint32_t[]> keys{new uint32_t[slots]()};
     std::unique_ptr<recomp_func_t[]> funcs{new recomp_func_t[slots]()};
     static uint32_t slot(uint32_t va){return (va*0x9e3779b1u)>>16;}
-    DispatchHash(){
-        static_assert(slots>2*27742,"dispatch hash load factor");
-        for(uint32_t i=0;i<recomp_dispatch_count;++i){
-            uint32_t va=recomp_dispatch_table[i].address,s=slot(va);
+    void add(const recomp_dispatch_entry_t* table,uint32_t count){
+        for(uint32_t i=0;i<count;++i){
+            uint32_t va=table[i].address,s=slot(va);
             while(keys[s])s=(s+1)&(slots-1);
-            keys[s]=va;funcs[s]=recomp_dispatch_table[i].func;
+            keys[s]=va;funcs[s]=table[i].func;
         }
+    }
+    DispatchHash(){
+        static_assert(slots>2*(27742+1531),"dispatch hash load factor");
+        add(recomp_dispatch_table,recomp_dispatch_count);
+#ifdef NFS_SERVER_DLL
+        add(server_recomp_dispatch_table,server_recomp_dispatch_count);
+#endif
+        uint32_t used=0;for(uint32_t i=0;i<slots;++i)used+=keys[i]!=0;
+        if(used>slots/2)throw GuestStop("Dispatch hash over half full: "+std::to_string(used));
     }
     recomp_func_t find(uint32_t va)const{
         if(!va)return nullptr;
@@ -606,13 +633,8 @@ struct DispatchHash {
 };
 }
 extern "C" recomp_func_t recomp_lookup(uint32_t va) {
-    if(recomp_dispatch_count<DispatchHash::slots/2){static const DispatchHash hash;return hash.find(va);}
-    uint32_t lo=0,hi=recomp_dispatch_count;
-    while (lo<hi) { uint32_t mid=lo+(hi-lo)/2, address=recomp_dispatch_table[mid].address;
-        if (address==va) return recomp_dispatch_table[mid].func;
-        if (address<va) lo=mid+1; else hi=mid;
-    }
-    return nullptr;
+    static const DispatchHash hash;
+    return hash.find(va);
 }
 extern "C" recomp_func_t recomp_lookup_manual(uint32_t va) {
     if(timerTestActive&&va==timerTestAddress)return timerTestCallback;

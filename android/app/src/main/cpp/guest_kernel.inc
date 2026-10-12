@@ -83,10 +83,12 @@ std::map<uint32_t,uint32_t> moduleReferences;
 void loadLibrary(){
     auto name=lower(guestString(arg(0)));auto slash=name.find_last_of("/\\");if(slash!=std::string::npos)name=name.substr(slash+1);if(name.find('.')==std::string::npos)name+=".dll";
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest LoadLibrary %s",name.c_str());
-    auto module=modules.find(name);if(module==modules.end()){lastError=126;ret(0,1);return;}
+    auto module=modules.find(name);
+    if(module==modules.end()){uint32_t loaded=loadGuestModule(name);if(!loaded)lastError=126;ret(loaded,1);return;}
     auto& count=moduleReferences[module->second];if(!count)count=1;++count;ret(module->second,1);
 }
-void freeLibrary(){auto module=std::find_if(modules.begin(),modules.end(),[](const auto& item){return item.second==arg(0);});if(module==modules.end()){lastError=6;ret(0,1);return;}
+void freeLibrary(){auto module=std::find_if(modules.begin(),modules.end(),[](const auto& item){return item.second==arg(0);});
+    if(module==modules.end()){if(freeGuestModule(arg(0))){ret(1,1);return;}lastError=6;ret(0,1);return;}
     auto found=moduleReferences.find(arg(0));if(found!=moduleReferences.end()&&found->second>1)--found->second;ret(1,1);}
 void environmentA() {
     if(!guestEnvironmentA) {std::string s="PATH=C:\\nfsu2";s.push_back(0);s+="TEMP=C:\\nfsu2";s.push_back(0);s.push_back(0);guestEnvironmentA=ansiString(s);}
@@ -363,6 +365,8 @@ const std::map<std::string,recomp_func_t> windowFunctions={
 };
 // Guest threads run one at a time under the machine lock, so plain accesses are atomic to them.
 void interlockedExchange(){uint32_t target=arg(0),old=read32(target);write32(target,arg(1));ret(old,2);}
+void interlockedIncrement(){uint32_t target=arg(0),value=read32(target)+1;write32(target,value);ret(value,1);}
+void interlockedDecrement(){uint32_t target=arg(0),value=read32(target)-1;write32(target,value);ret(value,1);}
 void interlockedCompareExchange(){uint32_t target=arg(0),old=read32(target);if(old==arg(2))write32(target,arg(1));ret(old,3);}
 const std::map<std::string,recomp_func_t> kernelFunctions={
     {"IsBadReadPtr",isBadReadPtr},{"IsBadWritePtr",isBadWritePtr},{"VirtualProtect",virtualProtect},
@@ -374,7 +378,7 @@ const std::map<std::string,recomp_func_t> kernelFunctions={
     {"SetErrorMode",setErrorMode},
     {"CreateEventA",createEvent},{"SetEvent",setEvent},{"ResetEvent",resetEvent},
     {"CreateThread",createThread},{"ResumeThread",resumeThread},{"GetExitCodeThread",threadExitCode},{"WaitForSingleObject",waitThread},{"WaitForMultipleObjects",waitMultiple},{"ExitThread",exitThread},
-    {"InterlockedExchange",interlockedExchange},{"InterlockedCompareExchange",interlockedCompareExchange},{"SetThreadPriority",setThreadPriority},
+    {"InterlockedExchange",interlockedExchange},{"InterlockedIncrement",interlockedIncrement},{"InterlockedDecrement",interlockedDecrement},{"InterlockedCompareExchange",interlockedCompareExchange},{"SetThreadPriority",setThreadPriority},
     {"CreateToolhelp32Snapshot",toolhelpSnapshot},{"Module32First",moduleFirst},{"Module32Next",moduleNext},{"CloseHandle",closeHandle},
     {"Process32First",processFirst},{"Process32Next",processNext},
     {"DuplicateHandle",duplicateHandle},

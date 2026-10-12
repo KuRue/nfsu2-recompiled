@@ -377,6 +377,32 @@ void socketOption(){
     else throw GuestStop("setsockopt nivel "+hex(level)+" opcion "+hex(name)+" pendiente desde "+hex(g_cur_func));
     ret(result,5);
 }
+// getsockopt for the options a Winsock program reads back.
+void socketGetOption(){
+    auto* socket=net::find(arg(0));if(!socket){ret(net::fail(net::wsaEnotsock),5);return;}
+    uint32_t level=arg(1),name=arg(2),value=arg(3),lengthPointer=arg(4);
+    if(!value||!lengthPointer||int32_t(read32(lengthPointer))<4){ret(net::fail(net::wsaEfault),5);return;}
+    int option=0;socklen_t size=sizeof option;int status=0;
+    if(level==0xffffu){
+        switch(name){
+        case 0x1007:status=::getsockopt(socket->fd,SOL_SOCKET,SO_ERROR,&option,&size);if(!status)option=option?int(net::wsaError(option)):0;break;
+        case 0x1008:status=::getsockopt(socket->fd,SOL_SOCKET,SO_TYPE,&option,&size);break;  // SOCK_STREAM/DGRAM match
+        case 0x1001:status=::getsockopt(socket->fd,SOL_SOCKET,SO_SNDBUF,&option,&size);break;
+        case 0x1002:status=::getsockopt(socket->fd,SOL_SOCKET,SO_RCVBUF,&option,&size);break;
+        case 0x0004:status=::getsockopt(socket->fd,SOL_SOCKET,SO_REUSEADDR,&option,&size);break;
+        case 0x0020:status=::getsockopt(socket->fd,SOL_SOCKET,SO_BROADCAST,&option,&size);break;
+        case 0x1005:option=int(socket->sendTimeout);break;
+        case 0x1006:option=int(socket->recvTimeout);break;
+        default:throw GuestStop("getsockopt SOL_SOCKET opcion pendiente: "+hex(name)+" desde "+hex(g_cur_func));
+        }
+    }else if(level==IPPROTO_TCP&&name==1)status=::getsockopt(socket->fd,IPPROTO_TCP,TCP_NODELAY,&option,&size);
+    else throw GuestStop("getsockopt nivel "+hex(level)+" opcion "+hex(name)+" pendiente desde "+hex(g_cur_func));
+    if(status){ret(net::failErrno(),5);return;}
+    write32(value,uint32_t(option));write32(lengthPointer,4);ret(0,5);
+}
+// Byte order helpers (x86 hosts are little-endian, network order is big-endian).
+void hostToNetLong(){ret(__builtin_bswap32(arg(0)),1);}
+void hostToNetShort(){ret(__builtin_bswap16(uint16_t(arg(0))),1);}
 // select over Windows fd_set {u_int count; SOCKET array[64]}.
 void socketSelect(){
     uint32_t sets[3]={arg(1),arg(2),arg(3)},timeoutPointer=arg(4);
@@ -542,6 +568,8 @@ void lineInitialize(){NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","TAPI: lineInitia
 void lineShutdown(){ret(0x80000034u,1);}  // LINEERR_INVALAPPHANDLE: nothing was initialized
 const std::map<std::string,recomp_func_t> networkFunctions={
     {"#1",socketAccept},{"#2",socketBind},{"#3",socketClose},{"#4",socketConnect},{"#5",socketPeerName},{"#6",socketLocalName},
+    {"#7",socketGetOption},{"#8",hostToNetLong},{"#9",hostToNetShort},{"#14",hostToNetLong},{"#15",hostToNetShort},
+    {"getsockopt",socketGetOption},{"htonl",hostToNetLong},{"htons",hostToNetShort},{"ntohl",hostToNetLong},{"ntohs",hostToNetShort},
     {"#10",socketIoctl},{"#13",socketListen},{"#16",socketRecv},{"#17",socketRecvFrom},{"#18",socketSelect},{"#19",socketSend},
     {"#20",socketSendTo},{"#21",socketOption},{"#22",socketShutdown},{"#23",socketCreate},{"#52",hostByName},{"#57",hostName},
     {"#111",wsaGetLastError},{"#112",wsaSetLastError},{"#115",wsaStartup},{"#116",wsaCleanup},{"WSAIoctl",wsaIoctl},
