@@ -55,6 +55,7 @@ template<class F> auto released(F f){
 Socket* find(uint32_t handle){auto found=sockets.find(handle);return found==sockets.end()?nullptr:&found->second;}
 // Waits until fd reports one of events; timeout in ms, 0 = forever. False on timeout.
 bool wait(int fd,short events,uint32_t timeout){
+    WaitScope scope(events&POLLOUT?"socket send/connect":"socket recv/accept",uint32_t(fd));
     auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(timeout);
     for(;;){
         checkGuestProgress();
@@ -423,6 +424,7 @@ void socketSelect(){
     uint64_t timeout=forever?0:uint64_t(read32(timeoutPointer))*1000u+(read32(timeoutPointer+4)+999u)/1000u;
     int ready=::poll(polls.data(),nfds_t(polls.size()),0);
     auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(timeout);
+    WaitScope scope("select",uint32_t(timeout));
     while(ready==0){
         auto left=std::chrono::duration_cast<std::chrono::milliseconds>(deadline-std::chrono::steady_clock::now()).count();
         if(!forever&&left<=0)break;

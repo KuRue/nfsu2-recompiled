@@ -150,7 +150,30 @@ void fullPathName(){
     std::memcpy(ptr(out,logical.size()+1),logical.c_str(),logical.size()+1);
     if(part)write32(part,logical.back()=='\\'?0:out+uint32_t(logical.find_last_of('\\')+1));ret(uint32_t(logical.size()),4);
 }
+// DeleteFileA / MoveFileA inside the game folder (gamePath refuses anything outside it).
+void deleteFile(){
+    auto path=gamePath(guestString(arg(0)));
+    if(::unlink(path.c_str())){lastError=fileError();ret(0,1);return;}
+    lastError=0;ret(1,1);
+}
+void moveFile(){
+    auto from=gamePath(guestString(arg(0))),to=gamePath(guestString(arg(1)));
+    struct stat status{};if(!::stat(to.c_str(),&status)){lastError=183;ret(0,2);return;}  // ERROR_ALREADY_EXISTS
+    if(::rename(from.c_str(),to.c_str())){lastError=fileError();ret(0,2);return;}
+    lastError=0;ret(1,2);
+}
+// GetFileTime(handle, creation, access, write): FILETIME is 100 ns ticks since 1601.
+void fileTime(){
+    auto file=fileHandles.find(arg(0));struct stat status{};
+    if(file==fileHandles.end()){lastError=6;ret(0,4);return;}
+    if(fstat(file->second,&status)){lastError=fileError();ret(0,4);return;}
+    auto ticks=[](const timespec& time){return uint64_t(time.tv_sec)*10000000ull+uint64_t(time.tv_nsec)/100u+116444736000000000ull;};
+    uint64_t values[3]={ticks(status.st_mtim),ticks(status.st_atim),ticks(status.st_mtim)};  // no creation time: use the last write
+    for(unsigned i=0;i<3;++i)if(arg(1+i))std::memcpy(ptr(arg(1+i),8),&values[i],8);
+    lastError=0;ret(1,4);
+}
 const std::map<std::string,recomp_func_t> fileFunctions={
+    {"GetFileTime",fileTime},{"DeleteFileA",deleteFile},{"MoveFileA",moveFile},
     {"GetFullPathNameA",fullPathName},{"WriteFile",writeFile},{"FlushFileBuffers",flushFileBuffers},{"SetEndOfFile",setEndOfFile},
     {"FindFirstFileA",findFirstFile},{"FindNextFileA",findNextFile},{"FindClose",findClose},{"CreateDirectoryA",createDirectory},
     {"SetFilePointer",setFilePointer},

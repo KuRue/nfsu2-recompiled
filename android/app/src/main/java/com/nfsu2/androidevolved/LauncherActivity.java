@@ -36,7 +36,7 @@ import java.util.concurrent.Executors;
  * right (Vulkan driver, resolution, frame cap, widescreen, compatibility).
  */
 public final class LauncherActivity extends Activity {
-    private static final int REQUEST_DRIVER_ZIP = 45, REQUEST_DRIVER_PROBE = 46, REQUEST_SAVE_REPORT = 47;
+    private static final int REQUEST_DRIVER_ZIP = 45, REQUEST_DRIVER_PROBE = 46;
     // NFSU2 green.
     private static final int ACCENT = 0xFF8EE03A;
     /** {label, guest language name, LANGUAGES/<file>.bin}. */
@@ -53,8 +53,6 @@ public final class LauncherActivity extends Activity {
     private TextView status;
     private Button play, access;
     private boolean playAfterProbe, checkingUpdates, resumed;
-    private File pendingReport;
-    private String pendingCrash;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -320,11 +318,6 @@ public final class LauncherActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_SAVE_REPORT) {
-            if (resultCode == RESULT_OK && data != null && data.getData() != null) finishReport(data.getData());
-            else pendingReport = null;
-            return;
-        }
         if (requestCode == REQUEST_DRIVER_PROBE) {
             showDriverReport(resultCode == RESULT_OK && data != null ? data.getStringExtra("gpu_report")
                     : "{\"probeError\":\"La prueba se cerró o fue cancelada.\",\"driverLoadFailed\":true}");
@@ -373,46 +366,30 @@ public final class LauncherActivity extends Activity {
         });
     }
 
-    /** Builds the report ZIP, lets the player save it, then opens a pre-filled GitHub issue. */
+    /**
+     * Builds the report ZIP, saves it to Download/NFSU2 and opens a pre-filled GitHub issue. GitHub
+     * cannot take an attachment through the link, so the issue already carries a technical summary
+     * and the player is told where the ZIP is to attach it.
+     */
     private void prepareReport(String crash) {
         status.setText("Preparando el registro…");
         worker.execute(() -> {
             try {
                 File report = Diagnostics.createReport(this);
+                String location = Diagnostics.saveToDownloads(this, report);
+                Uri issue = Diagnostics.issueUri(this, crash, location);
                 main.post(() -> {
                     refresh();
-                    pendingReport = report; pendingCrash = crash;
                     new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                             .setTitle("Reportar en GitHub")
-                            .setMessage("1. Guarda el ZIP con el registro completo.\n2. Se abrirá el issue en GitHub ya rellenado: "
-                                    + "describe qué pasó y adjunta el ZIP.")
-                            .setPositiveButton("Guardar y abrir GitHub", (dialog, which) -> startActivityForResult(
-                                    new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
-                                            .setType("application/zip").putExtra(Intent.EXTRA_TITLE, report.getName()),
-                                    REQUEST_SAVE_REPORT))
-                            .setNegativeButton("Cancelar", (dialog, which) -> pendingReport = null).show();
+                            .setMessage("El registro completo se ha guardado en:\n" + location
+                                    + "\n\nSe abrirá la issue en GitHub con un resumen técnico ya escrito. Describe qué pasó y, "
+                                    + "si puedes, adjunta ese ZIP (GitHub no permite adjuntarlo automáticamente).")
+                            .setPositiveButton("Abrir GitHub", (dialog, which) -> openUrl(issue))
+                            .setNegativeButton("Cancelar", null).show();
                 });
             } catch (Exception error) {
                 main.post(() -> { refresh(); message("Reportar un problema", "No se pudo preparar el registro: " + error.getMessage()); });
-            }
-        });
-    }
-
-    private void finishReport(Uri destination) {
-        File report = pendingReport;
-        String crash = pendingCrash;
-        pendingReport = null;
-        if (report == null || !report.isFile()) { message("Reportar un problema", "El registro ya no está disponible."); return; }
-        worker.execute(() -> {
-            try (java.io.InputStream input = new java.io.FileInputStream(report);
-                 java.io.OutputStream output = getContentResolver().openOutputStream(destination, "w")) {
-                if (output == null) throw new java.io.IOException("No se pudo abrir el destino.");
-                byte[] buffer = new byte[65536];
-                for (int n; (n = input.read(buffer)) != -1;) output.write(buffer, 0, n);
-                Uri issue = Diagnostics.issueUri(this, crash, report.getName());
-                main.post(() -> openUrl(issue));
-            } catch (Exception error) {
-                main.post(() -> message("Reportar un problema", "No se pudo guardar el ZIP: " + error.getMessage()));
             }
         });
     }

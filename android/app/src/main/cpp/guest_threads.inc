@@ -74,7 +74,7 @@ void* guestThreadEntry(void* context){
     }catch(const std::exception& error){thread.exitCode=1;guestThreadFault=error.what();}
     heaps->free(GuestHeaps::process,thread.stack);heaps->free(GuestHeaps::process,thread.tib);
     for(auto& value:mutexHandles)if(value.second->owner==thread.id){value.second->owner=0;value.second->depth=0;value.second->abandoned=true;}
-    thread.done=true;machineLease=nullptr;return nullptr;
+    forgetThreadTrace();thread.done=true;machineLease=nullptr;return nullptr;
 }
 void reapGuestThreads(){
     for(auto it=guestThreads.begin();it!=guestThreads.end();){
@@ -112,6 +112,7 @@ void setThreadPriority(){
 void threadExitCode(){auto thread=threadHandles.find(arg(0));if(thread==threadHandles.end()){lastError=6;ret(0,2);return;}write32(arg(1),thread->second->exitCode);ret(1,2);}
 void waitThread(){
     uint32_t handle=arg(0),timeout=arg(1);auto found=threadHandles.find(handle);
+    WaitScope scope(mutexHandles.count(handle)?"WaitForSingleObject(mutex)":eventHandles.count(handle)?"WaitForSingleObject(event)":"WaitForSingleObject(thread)",handle);
     auto mutexFound=mutexHandles.find(handle);
     if(mutexFound!=mutexHandles.end()){
         auto value=mutexFound->second;auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(timeout);
@@ -149,6 +150,7 @@ void waitMultiple(){
         if(!mutexHandles.count(handles[i])&&!eventHandles.count(handles[i])&&!threadHandles.count(handles[i])){lastError=6;ret(UINT32_MAX,4);return;}
     }
     auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(timeout);
+    WaitScope scope(all?"WaitForMultipleObjects(all)":"WaitForMultipleObjects(any)",handles[0]);
     for(;;){
         if(all){
             if(std::all_of(handles.begin(),handles.end(),waitableReady)){

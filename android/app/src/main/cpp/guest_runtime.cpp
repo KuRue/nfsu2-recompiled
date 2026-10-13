@@ -155,8 +155,44 @@ bool timerTestActive=false;std::vector<uint32_t> timerTestCalls;
 constexpr uint32_t timerTestAddress=0x7b000010u;
 bool generatedTestActive=false;unsigned generatedTestCalls=0;
 constexpr uint32_t generatedTestTarget=0x7b000020u;
+// Stall diagnostics: where each guest thread last handed the machine over and
+// what it was waiting for, dumped when the game stops presenting frames.
+struct GuestThreadTrace {std::atomic<uint32_t> func{0},handle{0};std::atomic<const char*> wait{nullptr};};
+std::mutex threadTracesMutex;
+std::map<uint32_t,std::shared_ptr<GuestThreadTrace>> threadTraces;
+thread_local std::shared_ptr<GuestThreadTrace> threadTrace;
+GuestThreadTrace& currentTrace(){
+    if(!threadTrace){threadTrace=std::make_shared<GuestThreadTrace>();std::lock_guard<std::mutex> lock(threadTracesMutex);threadTraces[guestThreadId]=threadTrace;}
+    return *threadTrace;
+}
+void forgetThreadTrace(){std::lock_guard<std::mutex> lock(threadTracesMutex);threadTraces.erase(guestThreadId);threadTrace.reset();}
+struct WaitScope {
+    WaitScope(const char* what,uint32_t handle){auto& trace=currentTrace();trace.wait=what;trace.handle=handle;}
+    ~WaitScope(){currentTrace().wait=nullptr;}
+};
+std::atomic<int64_t> lastPresentMs{0};
+int64_t steadyMs(){return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();}
+void startStallWatch(){
+    static std::once_flag started;
+    std::call_once(started,[]{std::thread([]{
+        int64_t reportedFor=0;
+        while(!stopRequested.load()){
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            int64_t last=lastPresentMs.load(),idle=steadyMs()-last;
+            if(guestPaused.load()||idle<12000||reportedFor==last)continue;
+            reportedFor=last;
+            NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Guest stall: no frame for %lld s; guest threads:",static_cast<long long>(idle/1000));
+            std::lock_guard<std::mutex> lock(threadTracesMutex);
+            for(auto& [id,trace]:threadTraces){
+                const char* wait=trace->wait.load();
+                NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","  thread %u at %08x %s %08x",id,trace->func.load(),wait?wait:"running",wait?trace->handle.load():0u);
+            }
+        }
+    }).detach();});
+}
 void yieldGuestMachine(unsigned milliseconds=0) {
     if(!machineLease||!machineLease->owns_lock())throw GuestStop("Guest scheduler ownership missing");
+    currentTrace().func=g_cur_func;
     State saved;saved.save();machineLease->unlock();
     if(milliseconds)std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));else std::this_thread::yield();
     machineLease->lock();saved.load();
@@ -256,7 +292,7 @@ void d3dDispatch(){uint32_t args[32];std::memcpy(args,ptr(g_esp+4,sizeof args),s
     try{result=dispatchGuestD3D9(token,args,&count);}catch(...){
         NFS_RUNTIME_LOG(ANDROID_LOG_ERROR,"NFSU2","D3D9 guest caller=%08x stack=%08x token=%08x self=%08x",g_cur_func,g_esp,token,args[0]);throw;}
     if(timed){auto spent=std::chrono::steady_clock::now()-bridgeStart;bridgeTime+=token==0x7e002110u?spent:spent*64;presentTime+=token==0x7e002110u?spent:std::chrono::nanoseconds{};}
-    if(token==0x7e002110u)nfs_widescreen_apply_frame_rate();
+    if(token==0x7e002110u){nfs_widescreen_apply_frame_rate();lastPresentMs=steadyMs();startStallWatch();}
     if(token==0x7e002110u&&result==0){
         static unsigned appliedLimit=0;static auto nextFrame=std::chrono::steady_clock::now();
         unsigned cap=frameLimit.load(std::memory_order_relaxed);
