@@ -63,6 +63,24 @@ public final class LauncherActivity extends Activity {
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
         setContentView(buildScreen());
         checkUpdates(false);
+        String updated = ReleaseUpdates.updatedSinceLastLaunch(this);
+        if (updated != null) showWhatsNew(updated);
+    }
+
+    /** First launch after an update: the installed version's release notes from GitHub. */
+    private void showWhatsNew(String version) {
+        AlertDialog dialog = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("¡Actualizado a la versión " + version + "!")
+                .setMessage("Cargando las novedades…")
+                .setPositiveButton("Aceptar", null)
+                .setNeutralButton("Ver en GitHub", (d, which) -> openUrl(Uri.parse(
+                        "https://github.com/codepdbh/nfsu2-recompiled/releases/tag/v" + Uri.encode(version))))
+                .show();
+        ReleaseUpdates.releaseNotes(this, version, notes -> {
+            if (!dialog.isShowing()) return;
+            dialog.setMessage(notes != null ? notes
+                    : "No se pudieron cargar las novedades (sin conexión o aún no publicadas). Puedes verlas en GitHub.");
+        });
     }
 
     @Override protected void onResume() {

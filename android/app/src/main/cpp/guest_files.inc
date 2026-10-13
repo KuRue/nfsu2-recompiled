@@ -156,6 +156,11 @@ void deleteFile(){
     if(::unlink(path.c_str())){lastError=fileError();ret(0,1);return;}
     lastError=0;ret(1,1);
 }
+void removeDirectory(){
+    auto path=gamePath(guestString(arg(0)));
+    if(::rmdir(path.c_str())){lastError=errno==ENOTEMPTY||errno==EEXIST?145:fileError();ret(0,1);return;}  // ERROR_DIR_NOT_EMPTY
+    lastError=0;ret(1,1);
+}
 void moveFile(){
     auto from=gamePath(guestString(arg(0))),to=gamePath(guestString(arg(1)));
     struct stat status{};if(!::stat(to.c_str(),&status)){lastError=183;ret(0,2);return;}  // ERROR_ALREADY_EXISTS
@@ -173,7 +178,7 @@ void fileTime(){
     lastError=0;ret(1,4);
 }
 const std::map<std::string,recomp_func_t> fileFunctions={
-    {"GetFileTime",fileTime},{"DeleteFileA",deleteFile},{"MoveFileA",moveFile},
+    {"GetFileTime",fileTime},{"DeleteFileA",deleteFile},{"RemoveDirectoryA",removeDirectory},{"MoveFileA",moveFile},
     {"GetFullPathNameA",fullPathName},{"WriteFile",writeFile},{"FlushFileBuffers",flushFileBuffers},{"SetEndOfFile",setEndOfFile},
     {"FindFirstFileA",findFirstFile},{"FindNextFileA",findNextFile},{"FindClose",findClose},{"CreateDirectoryA",createDirectory},
     {"SetFilePointer",setFilePointer},

@@ -39,6 +39,64 @@ final class ReleaseUpdates {
         }, "GitHubReleaseCheck");
         worker.setDaemon(true); worker.start();
     }
+    /**
+     * Detects an app update since the last launch (versionCode grew). A fresh install only records
+     * the version; the first launch of a build that predates this record counts as an update when
+     * Android says the package was updated after its install. Returns the version name, else null.
+     */
+    static String updatedSinceLastLaunch(Context context) {
+        android.content.pm.PackageInfo info;
+        try { info = context.getPackageManager().getPackageInfo(context.getPackageName(), 0); }
+        catch (Exception ignored) { return null; }
+        long current = info.getLongVersionCode();
+        SharedPreferences prefs = prefs(context);
+        long previous = prefs.getLong("seen_version_code", 0);
+        if (previous == current) return null;
+        prefs.edit().putLong("seen_version_code", current).apply();
+        boolean updated = previous != 0 ? current > previous : info.lastUpdateTime > info.firstInstallTime;
+        return updated ? installed(context) : null;
+    }
+
+    /** Release notes of a version (GitHub release v{version}) as plain text, or null if unavailable. */
+    static void releaseNotes(Context context, String version, Consumer<String> callback) {
+        Handler main = new Handler(Looper.getMainLooper());
+        Thread worker = new Thread(() -> {
+            String notes = null;
+            try {
+                HttpsURLConnection connection = (HttpsURLConnection) new URL(
+                        "https://api.github.com/repos/codepdbh/nfsu2-recompiled/releases/tags/v" + Uri.encode(version)).openConnection();
+                connection.setConnectTimeout(6000); connection.setReadTimeout(6000);
+                connection.setRequestProperty("Accept", "application/vnd.github+json");
+                connection.setRequestProperty("User-Agent", "NFSU2-Android-Evolved/" + version);
+                try {
+                    if (connection.getResponseCode() == 200) {
+                        ByteArrayOutputStream body = new ByteArrayOutputStream();
+                        try (InputStream input = connection.getInputStream()) {
+                            byte[] buffer = new byte[8192]; int n;
+                            while ((n = input.read(buffer)) != -1 && body.size() < 512 * 1024) body.write(buffer, 0, n);
+                        }
+                        notes = plainText(new JSONObject(new String(body.toByteArray(), StandardCharsets.UTF_8)).optString("body"));
+                    }
+                } finally { connection.disconnect(); }
+            } catch (Exception ignored) { }
+            String value = notes;
+            main.post(() -> callback.accept(value));
+        }, "GitHubReleaseNotes");
+        worker.setDaemon(true); worker.start();
+    }
+
+    /** Markdown of a release body to readable dialog text. */
+    static String plainText(String markdown) {
+        if (markdown == null || markdown.trim().isEmpty()) return null;
+        return markdown.replace("\r", "")
+                .replaceAll("(?m)^#{1,6}\\s*", "")
+                .replaceAll("(?m)^>\\s?", "")
+                .replaceAll("(?m)^(\\s*)[-*]\\s+", "$1• ")
+                .replace("**", "").replace("`", "")
+                .replaceAll("\\[([^\\]]+)\\]\\([^)]+\\)", "$1")
+                .replaceAll("\n{3,}", "\n\n").trim();
+    }
+
     private static Result fetch(Context context, boolean force) throws Exception {
         SharedPreferences prefs = prefs(context);
         long age = System.currentTimeMillis() - prefs.getLong("last_check", 0);

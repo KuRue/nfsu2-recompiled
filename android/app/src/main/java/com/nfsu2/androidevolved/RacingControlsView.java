@@ -111,6 +111,10 @@ final class RacingControlsView extends View {
         add(w-118,16,46,racing?"menu":"wheel",MODE);
         if(racing) {
             add(16,16,46,"pause",1);
+            // Free-roam actions of the PC keyboard defaults (Opciones > Controles).
+            add(72,16,46,"map",0x32);     // Mapa del mundo: M
+            add(128,16,46,"sms",0x0f);    // Leer SMS: Tab
+            add(184,16,46,"reset",0x13);  // Reiniciar coche: R
             if(style.equals("classic")) {
                 add(20,bottom-92,92,"left",0xcb);
                 add(124,bottom-92,92,"right",0xcd);
@@ -238,6 +242,20 @@ final class RacingControlsView extends View {
             case "nitro": glyph(canvas,"N₂O",cx,cy,s*.9f,on);break;
             case "accept":
                 path.reset();path.moveTo(cx-s*.7f,cy);path.lineTo(cx-s*.15f,cy+s*.55f);path.lineTo(cx+s*.75f,cy-s*.5f);
+                canvas.drawPath(path,line);break;
+            case "map":
+                path.reset();path.moveTo(cx-s*.9f,cy-s*.55f);path.lineTo(cx-s*.3f,cy-s*.8f);path.lineTo(cx+s*.3f,cy-s*.55f);
+                path.lineTo(cx+s*.9f,cy-s*.8f);path.lineTo(cx+s*.9f,cy+s*.55f);path.lineTo(cx+s*.3f,cy+s*.8f);
+                path.lineTo(cx-s*.3f,cy+s*.55f);path.lineTo(cx-s*.9f,cy+s*.8f);path.close();canvas.drawPath(path,line);
+                canvas.drawLine(cx-s*.3f,cy-s*.8f,cx-s*.3f,cy+s*.55f,line);canvas.drawLine(cx+s*.3f,cy-s*.55f,cx+s*.3f,cy+s*.8f,line);break;
+            case "sms":
+                canvas.drawRoundRect(cx-s*.9f,cy-s*.7f,cx+s*.9f,cy+s*.4f,s*.25f,s*.25f,line);
+                path.reset();path.moveTo(cx-s*.45f,cy+s*.4f);path.lineTo(cx-s*.6f,cy+s*.85f);path.lineTo(cx-s*.05f,cy+s*.4f);
+                canvas.drawPath(path,line);
+                for(int dot=-1;dot<=1;++dot)canvas.drawCircle(cx+dot*s*.4f,cy-s*.15f,s*.1f,fill);break;
+            case "reset":
+                canvas.drawArc(cx-s*.75f,cy-s*.75f,cx+s*.75f,cy+s*.75f,-60,290,false,line);
+                path.reset();path.moveTo(cx+s*.2f,cy-s*.95f);path.lineTo(cx+s*.55f,cy-s*.62f);path.lineTo(cx+s*.08f,cy-s*.42f);
                 canvas.drawPath(path,line);break;
             case "back":
                 canvas.drawLine(cx-s*.5f,cy-s*.5f,cx+s*.5f,cy+s*.5f,line);canvas.drawLine(cx+s*.5f,cy-s*.5f,cx-s*.5f,cy+s*.5f,line);break;
