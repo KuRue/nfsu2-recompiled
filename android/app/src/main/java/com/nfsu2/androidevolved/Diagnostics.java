@@ -103,7 +103,9 @@ final class Diagnostics {
 
     // Lines that explain a stop, a stall or a missing piece of the Windows layer.
     private static final java.util.regex.Pattern KEY_LINE = java.util.regex.Pattern.compile(
-            "stopped|boundary|pendiente|unresolved|stall|  thread |FATAL|Fatal|SIGSEGV|SIGBUS|abort|DeadSystem|E DXVK|MessageBox");
+            "stopped|boundary|pendiente|unresolved|stall|  thread |FATAL|Fatal|SIGSEGV|SIGBUS|abort|DeadSystem|E DXVK|MessageBox"
+            // Native crash frames inside our libraries (symbolized later with symbols-vX.Y.Z).
+            + "|#[01][0-9] pc [0-9a-f]+ .*libnfsu2");
     // Per-frame or per-file chatter that crowds out the useful part of the tail.
     private static final java.util.regex.Pattern NOISE = java.util.regex.Pattern.compile(
             "Guest file |touch DIK|Keyboard buffered|D3D9 COM|Guest timer|Guest import|Guest LoadLibrary d3d9|VirtualProtect|presentation");
@@ -127,7 +129,7 @@ final class Diagnostics {
             if (KEY_LINE.matcher(line).find()) key.add(compact(line));
             else if (line.contains(" NFSU2 ") && !NOISE.matcher(line).find()) tail.add(compact(line));
         }
-        if (key.size() > 25) key = key.subList(key.size() - 25, key.size());
+        if (key.size() > 35) key = key.subList(key.size() - 35, key.size());
         if (tail.size() > 60) tail = tail.subList(tail.size() - 60, tail.size());
         String title = "[Android] " + Build.MODEL + ": " + (crash == null ? "" : "cierre inesperado");
         while (true) {

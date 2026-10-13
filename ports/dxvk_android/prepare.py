@@ -82,3 +82,6 @@ replace('src/dxvk/dxvk_meta_copy.cpp', 'namespace dxvk {\n', 'namespace dxvk {\n
 replace('src/dxvk/dxvk_meta_copy.cpp', '    rsState.depthClampEnable    = VK_TRUE;\n', '    rsState.depthClampEnable    = g_dxvkDepthClamp;\n')
 replace('src/dxvk/dxvk_meta_resolve.cpp', 'namespace dxvk {\n', 'namespace dxvk {\n  extern bool g_dxvkDepthClamp;\n')
 replace('src/dxvk/dxvk_meta_resolve.cpp', '    rsState.depthClampEnable    = VK_TRUE;\n', '    rsState.depthClampEnable    = g_dxvkDepthClamp;\n')
+
+# Reset on Mali: log why the swap chain could not be recreated.
+replace('src/d3d9/d3d9_swapchain.cpp', '    if (m_presenter->recreateSwapChain(presenterDesc) != VK_SUCCESS)\n      throw DxvkError("D3D9SwapChainEx: Failed to recreate swap chain");\n', '    VkResult recreated = m_presenter->recreateSwapChain(presenterDesc);\n    if (recreated != VK_SUCCESS) {\n      Logger::err(str::format("D3D9SwapChainEx: Failed to recreate swap chain: ", recreated,\n        " (", presenterDesc.imageExtent.width, "x", presenterDesc.imageExtent.height, ")"));\n      throw DxvkError("D3D9SwapChainEx: Failed to recreate swap chain");\n    }\n')

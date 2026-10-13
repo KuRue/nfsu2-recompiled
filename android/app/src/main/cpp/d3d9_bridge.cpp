@@ -171,6 +171,11 @@ void noteVertexDeclaration(const D3DVERTEXELEMENT9* elements){
         NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","D3D9 game vertex type %s (usage %u)",name,unsigned(elements[i].Usage));
     }
 }
+// Set when DXVK could not rebuild the swap chain in Reset. DXVK's TestCooperativeLevel
+// always reports D3D_OK, so the game would keep drawing on the half-reset device and
+// crash (null dereference, Mali reports); until a Reset succeeds the device reads as
+// lost and needing a reset, which the game handles as on Windows.
+bool deviceResetPending=false;
 uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumentCount){
     uint32_t kind=(token-methodBase)/4096,method=((token-methodBase)%4096)/16;
     auto found=objects.find(args[0]);
@@ -185,7 +190,7 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
     // DXVK recreates its presenter while keeping the game's device/resources.
     if((kind==2&&method==17)||(kind==13&&method==3)){
         *argumentCount=kind==2?5:6;auto window=dxvkAndroidGetWindowHandle();
-        if(!window)return D3DERR_DEVICELOST;
+        if(!window||deviceResetPending)return D3DERR_DEVICELOST;
         auto source=static_cast<const RECT*>(pointer(args[1])),destination=static_cast<const RECT*>(pointer(args[2]));
         auto dirty=static_cast<const RGNDATA*>(pointer(args[4]));
         return kind==2?static_cast<IDirect3DDevice9*>(object)->Present(source,destination,window,dirty):
@@ -264,11 +269,16 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
     if(kind==2){auto device=static_cast<IDirect3DDevice9*>(object);switch(method){
         case 9:{*argumentCount=2;D3DDEVICE_CREATION_PARAMETERS p{};HRESULT status=device->GetCreationParameters(&p);if(SUCCEEDED(status)){write(args[1],p.AdapterOrdinal);write(args[1]+4,p.DeviceType);write(args[1]+8,0xf0000301);write(args[1]+12,p.BehaviorFlags);}return status;}
         case 13:{*argumentCount=3;auto p=presentation(args[1]);IDirect3DSwapChain9* result=nullptr;HRESULT status=device->CreateAdditionalSwapChain(&p,&result);write(args[2],SUCCEEDED(status)?wrap(result,Kind::SwapChain):0);return status;}
-        case 16:{*argumentCount=2;auto p=presentation(args[1]);HRESULT status;
+        case 16:{*argumentCount=2;auto p=presentation(args[1]);HRESULT status=D3DERR_DEVICELOST;
             // DXVK throws (DxvkError) when it cannot rebuild the swap chain; Windows
             // would report a lost device, which the game retries (Mali G615 report).
-            try{status=device->Reset(&p);}catch(...){
-                NFS_RUNTIME_LOG(ANDROID_LOG_ERROR,"NFSU2","D3D9 Reset raised a DXVK error; reporting a lost device");status=D3DERR_DEVICELOST;}
+            // The old Android window can stay busy for a moment: retry once before giving up.
+            for(int attempt=0;attempt<2;++attempt){
+                try{status=device->Reset(&p);break;}catch(...){
+                    NFS_RUNTIME_LOG(ANDROID_LOG_ERROR,"NFSU2","D3D9 Reset raised a DXVK error (attempt %d)",attempt+1);status=D3DERR_DEVICELOST;
+                    if(!attempt)std::this_thread::sleep_for(std::chrono::milliseconds(100));}
+            }
+            deviceResetPending=status==D3DERR_DEVICELOST;
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","D3D9 Reset backbuffer %ux%u result=%08x",p.BackBufferWidth,p.BackBufferHeight,uint32_t(status));return status;}
         case 23:{*argumentCount=9;if(args[8])throw std::runtime_error("Shared texture handle pending");if(!args[7])return D3DERR_INVALIDCALL;
             auto original=static_cast<D3DFORMAT>(args[5]),format=nativeTextureFormat(device,original,args[4],D3DRTYPE_TEXTURE);IDirect3DTexture9* texture=nullptr;
