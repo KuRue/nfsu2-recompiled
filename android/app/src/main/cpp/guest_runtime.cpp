@@ -155,9 +155,15 @@ bool timerTestActive=false;std::vector<uint32_t> timerTestCalls;
 constexpr uint32_t timerTestAddress=0x7b000010u;
 bool generatedTestActive=false;unsigned generatedTestCalls=0;
 constexpr uint32_t generatedTestTarget=0x7b000020u;
+uint32_t read32(uint32_t va);
 // Stall diagnostics: where each guest thread last handed the machine over and
 // what it was waiting for, dumped when the game stops presenting frames.
-struct GuestThreadTrace {std::atomic<uint32_t> func{0},handle{0};std::atomic<const char*> wait{nullptr};};
+struct GuestThreadTrace {
+    std::atomic<uint32_t> func{0},handle{0},esp{0};std::atomic<const char*> wait{nullptr};
+    std::array<std::atomic<uint32_t>,8> held{};  // critical sections this thread owns (outermost entries)
+    void hold(uint32_t cs){for(auto& slot:held){uint32_t empty=0;if(slot.compare_exchange_strong(empty,cs))return;}}
+    void release(uint32_t cs){for(auto& slot:held){uint32_t value=cs;if(slot.compare_exchange_strong(value,0))return;}}
+};
 std::mutex threadTracesMutex;
 std::map<uint32_t,std::shared_ptr<GuestThreadTrace>> threadTraces;
 thread_local std::shared_ptr<GuestThreadTrace> threadTrace;
@@ -184,15 +190,27 @@ void startStallWatch(){
             NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Guest stall: no frame for %lld s; guest threads:",static_cast<long long>(idle/1000));
             std::lock_guard<std::mutex> lock(threadTracesMutex);
             for(auto& [id,trace]:threadTraces){
-                const char* wait=trace->wait.load();
-                NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","  thread %u at %08x %s %08x",id,trace->func.load(),wait?wait:"running",wait?trace->handle.load():0u);
+                const char* wait=trace->wait.load();uint32_t handle=trace->handle.load();
+                std::string detail,held,callers;
+                // Read-only peeks at guest memory from this host thread: stable while the guest is stuck.
+                if(wait&&!std::strcmp(wait,"EnterCriticalSection")&&memory&&memory->readable(handle,24))
+                    detail=" (owner thread "+std::to_string(read32(handle+12))+", count "+std::to_string(read32(handle+8))+")";
+                for(auto& slot:trace->held)if(uint32_t cs=slot.load())held+=" "+hex(cs);
+                uint32_t esp=trace->esp.load();
+                for(unsigned i=0,found=0;memory&&i<256&&found<10;++i){
+                    if(!memory->readable(esp+i*4,4))break;
+                    uint32_t value=read32(esp+i*4);
+                    if(value>=0x401000u&&value<0x75d000u&&recomp_lookup(value)==nullptr){callers+=" "+hex(value);++found;}
+                }
+                NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","  thread %u at %08x %s %08x%s; holds:%s; stack:%s",id,trace->func.load(),
+                    wait?wait:"running",wait?handle:0u,detail.c_str(),held.empty()?" none":held.c_str(),callers.c_str());
             }
         }
     }).detach();});
 }
 void yieldGuestMachine(unsigned milliseconds=0) {
     if(!machineLease||!machineLease->owns_lock())throw GuestStop("Guest scheduler ownership missing");
-    currentTrace().func=g_cur_func;
+    {auto& trace=currentTrace();trace.func=g_cur_func;trace.esp=g_esp;}
     State saved;saved.save();machineLease->unlock();
     if(milliseconds)std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));else std::this_thread::yield();
     machineLease->lock();saved.load();
@@ -329,7 +347,7 @@ void testGuestScheduling(){
             if(g_eax!=0xaabbccdd||g_fs_base!=0xdead1000||g_st[0]!=-456.25||g_xmm[7].u64[0]!=0xfedcba9876543210ull||lastError!=222||tlsValues[1087]!=0xaa)
                 throw GuestStop("Guest worker context was not isolated");}}
         catch(const std::exception& error){failure=error.what();}
-        done=true;machineLease=nullptr;
+        forgetThreadTrace();done=true;machineLease=nullptr;
     });
     try{while(!done){checkGuestProgress();yieldGuestMachine();
         if(g_eax!=0x11223344||g_fs_base!=0x21000000||g_st[0]!=123.5||g_xmm[7].u64[0]!=0x123456789abcdef0ull||lastError!=111||tlsValues[1087]!=0x55)

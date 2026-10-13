@@ -54,12 +54,14 @@ void enterCritical() {
     }
     cs=criticalSections.find(address);
     if(cs==criticalSections.end()||cs->second!=mutex){mutex->unlock();throw GuestStop("Critical section deleted while waiting");}
-    auto count=read32(address+8)+1; write32(address+8,count); write32(address+4,count-1); write32(address+12,guestThreadId);ret(0,1);
+    auto count=read32(address+8)+1; write32(address+8,count); write32(address+4,count-1); write32(address+12,guestThreadId);
+    if(count==1)currentTrace().hold(address);
+    ret(0,1);
 }
 void leaveCritical() {
     uint32_t address=arg(0); auto cs=criticalSections.find(address); uint32_t count=read32(address+8);
     if(cs==criticalSections.end()||!count||read32(address+12)!=guestThreadId) throw GuestStop("Unbalanced LeaveCriticalSection");
-    write32(address+8,--count);write32(address+4,count-1);if(!count)write32(address+12,0);cs->second->unlock();
+    write32(address+8,--count);write32(address+4,count-1);if(!count){write32(address+12,0);currentTrace().release(address);}cs->second->unlock();
     if(!count&&pendingCriticalDeletes.erase(address))criticalSections.erase(cs);
     ret(0,1);
 }
