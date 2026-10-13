@@ -307,6 +307,8 @@ public final class LauncherActivity extends Activity {
                     : "GPU: " + gpu.optString("gpu") + "\nVulkan: " + gpu.optString("vulkan")
                       + "\nDriver: " + gpu.optString("driverName", "—") + " " + gpu.optString("driverInfo", "")
                       + "\nTexturas BC: " + (gpu.optBoolean("bcTextures") ? "en la GPU" : "se convierten en la CPU")
+                      + (gpu.optString("vertexFormatsMissing").isEmpty() ? ""
+                              : "\nTipos de vértice sin soporte: " + gpu.optString("vertexFormatsMissing"))
                       + "\n" + (gpu.optBoolean("compatible") ? "Compatible con el juego."
                               : "Faltan funciones: " + gpu.optJSONArray("missing"));
             new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)

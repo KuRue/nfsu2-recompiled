@@ -191,6 +191,9 @@ final class Diagnostics {
                     "-v", "threadtime", "--uid=" + Process.myUid()));
             if (lines > 0) { command.add("-t"); command.add(String.valueOf(lines)); }
             command.addAll(Arrays.asList(filters));
+            // Android 11's logcat has no --uid (the report came back empty); an app only reads
+            // its own uid's log there anyway.
+            if (Build.VERSION.SDK_INT < 31) command.remove("--uid=" + Process.myUid());
             process = new ProcessBuilder(command).redirectErrorStream(true).start();
             java.lang.Process active = process;
             Thread timeout = new Thread(() -> {

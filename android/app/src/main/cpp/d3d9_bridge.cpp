@@ -1,6 +1,7 @@
 #include "d3d9_bridge.h"
 #include "runtime_log.h"
 #include "dxt_shadow.h"
+#include "vertex_formats.h"
 #include <d3d9.h>
 #include <algorithm>
 #include <map>
@@ -157,6 +158,18 @@ uint32_t createGuestD3D9(uint32_t sdk){
     auto native=Direct3DCreate9(sdk);
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","DXVK native Direct3DCreate9 sdk=%u",sdk);
     return wrap(native,Kind::D3D9);
+}
+// Logs each vertex declaration type the first time the game uses it, flagging the
+// ones this GPU cannot fetch (see vertex_formats.h): the evidence for stretched geometry.
+void noteVertexDeclaration(const D3DVERTEXELEMENT9* elements){
+    static bool seen[32]{};
+    for(unsigned i=0;elements&&i<64&&elements[i].Stream!=0xff;++i){
+        unsigned type=elements[i].Type;
+        if(type>=32||seen[type])continue;
+        seen[type]=true;
+        const char* name="?";for(auto& entry:kD3DVertexFormats)if(entry.type==type)name=entry.name;
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","D3D9 game vertex type %s (usage %u)",name,unsigned(elements[i].Usage));
+    }
 }
 uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumentCount){
     uint32_t kind=(token-methodBase)/4096,method=((token-methodBase)%4096)/16;

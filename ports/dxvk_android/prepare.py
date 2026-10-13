@@ -66,3 +66,19 @@ replace('src/util/log/log.cpp', '        std::cerr << prefix << line << std::end
 (args.output / "version.h").write_text('#define DXVK_VERSION "native-1.9.2b-android-arm64"\n')
 (args.output / "PINNED_REVISION").write_text(PIN + "\n")
 print("Prepared DXVK " + PIN)
+
+# Mali-G52/G57/G76 drivers lack depthClamp and fillModeNonSolid (CreateDevice
+# D3DERR_NOTAVAILABLE): request them only when supported.
+replace('src/d3d9/d3d9_device.cpp', '    enabled.core.features.depthClamp = VK_TRUE;\n', '    // Mali-G52/G57/G76 drivers have no depthClamp: D3D9 always clips depth, so\n    // pipelines only need it when the device has it (g_dxvkDepthClamp).\n    enabled.core.features.depthClamp = supported.core.features.depthClamp;\n    g_dxvkDepthClamp = supported.core.features.depthClamp;\n')
+replace('src/d3d9/d3d9_device.cpp', '    enabled.core.features.fillModeNonSolid = VK_TRUE;\n', '    // Without it D3DFILL_WIREFRAME/POINT draw filled (see the rasterizer state).\n    enabled.core.features.fillModeNonSolid = supported.core.features.fillModeNonSolid;\n')
+replace('src/d3d9/d3d9_device.cpp', '    state.polygonMode     = DecodeFillMode(D3DFILLMODE(rs[D3DRS_FILLMODE]));\n', '    state.polygonMode     = DecodeFillMode(D3DFILLMODE(rs[D3DRS_FILLMODE]));\n    if (!m_dxvkDevice->features().core.features.fillModeNonSolid)\n      state.polygonMode   = VK_POLYGON_MODE_FILL;\n')
+replace('src/d3d9/d3d9_device.cpp', 'namespace dxvk {\n', 'namespace dxvk {\n  extern bool g_dxvkDepthClamp;\n')
+replace('src/dxvk/dxvk_graphics.cpp', 'namespace dxvk {\n', 'namespace dxvk {\n  // False when the device lacks depthClamp (set before device creation).\n  bool g_dxvkDepthClamp = true;\n')
+replace('src/dxvk/dxvk_graphics.cpp', '    rsInfo.depthClampEnable       = VK_TRUE;\n', '    rsInfo.depthClampEnable       = g_dxvkDepthClamp;\n')
+replace('src/dxvk/dxvk_graphics.cpp', '      rsInfo.depthClampEnable = !state.rs.depthClipEnable();\n', '      rsInfo.depthClampEnable = g_dxvkDepthClamp && !state.rs.depthClipEnable();\n')
+replace('src/dxvk/dxvk_meta_blit.cpp', 'namespace dxvk {\n', 'namespace dxvk {\n  extern bool g_dxvkDepthClamp;\n')
+replace('src/dxvk/dxvk_meta_blit.cpp', '    rsState.depthClampEnable    = VK_TRUE;\n', '    rsState.depthClampEnable    = g_dxvkDepthClamp;\n')
+replace('src/dxvk/dxvk_meta_copy.cpp', 'namespace dxvk {\n', 'namespace dxvk {\n  extern bool g_dxvkDepthClamp;\n')
+replace('src/dxvk/dxvk_meta_copy.cpp', '    rsState.depthClampEnable    = VK_TRUE;\n', '    rsState.depthClampEnable    = g_dxvkDepthClamp;\n')
+replace('src/dxvk/dxvk_meta_resolve.cpp', 'namespace dxvk {\n', 'namespace dxvk {\n  extern bool g_dxvkDepthClamp;\n')
+replace('src/dxvk/dxvk_meta_resolve.cpp', '    rsState.depthClampEnable    = VK_TRUE;\n', '    rsState.depthClampEnable    = g_dxvkDepthClamp;\n')

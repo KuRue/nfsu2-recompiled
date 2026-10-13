@@ -8,6 +8,7 @@
 #include <cstring>
 #include <thread>
 #include <chrono>
+#include "vertex_formats.h"
 #include "guest_memory.h"
 #include "game_data.h"
 #include "guest_runtime.h"
@@ -107,6 +108,9 @@ struct Renderer {
             if (gpu) {
                 __android_log_print(ANDROID_LOG_INFO, "NFSU2", "GPU %s; API %u.%u; required Vulkan 1.1", props.deviceName,
                     VK_VERSION_MAJOR(props.apiVersion), VK_VERSION_MINOR(props.apiVersion));
+                auto vertexMissing = unsupportedD3DVertexFormats(candidate, vkGetPhysicalDeviceFormatProperties);
+                __android_log_print(vertexMissing.empty() ? ANDROID_LOG_INFO : ANDROID_LOG_WARN, "NFSU2",
+                    "D3D9 vertex types without Vulkan vertex fetch: %s", vertexMissing.empty() ? "none" : vertexMissing.c_str());
                 break;
             }
         }
