@@ -63,7 +63,7 @@ public final class LauncherActivity extends Activity {
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
         setContentView(buildScreen());
         checkUpdates(false);
-        String updated = ReleaseUpdates.updatedSinceLastLaunch(this);
+        String updated = ReleaseUpdates.pendingWhatsNew(this);
         if (updated != null) showWhatsNew(updated);
     }
 
@@ -72,12 +72,18 @@ public final class LauncherActivity extends Activity {
         AlertDialog dialog = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setTitle("¡Actualizado a la versión " + version + "!")
                 .setMessage("Cargando las novedades…")
-                .setPositiveButton("Aceptar", null)
-                .setNeutralButton("Ver en GitHub", (d, which) -> openUrl(Uri.parse(
-                        "https://github.com/codepdbh/nfsu2-recompiled/releases/tag/v" + Uri.encode(version))))
+                .setPositiveButton("Aceptar", (d, which) -> ReleaseUpdates.whatsNewSeen(this))
+                .setNeutralButton("Ver en GitHub", (d, which) -> {
+                    ReleaseUpdates.whatsNewSeen(this);
+                    openUrl(Uri.parse("https://github.com/codepdbh/nfsu2-recompiled/releases/tag/v" + Uri.encode(version)));
+                })
+                .setOnCancelListener(d -> ReleaseUpdates.whatsNewSeen(this))
                 .show();
         ReleaseUpdates.releaseNotes(this, version, notes -> {
             if (!dialog.isShowing()) return;
+            // In the app, skip the download/install preamble of the release page.
+            int start = notes == null ? -1 : notes.indexOf("Novedades");
+            if (start > 0) notes = notes.substring(start);
             dialog.setMessage(notes != null ? notes
                     : "No se pudieron cargar las novedades (sin conexión o aún no publicadas). Puedes verlas en GitHub.");
         });

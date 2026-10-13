@@ -40,22 +40,30 @@ final class ReleaseUpdates {
         worker.setDaemon(true); worker.start();
     }
     /**
-     * Detects an app update since the last launch (versionCode grew). A fresh install only records
-     * the version; the first launch of a build that predates this record counts as an update when
-     * Android says the package was updated after its install. Returns the version name, else null.
+     * The version whose "what's new" notice the player has not closed yet, or null. An update is
+     * detected when versionCode grew since the last launch; a fresh install only records the
+     * version, and the first launch of a build that predates this record counts as an update when
+     * Android says the package was updated after its install. The notice stays pending until
+     * {@link #whatsNewSeen} (so a rotation that recreates the launcher shows it again).
      */
-    static String updatedSinceLastLaunch(Context context) {
+    static String pendingWhatsNew(Context context) {
         android.content.pm.PackageInfo info;
         try { info = context.getPackageManager().getPackageInfo(context.getPackageName(), 0); }
         catch (Exception ignored) { return null; }
         long current = info.getLongVersionCode();
         SharedPreferences prefs = prefs(context);
         long previous = prefs.getLong("seen_version_code", 0);
-        if (previous == current) return null;
-        prefs.edit().putLong("seen_version_code", current).apply();
-        boolean updated = previous != 0 ? current > previous : info.lastUpdateTime > info.firstInstallTime;
-        return updated ? installed(context) : null;
+        if (previous != current) {
+            boolean updated = previous != 0 ? current > previous : info.lastUpdateTime > info.firstInstallTime;
+            SharedPreferences.Editor edit = prefs.edit().putLong("seen_version_code", current);
+            if (updated) edit.putString("whats_new", installed(context)); else edit.remove("whats_new");
+            edit.apply();
+        }
+        String pending = prefs.getString("whats_new", "");
+        return pending.isEmpty() ? null : pending;
     }
+
+    static void whatsNewSeen(Context context) { prefs(context).edit().remove("whats_new").apply(); }
 
     /** Release notes of a version (GitHub release v{version}) as plain text, or null if unavailable. */
     static void releaseNotes(Context context, String version, Consumer<String> callback) {
