@@ -289,7 +289,9 @@ void moduleHandle() {
     if(name.find('.')==std::string::npos) name+=".dll";
     if(uint32_t loaded=guestModuleHandle(name)) { ret(loaded,1); return; }
     auto module=modules.find(name);
-    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Module lookup %s",name.c_str());
+    static std::set<std::string> loggedLookups;
+    if(loggedLookups.insert(name).second)
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Module lookup %s",name.c_str());
     if(module==modules.end()) lastError=126;
     ret(module==modules.end()?0:module->second,1);
 }

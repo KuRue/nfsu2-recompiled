@@ -1,5 +1,6 @@
 """Prepare the pinned zlib-licensed DXVK native 1.9.2b for Android ARM64."""
 import argparse
+import hashlib
 import pathlib
 import shutil
 import subprocess
@@ -89,6 +90,9 @@ replace('src/d3d9/d3d9_swapchain.cpp', '    if (m_presenter->recreateSwapChain(p
 replace("src/d3d9/d3d9_swapchain.cpp", '  void D3D9SwapChainEx::DestroyBackBuffers() {\n    for (auto& backBuffer : m_backBuffers)\n      backBuffer->ClearContainer();\n', '  void D3D9SwapChainEx::DestroyBackBuffers() {\n    // Entries stay null when a previous CreateBackBuffers threw half way.\n    for (auto& backBuffer : m_backBuffers)\n      if (backBuffer != nullptr)\n        backBuffer->ClearContainer();\n')
 replace("src/d3d9/d3d9_swapchain.cpp", '    for (uint32_t i = 0; i < m_backBuffers.size(); i++)\n      m_backBuffers[i] = new D3D9Surface(m_parent, &desc, this);\n', '    // Android: allocating the images can fail (out of device memory on Reset,\n    // MediaTek/Unisoc reports). Leave no null entries behind for the next\n    // Reset, which used to crash in ClearContainer.\n    try {\n      for (uint32_t i = 0; i < m_backBuffers.size(); i++)\n        m_backBuffers[i] = new D3D9Surface(m_parent, &desc, this);\n    } catch (...) {\n      DestroyBackBuffers();\n      throw;\n    }\n')
 # Persistent VkPipelineCache (pipeline_cache.cpp): no recompiling every pipeline each session.
+replace("src/vulkan/vulkan_presenter.cpp", '    m_vkd->vkDestroySwapchainKHR(m_vkd->device(), m_swapchain, nullptr);', '    if (m_swapchain != VK_NULL_HANDLE)\n      m_vkd->vkDestroySwapchainKHR(m_vkd->device(), m_swapchain, nullptr);')
+replace("src/vulkan/vulkan_presenter.cpp", '    m_vki->vkDestroySurfaceKHR(m_vki->instance(), m_surface, nullptr);', '    if (m_surface != VK_NULL_HANDLE)\n      m_vki->vkDestroySurfaceKHR(m_vki->instance(), m_surface, nullptr);\n    m_surface = VK_NULL_HANDLE;')
 shutil.copy2(pathlib.Path(__file__).parent / "pipeline_cache.cpp", args.output / "src/dxvk/dxvk_pipecache.cpp")
 shutil.copy2(pathlib.Path(__file__).parent / "pipeline_cache.h", args.output / "src/dxvk/dxvk_pipecache.h")
 replace("src/dxvk/dxvk_pipemanager.cpp", '    m_cache     (new DxvkPipelineCache(device->vkd())) {', '    m_cache     (new DxvkPipelineCache(device->vkd(), device->properties().core.properties)) {')
+(args.output / "ANDROID_PREPARE_SHA256").write_text(hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest() + "\n", encoding="ascii")
