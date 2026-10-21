@@ -138,6 +138,8 @@ Current state as of **October 2026**:
 
 *For deep binary details, see [docs/NFSU2_BINARY_REPORT.md](docs/NFSU2_BINARY_REPORT.md).*
 
+**Other SPEED2.EXE builds.** Widescreen hooks are tied to the exact code of the lifted executable. The default table (`config/hooks.txt`) is for the build above. The build with SHA-1 `f4bb0d99…` used by the R36S port has its own table (`config/hooks-f4bb0d99.txt`): set `NFSU2_EXE_BUILD=f4bb0d99` both when lifting (`scripts/run_lift.py`) and when building (CMake reads the same variable). A different build needs its own `config/hooks-<build>.txt` and table in `src/runtime/widescreen.c`.
+
 ---
 
 ## Requirements
