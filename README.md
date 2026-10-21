@@ -236,6 +236,17 @@ The project uses tailored patches over upstream pcrecomp located in `patches/pcr
 
 ---
 
+## Contributors
+
+| Contributor | Contribution |
+|---|---|
+| [codepdbh](https://github.com/codepdbh) | Static recompilation, Windows host, Android port and launcher |
+| [Manuel Peña (manuelpllull)](https://github.com/manuelpllull) | R36S handheld port ([nfsu2-recompiled-r36s](https://github.com/manuelpllull/nfsu2-recompiled-r36s)) and widescreen hook work |
+
+Contributions are welcome through pull requests.
+
+---
+
 ## Legal & Disclaimer
 
 - Need for Speed, Underground, EA, and all associated game materials, logos, and trademarks are the property of **Electronic Arts Inc.**
