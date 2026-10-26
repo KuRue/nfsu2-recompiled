@@ -1,6 +1,7 @@
 package com.nfsu2.androidevolved;
 
 import android.media.MediaScannerConnection;
+import android.app.Dialog;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -19,6 +20,7 @@ import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.Window;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
@@ -208,6 +210,8 @@ public final class LauncherActivity extends Activity {
 
     /** Options panel navigation: null shows the category list, otherwise the open group's key. */
     private String openGroup;
+    /** The open themed value picker, if any. */
+    private Dialog dialog;
 
     private void refreshOptions() {
         optionsList.removeAllViews();
@@ -313,12 +317,50 @@ public final class LauncherActivity extends Activity {
         });
     }
 
-    /** A setting that cycles through its values on tap, game-menu style: ‹ current ›. */
+    /** A setting row that opens a themed value picker instead of cycling. */
     private View cycleRow(String title, String[] labels, String[] values, String current, String fallback,
                           java.util.function.Consumer<String> set) {
         int index = java.util.Arrays.asList(values).indexOf(current);
-        String shown = index < 0 ? fallback : labels[index];
-        return menuRow(title, "‹  " + shown + "  ›", () -> set.accept(values[(index + 1 + values.length) % values.length]));
+        return optionRow(title, index < 0 ? fallback : labels[index],
+                () -> chooseValue(title, labels, values, current, fallback, set));
+    }
+
+    /** Launcher-styled value picker: dark green card, green check on the current value. */
+    private void chooseValue(String title, String[] labels, String[] values, String current, String fallback,
+                             java.util.function.Consumer<String> set) {
+        LinearLayout card = card();
+        card.setPadding(dp(20), dp(14), dp(20), dp(16));
+        TextView heading = label(title, 15, ACCENT, true);
+        heading.setPadding(0, 0, 0, dp(8));
+        card.addView(heading);
+        int index = java.util.Arrays.asList(values).indexOf(current);
+        for (int i = 0; i < labels.length; i++) {
+            final String value = values[i];
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(12), dp(10), dp(12), dp(10));
+            GradientDrawable bg = new GradientDrawable();
+            bg.setColor(i == index ? 0x2E8EE03A : 0x168EE03A);
+            bg.setCornerRadius(dp(10));
+            row.setBackground(bg);
+            row.setClickable(true);
+            row.setOnClickListener(v -> { dialog.dismiss(); set.accept(value); });
+            row.addView(label(labels[i], 14, i == index ? ACCENT : Color.WHITE, i == index),
+                    new LinearLayout.LayoutParams(0, -2, 1f));
+            if (i == index) row.addView(label("✓", 16, ACCENT, true));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.topMargin = dp(6);
+            row.setLayoutParams(lp);
+            card.addView(row);
+        }
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(card);
+        final Dialog picker = new Dialog(this);
+        picker.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        picker.setContentView(scroll);
+        picker.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xB3000000));
+        picker.show();
+        dialog = picker;
     }
 
     /** Section header that returns to the category list. */
