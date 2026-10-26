@@ -491,3 +491,8 @@ standalone source-check runner and read-only pinned-checkout GitHub workflow;
 no game inputs/SDK/keys required, no APK or release publication. Maintenance docs
 explain coverage and backup boundary. Next verify local suite and GitHub run,
 and switch fork default branch to phone branch so homepage reflects this work.
+
+Verified GitHub source CI run40343408201 succeeded on clean Ubuntu24.04/JDK17,
+including all eight C++ and Java regressions, with no game/SDK/key prerequisites.
+Fork default branch and description confirmed via gh. No APK rebuild needed for
+README/CI and whitespace-only braces. No background process/device cleanup needed.
