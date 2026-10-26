@@ -206,50 +206,32 @@ public final class LauncherActivity extends Activity {
         refreshOptions();
     }
 
+    /** Options panel navigation: null shows the category list, otherwise the open group's key. */
+    private String openGroup;
+
     private void refreshOptions() {
         optionsList.removeAllViews();
+        if (openGroup != null) { buildGroup(openGroup); return; }
         PhonePreset preset = GameOptions.phonePreset(this);
         optionsList.addView(optionRow("Graphics and display",
-                preset == null ? "Custom" : preset.label, () -> showGroup("Graphics and display", this::buildGraphicsGroup)));
+                preset == null ? "Custom" : preset.label, () -> openGroup("graphics")));
         optionsList.addView(optionRow("Controls and feedback",
                 GameOptions.get(this, GameOptions.PEDALS).equals("triggers") ? "Trigger pedals" : "Game bindings",
-                () -> showGroup("Controls and feedback", this::buildControlsGroup)));
+                () -> openGroup("controls")));
         optionsList.addView(optionRow("Game", languageLabel() + " · " + GameOptions.onlineServer(this),
-                () -> showGroup("Game", this::buildGameGroup)));
-        optionsList.addView(optionRow("Career saves", backupSummary(),
-                () -> showGroup("Career saves", this::buildSavesGroup)));
+                () -> openGroup("game")));
+        optionsList.addView(optionRow("Career saves", backupSummary(), () -> openGroup("saves")));
         optionsList.addView(optionRow("Updates and support", "Version " + ReleaseUpdates.installed(this),
-                () -> showGroup("Updates and support", this::buildSupportGroup)));
+                () -> openGroup("support")));
     }
 
-    // ---- Option groups ---------------------------------------------------------------------------------
+    private void openGroup(String key) { openGroup = key; refreshOptions(); }
 
-    private LinearLayout openGroupList;
-    private Runnable openGroupBuilder;
+    private void closeGroup() { openGroup = null; refreshOptions(); }
 
-    /** A sub-menu of the OPTIONS list: its rows refresh in place when a setting changes. */
-    private void showGroup(String title, Runnable build) {
-        LinearLayout list = new LinearLayout(this);
-        list.setOrientation(LinearLayout.VERTICAL);
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(list);
-        int pad = dp(16);
-        scroll.setPadding(pad, pad / 2, pad, pad / 2);
-        openGroupList = list;
-        openGroupBuilder = build;
-        build.run();
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle(title).setView(scroll)
-                .setOnDismissListener(dialog -> { openGroupList = null; openGroupBuilder = null; refreshOptions(); })
-                .setNegativeButton("Back", null).show();
-    }
-
-    private void rebuildGroup() {
-        if (openGroupList != null) { openGroupList.removeAllViews(); openGroupBuilder.run(); }
-    }
-
-    private View groupRow(String title, String value, Runnable onClick) {
-        return optionRow(title, value, () -> { onClick.run(); rebuildGroup(); });
+    @Override public void onBackPressed() {
+        if (openGroup != null) { closeGroup(); return; }
+        super.onBackPressed();
     }
 
     private static boolean isControlOption(GameOptions.Option option) {
@@ -257,40 +239,95 @@ public final class LauncherActivity extends Activity {
                 || option.key.equals(GameOptions.PEDALS);
     }
 
-    private void buildGraphicsGroup() {
-        GpuDrivers.Driver driver = GpuDrivers.selected(this);
-        if (android.os.Process.is64Bit())
-            openGroupList.addView(groupRow("Vulkan driver", driver == null ? "System" : driver.name, this::chooseDriver));
-        PhonePreset preset = GameOptions.phonePreset(this);
-        openGroupList.addView(groupRow("Phone preset", preset == null ? "Custom" : preset.label, this::choosePhonePreset));
-        for (GameOptions.Option option : GameOptions.ALL)
-            if (!isControlOption(option))
-                openGroupList.addView(groupRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
-        openGroupList.addView(groupRow("Test driver", "GPU and Vulkan features", () -> probeDriver(false)));
-        openGroupList.addView(groupRow("Reset graphics cache", "Rebuild shaders", () -> GraphicsCache.prompt(this)));
+    private void buildGroup(String key) {
+        switch (key) {
+            case "graphics": {
+                TextView back = backRow("‹  Options");
+                optionsList.addView(back);
+                if (android.os.Process.is64Bit()) {
+                    List<GpuDrivers.Driver> drivers = GpuDrivers.list(this);
+                    String[] values = new String[drivers.size() + 1], labels = new String[drivers.size() + 1];
+                    values[0] = ""; labels[0] = "System";
+                    for (int i = 0; i < drivers.size(); i++) { values[i + 1] = drivers.get(i).id; labels[i + 1] = drivers.get(i).name; }
+                    optionsList.addView(cycleRow("Vulkan driver", labels, values,
+                            GpuDrivers.selectedId(this), "System", id -> { GpuDrivers.select(this, id); refreshOptions(); }));
+                    if (GpuDrivers.selected(this) != null)
+                        optionsList.addView(optionRow("Remove driver", GpuDrivers.selected(this).name, () -> {
+                            try { GpuDrivers.remove(this, GpuDrivers.selected(this)); refreshOptions(); }
+                            catch (java.io.IOException error) { message("Vulkan driver", error.getMessage()); }
+                        }));
+                    optionsList.addView(optionRow("Import driver ZIP", "Custom Adreno driver", () -> startActivityForResult(
+                            new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),
+                            REQUEST_DRIVER_ZIP)));
+                }
+                PhonePreset[] presets = PhonePreset.values();
+                String[] values = new String[presets.length], labels = new String[presets.length];
+                for (int i = 0; i < presets.length; i++) { values[i] = presets[i].name(); labels[i] = presets[i].label; }
+                PhonePreset preset = GameOptions.phonePreset(this);
+                optionsList.addView(cycleRow("Phone preset", labels, values, preset == null ? "" : preset.name(), "Custom",
+                        name -> { GameOptions.applyPhonePreset(this, PhonePreset.valueOf(name)); refreshOptions(); }));
+                for (GameOptions.Option option : GameOptions.ALL)
+                    if (!isControlOption(option))
+                        optionsList.addView(optionCycleRow(option));
+                optionsList.addView(optionRow("Test driver", "GPU and Vulkan features", () -> probeDriver(false)));
+                optionsList.addView(optionRow("Reset graphics cache", "Rebuild shaders", () -> GraphicsCache.prompt(this)));
+                break;
+            }
+            case "controls":
+                optionsList.addView(backRow("‹  Options"));
+                for (GameOptions.Option option : GameOptions.ALL)
+                    if (isControlOption(option))
+                        optionsList.addView(optionCycleRow(option));
+                optionsList.addView(optionRow("Test phone vibration", "Brief handset pulse", () -> {if(!PhoneFeedback.test(this))message("Phone vibration", "This device has no vibration motor.");}));
+                break;
+            case "game": {
+                optionsList.addView(backRow("‹  Options"));
+                List<String[]> found = allowed() ? languages() : new ArrayList<>();
+                if (!found.isEmpty()) {
+                    String[] values = new String[found.size()], labels = new String[found.size()];
+                    for (int i = 0; i < found.size(); i++) { values[i] = found.get(i)[1]; labels[i] = found.get(i)[0]; }
+                    optionsList.addView(cycleRow("Game language", labels, values, GameOptions.language(this), GameOptions.language(this), language -> {
+                        GameOptions.prefs(this).edit().putString(GameOptions.LANGUAGE, language).apply(); refreshOptions();
+                    }));
+                }
+                optionsList.addView(optionRow("Online server", GameOptions.onlineServer(this), this::chooseOnlineServer));
+                break;
+            }
+            case "saves":
+                optionsList.addView(backRow("‹  Options"));
+                optionsList.addView(optionRow("Backup career saves", backupSummary(), this::backupSaves));
+                optionsList.addView(optionRow("Restore career saves", "From a backup ZIP", this::restoreSaves));
+                break;
+            case "support":
+                optionsList.addView(backRow("‹  Options"));
+                optionsList.addView(optionRow("Check for updates",
+                        checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
+                optionsList.addView(optionRow("Report a problem", "Full log for GitHub", () -> prepareReport(null)));
+                break;
+        }
     }
 
-    private void buildControlsGroup() {
-        for (GameOptions.Option option : GameOptions.ALL)
-            if (isControlOption(option))
-                openGroupList.addView(groupRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
-        openGroupList.addView(groupRow("Test phone vibration", "Brief handset pulse", () -> {if(!PhoneFeedback.test(this))message("Phone vibration", "This device has no vibration motor.");}));
+    private View optionCycleRow(GameOptions.Option option) {
+        return cycleRow(option.title, option.labels, option.values, GameOptions.get(this, option.key), GameOptions.get(this, option.key), value -> {
+            GameOptions.set(this, option.key, value); refreshOptions();
+        });
     }
 
-    private void buildGameGroup() {
-        openGroupList.addView(groupRow("Game language", languageLabel(), this::chooseLanguage));
-        openGroupList.addView(groupRow("Online server", GameOptions.onlineServer(this), this::chooseOnlineServer));
+    /** A setting that cycles through its values on tap, game-menu style: ‹ current ›. */
+    private View cycleRow(String title, String[] labels, String[] values, String current, String fallback,
+                          java.util.function.Consumer<String> set) {
+        int index = java.util.Arrays.asList(values).indexOf(current);
+        String shown = index < 0 ? fallback : labels[index];
+        return menuRow(title, "‹  " + shown + "  ›", () -> set.accept(values[(index + 1 + values.length) % values.length]));
     }
 
-    private void buildSavesGroup() {
-        openGroupList.addView(groupRow("Backup career saves", backupSummary(), this::backupSaves));
-        openGroupList.addView(groupRow("Restore career saves", "From a backup ZIP", this::restoreSaves));
-    }
-
-    private void buildSupportGroup() {
-        openGroupList.addView(groupRow("Check for updates",
-                checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
-        openGroupList.addView(groupRow("Report a problem", "Full log for GitHub", () -> prepareReport(null)));
+    /** Section header that returns to the category list. */
+    private TextView backRow(String text) {
+        TextView back = label(text, 13, ACCENT, true);
+        back.setPadding(dp(4), 0, 0, dp(4));
+        back.setClickable(true);
+        back.setOnClickListener(v -> closeGroup());
+        return back;
     }
 
     // ---- Options ---------------------------------------------------------------------------------------
@@ -307,50 +344,6 @@ public final class LauncherActivity extends Activity {
         String current = GameOptions.language(this);
         for (String[] language : LANGUAGES) if (language[1].equals(current)) return language[0];
         return current;
-    }
-
-    private void chooseLanguage() {
-        List<String[]> found = allowed() ? languages() : new ArrayList<>();
-        if (found.isEmpty()) { message("Game language", "No languages found in Internal storage/nfsu2/LANGUAGES."); return; }
-        String[] names = new String[found.size()];
-        int checked = 0;
-        for (int i = 0; i < names.length; i++) {
-            names[i] = found.get(i)[0];
-            if (found.get(i)[1].equals(GameOptions.language(this))) checked = i;
-        }
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Game language")
-                .setSingleChoiceItems(names, checked, (dialog, which) -> {
-                    GameOptions.prefs(this).edit().putString(GameOptions.LANGUAGE, found.get(which)[1]).apply();
-                    dialog.dismiss(); refreshOptions(); rebuildGroup();
-                }).setNegativeButton("Cancel", null).show();
-    }
-
-    private void choosePhonePreset() {
-        PhonePreset[] presets = PhonePreset.values();
-        String[] labels = new String[presets.length];
-        PhonePreset current = GameOptions.phonePreset(this);
-        int checked = -1;
-        for (int i = 0; i < presets.length; i++) {
-            labels[i] = presets[i].label;
-            if (presets[i] == current) checked = i;
-        }
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Phone preset")
-                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
-                    GameOptions.applyPhonePreset(this, presets[which]);
-                    dialog.dismiss(); refreshOptions(); rebuildGroup();
-                }).setNegativeButton("Cancel", null).show();
-    }
-
-    private void chooseOption(GameOptions.Option option) {
-        String current = GameOptions.get(this, option.key);
-        int checked = 0;
-        for (int i = 0; i < option.values.length; i++) if (option.values[i].equals(current)) checked = i;
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle(option.title)
-                .setSingleChoiceItems(option.labels, checked, (dialog, which) -> {
-                    GameOptions.set(this, option.key, option.values[which]);
-                    dialog.dismiss(); refreshOptions(); rebuildGroup();
-                }).setNegativeButton("Cancel", null).show();
     }
 
     private void chooseOnlineServer() {
@@ -370,39 +363,13 @@ public final class LauncherActivity extends Activity {
                     String value = input.getText().toString().trim();
                     if (!GameOptions.validServer(value)) { message("Online server", "\"" + value + "\" is not a valid server name."); return; }
                     GameOptions.prefs(this).edit().putString(GameOptions.ONLINE_SERVER, value).apply();
-                    refreshOptions(); rebuildGroup();
+                    refreshOptions();
                 })
                 .setNeutralButton("Restore default", (dialog, which) -> {
                     GameOptions.prefs(this).edit().remove(GameOptions.ONLINE_SERVER).apply();
-                    refreshOptions(); rebuildGroup();
+                    refreshOptions();
                 })
                 .setNegativeButton("Cancel", null).show();
-    }
-
-    private void chooseDriver() {
-        List<GpuDrivers.Driver> drivers = GpuDrivers.list(this);
-        String[] names = new String[drivers.size() + 1];
-        names[0] = "System driver";
-        int selected = 0;
-        for (int i = 0; i < drivers.size(); ++i) {
-            names[i + 1] = drivers.get(i).name;
-            if (drivers.get(i).id.equals(GpuDrivers.selectedId(this))) selected = i + 1;
-        }
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Vulkan driver")
-                .setSingleChoiceItems(names, selected, (dialog, which) -> {
-                    GpuDrivers.select(this, which == 0 ? "" : drivers.get(which - 1).id);
-                    refreshOptions(); rebuildGroup(); dialog.dismiss();
-                })
-                .setPositiveButton("Import ZIP", (dialog, which) -> startActivityForResult(
-                        new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),
-                        REQUEST_DRIVER_ZIP))
-                .setNeutralButton("Remove selected", (dialog, which) -> {
-                    GpuDrivers.Driver driver = GpuDrivers.selected(this);
-                    if (driver == null) return;
-                    try { GpuDrivers.remove(this, driver); refreshOptions(); rebuildGroup(); }
-                    catch (java.io.IOException error) { message("Vulkan driver", error.getMessage()); }
-                })
-                .setNegativeButton("Back", null).show();
     }
 
     private void probeDriver(boolean thenPlay) {
@@ -695,6 +662,10 @@ public final class LauncherActivity extends Activity {
     }
 
     private View optionRow(String title, String value, Runnable onClick) {
+        return menuRow(title, value + "  ›", onClick);
+    }
+
+    private View menuRow(String title, String value, Runnable onClick) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(12), dp(8), dp(12), dp(8));
@@ -705,7 +676,7 @@ public final class LauncherActivity extends Activity {
         row.setClickable(true);
         row.setOnClickListener(v -> onClick.run());
         row.addView(label(title, 14, Color.WHITE, false), new LinearLayout.LayoutParams(0, -2, 1f));
-        TextView current = label(value + "  ›", 13, ACCENT, true);
+        TextView current = label(value, 13, ACCENT, true);
         current.setGravity(Gravity.END);
         row.addView(current, new LinearLayout.LayoutParams(0, -2, 1f));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
