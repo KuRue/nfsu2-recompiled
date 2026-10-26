@@ -6,6 +6,8 @@
 std::string connectGuestRuntime(const char* executable);
 void requestGuestRuntimeStop();
 void setGuestPaused(bool paused);
+// True once the game has presented at least one frame (i.e. it is live, not booting).
+bool guestHasPresented();
 void setGuestDisplaySize(unsigned width,unsigned height);
 void setGuestKey(unsigned scan,bool down);
 void clearGuestInput();

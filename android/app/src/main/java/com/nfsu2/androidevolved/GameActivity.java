@@ -215,6 +215,10 @@ public final class GameActivity extends NativeActivity {
     }
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        // Marks a running session so the launcher can offer Resume after a kill.
+        sessionMarker().delete();
+        try { new java.io.FileOutputStream(sessionMarker()).close(); } catch (java.io.IOException ignored) {}
+        resumeRequested = getIntent().getBooleanExtra("resume", false);
         inputManager=(android.hardware.input.InputManager)getSystemService(INPUT_SERVICE);
         tiltSensors=(android.hardware.SensorManager)getSystemService(SENSOR_SERVICE);
         tiltSensor=tiltSensors==null?null:tiltSensors.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER);
@@ -332,6 +336,7 @@ public final class GameActivity extends NativeActivity {
         if(inputManager!=null)inputManager.unregisterInputDeviceListener(gamepadListener);
         if (statusWindow != null) statusWindow.dismiss();
         if (touchControls != null) {touchControls.removeCallbacks(updateControlMode);touchControls.releaseAll();}
+        resumePoker.removeCallbacks(resumeTap);
         if (controlsWindow != null) controlsWindow.dismiss();
         super.onPause();
     }
@@ -344,6 +349,8 @@ public final class GameActivity extends NativeActivity {
         updateTiltSensor();
         if(inputManager!=null){inputManager.registerInputDeviceListener(gamepadListener,null);updateGamepads();}
         if(touchControls!=null) {touchControls.removeCallbacks(updateControlMode);touchControls.post(updateControlMode);}
+        resumePoker.removeCallbacks(resumeTap);
+        if (resumeRequested && resumeTaps == 0) resumePoker.postDelayed(resumeTap, 8000);
         boolean allowed = Build.VERSION.SDK_INT >= 30
                 ? Environment.isExternalStorageManager()
                 : checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
@@ -366,7 +373,27 @@ public final class GameActivity extends NativeActivity {
     }
     @Override protected void onDestroy() {
         super.onDestroy();
+        sessionMarker().delete();
         // Each launch uses a fresh guest machine in the dedicated :game process.
         android.os.Process.killProcess(android.os.Process.myPid());
     }
+
+    /** Dropped only on a clean exit: its survival after the process dies is what the launcher reads. */
+    static java.io.File sessionMarker() {
+        return new java.io.File(Environment.getExternalStorageDirectory(), "nfsu2/.session_running");
+    }
+
+    private boolean resumeRequested;
+    private final android.os.Handler resumePoker=new android.os.Handler(android.os.Looper.getMainLooper());
+    private int resumeTaps;
+    /** Resume = boot, then confirm through movies and "press start" until the career loads. */
+    private final Runnable resumeTap=new Runnable() {
+        @Override public void run() {
+            if (!foreground || !resumeRequested) return;
+            if (nativeDrivingControls() || ++resumeTaps > 40) { resumeRequested = false; return; }
+            nativeKey(0x1c, true);
+            performanceHandler.postDelayed(() -> nativeKey(0x1c, false), 60);
+            resumePoker.postDelayed(this, 4000);
+        }
+    };
 }

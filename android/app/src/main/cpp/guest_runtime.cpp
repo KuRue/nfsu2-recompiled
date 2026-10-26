@@ -965,6 +965,7 @@ std::string connectGuestRuntime(const char* executable) {
     }
 }
 void requestGuestRuntimeStop() {stopRequested=true;}
+bool guestHasPresented() { return lastPresentMs.load() > 0; }
 void setGuestPaused(bool paused) {
     // The AAudio stream keeps pulling from looping voices while the guest is
     // paused: in the background the last mixed sound repeated until the app

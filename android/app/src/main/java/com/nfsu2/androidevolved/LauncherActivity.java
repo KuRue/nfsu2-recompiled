@@ -54,8 +54,8 @@ public final class LauncherActivity extends Activity {
 
     private LinearLayout checksList, optionsList;
     private TextView status;
-    private Button play, access;
-    private boolean playAfterProbe, checkingUpdates, resumed;
+    private Button play, access, playArrow;
+    private boolean playAfterProbe, checkingUpdates, resumed, resumeNextLaunch;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -158,9 +158,18 @@ public final class LauncherActivity extends Activity {
 
         play = actionButton("PLAY", true);
         play.setOnClickListener(view -> play());
-        LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(-1, dp(54));
+        LinearLayout playRow = new LinearLayout(this);
+        playRow.addView(play, new LinearLayout.LayoutParams(0, dp(54), 1f));
+        playArrow = actionButton("▾", false);
+        playArrow.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        playArrow.setLetterSpacing(0);
+        LinearLayout.LayoutParams arrowParams = new LinearLayout.LayoutParams(dp(54), dp(54));
+        arrowParams.leftMargin = dp(10);
+        playArrow.setOnClickListener(view -> chooseStartMode());
+        playRow.addView(playArrow, arrowParams);
+        LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(-1, -2);
         playParams.topMargin = dp(8);
-        left.addView(play, playParams);
+        left.addView(playRow, playParams);
 
         access = actionButton("Allow access to Internal storage/nfsu2", false);
         access.setOnClickListener(view -> requestAccess());
@@ -202,6 +211,11 @@ public final class LauncherActivity extends Activity {
         boolean ready = exe && !languages().isEmpty();
         status.setText(!allowed ? "Allow file access to read Internal storage/nfsu2."
                 : ready ? "Internal storage/nfsu2" : "Copy your game files to Internal storage/nfsu2.");
+        // A surviving session marker means the game was killed mid-run: default to Resume.
+        boolean resumable = ready && !gameRunning() && GameActivity.sessionMarker().exists();
+        resumeNextLaunch = resumable;
+        play.setText(resumable ? "RESUME" : "PLAY");
+        playArrow.setVisibility(resumable ? View.VISIBLE : View.GONE);
         play.setEnabled(ready);
         play.setAlpha(ready ? 1f : .45f);
         access.setVisibility(allowed ? View.GONE : View.VISIBLE);
@@ -535,6 +549,12 @@ public final class LauncherActivity extends Activity {
 
     // ---- Launch ----------------------------------------------------------------------------------------
 
+    private void chooseStartMode() {
+        chooseValue("How to start", new String[] {"Resume career", "Start fresh"},
+                new String[] {"resume", "fresh"}, resumeNextLaunch ? "resume" : "fresh", "resume",
+                mode -> { resumeNextLaunch = mode.equals("resume"); launch(); });
+    }
+
     private void play() {
         if (android.os.Process.is64Bit() && GpuDrivers.selected(this) != null) probeDriver(true);
         else launch();
@@ -553,6 +573,7 @@ public final class LauncherActivity extends Activity {
                 Math.min(metrics.widthPixels, metrics.heightPixels));
         String[] loader = GpuDrivers.loaderArguments(this);
         startActivity(new Intent(this, GameActivity.class)
+                .putExtra("resume", resumeNextLaunch)
                 .putExtra("language", GameOptions.language(this))
                 .putExtra("renderWidth", size[0]).putExtra("renderHeight", size[1])
                 .putExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS)))

@@ -259,10 +259,18 @@ static void publishPad(){
     const float axes[6]={state.leftX,state.leftY,state.leftTrigger-state.rightTrigger,state.rightX,state.rightY,0.f};
     setGuestPad(axes,state.buttons,state.hatX,state.hatY);
 }
+// Set when the app pauses with the game live: the next unpause opens the game's own pause menu.
+static bool pauseReturnPending=false;
+static std::chrono::steady_clock::time_point pauseReturnEscUp{};
 static void onCommand(android_app* app, int32_t command) {
     auto& h = *static_cast<Host*>(app->userData);
     if (command == APP_CMD_RESUME) { h.resumed = true; h.failed = false; }
-    if (command == APP_CMD_PAUSE) { setGuestPaused(true);gamepad.releaseAll(setPadKey);clearGuestInput();h.resumed = false; h.renderer.stop();acknowledgeD3D9Surface(false);setD3D9HostWindow(nullptr); }
+    if (command == APP_CMD_PAUSE) {
+        // Returning to gameplay after an app switch should land on the pause
+        // menu, not resume driving mid-corner; remember the guest was live.
+        if (guestHasPresented()) pauseReturnPending = true;
+        setGuestPaused(true);gamepad.releaseAll(setPadKey);clearGuestInput();h.resumed = false; h.renderer.stop();acknowledgeD3D9Surface(false);setD3D9HostWindow(nullptr);
+    }
     if (command == APP_CMD_TERM_WINDOW || command == APP_CMD_WINDOW_RESIZED || command == APP_CMD_INIT_WINDOW) {
         setGuestPaused(true);h.renderer.stop(); h.failed = false;
         acknowledgeD3D9Surface(false);setD3D9HostWindow(nullptr);
@@ -427,6 +435,17 @@ void android_main(android_app* app) {
             setD3D9HostWindow(app->window);
             if(d3d9RequestsSurface()){host.renderer.stop();acknowledgeD3D9Surface(true);}
             setGuestPaused(false);
+            if (pauseReturnPending) {
+                // One Esc tap right after the guest wakes: the game opens its
+                // own pause menu instead of continuing to drive unattended.
+                pauseReturnPending = false;
+                setGuestKey(1, true);
+                pauseReturnEscUp = std::chrono::steady_clock::now() + std::chrono::milliseconds(120);
+            }
+            if (pauseReturnEscUp.time_since_epoch().count() && std::chrono::steady_clock::now() >= pauseReturnEscUp) {
+                setGuestKey(1, false);
+                pauseReturnEscUp = {};
+            }
             if(!customVulkanError.empty())throw std::runtime_error(customVulkanError);
             if (!host.renderer.device&&!d3d9RequestsSurface()&&!(customVulkanDriver&&host.guestAttempted)) {
                 checkGameData();
