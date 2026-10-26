@@ -11,7 +11,8 @@ public:
         int32_t code=AKeyEvent_getKeyCode(event),action=AKeyEvent_getAction(event);
         int button=buttonFor(code);
         if(button<0){
-            if(isGamepad(event)&&action==AKEY_EVENT_ACTION_DOWN&&AKeyEvent_getRepeatCount(event)==0)
+            // key() is only called for accepted pads, so log whatever falls through.
+            if(action==AKEY_EVENT_ACTION_DOWN&&AKeyEvent_getRepeatCount(event)==0)
                 __android_log_print(ANDROID_LOG_INFO,"NFSU2","Gamepad key %d not mapped (device %d)",code,AInputEvent_getDeviceId(event));
             return false;
         }
@@ -32,10 +33,8 @@ public:
         rightTrigger_=std::fmax(axis(AMOTION_EVENT_AXIS_RTRIGGER),axis(AMOTION_EVENT_AXIS_GAS));
         apply(driving,setKey);return true;
     }
-    static bool isGamepad(const AInputEvent* event){
-        int32_t source=AInputEvent_getSource(event);
-        return (source&AINPUT_SOURCE_GAMEPAD)==AINPUT_SOURCE_GAMEPAD||(source&AINPUT_SOURCE_JOYSTICK)==AINPUT_SOURCE_JOYSTICK;
-    }
+public:
+    using GamepadState::GamepadState;
 private:
     static int buttonFor(int32_t code){
         switch(code){
@@ -47,8 +46,8 @@ private:
         case AKEYCODE_BUTTON_R1:case AKEYCODE_BUTTON_6:return R1;
         case AKEYCODE_BUTTON_L2:case AKEYCODE_BUTTON_7:return L2;
         case AKEYCODE_BUTTON_R2:case AKEYCODE_BUTTON_8:return R2;
-        case AKEYCODE_BUTTON_SELECT:case AKEYCODE_BUTTON_9:case AKEYCODE_BACK:return Select;
-        case AKEYCODE_BUTTON_START:case AKEYCODE_BUTTON_10:case AKEYCODE_MENU:return Start;
+        case AKEYCODE_BUTTON_SELECT:case AKEYCODE_BUTTON_9:case AKEYCODE_BACK:case AKEYCODE_BUTTON_13:return Select;
+        case AKEYCODE_BUTTON_START:case AKEYCODE_BUTTON_10:case AKEYCODE_MENU:case AKEYCODE_BUTTON_14:case AKEYCODE_BUTTON_MODE:return Start;
         case AKEYCODE_BUTTON_THUMBL:case AKEYCODE_BUTTON_11:return ThumbL;
         case AKEYCODE_BUTTON_THUMBR:case AKEYCODE_BUTTON_12:return ThumbR;
         case AKEYCODE_DPAD_UP:return Up;case AKEYCODE_DPAD_DOWN:return Down;
