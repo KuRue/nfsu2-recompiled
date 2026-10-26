@@ -106,3 +106,35 @@ zero lift failures, 131 seconds. Lift statistics still include 2,910
 RECOMP_UNIMPL sites (2,890 3dnow, 17 int, 2 override, 1 excluded); zero failures
 is not a claim of complete instruction/runtime support. Generated files and
 analysis inputs remain ignored and must never be committed.
+
+
+## Full native APK and phone smoke test completed
+
+- `assembleDebug`: BUILD SUCCESSFUL in 15m 2s (first full compile plus ThinLTO).
+- APK: android/app/build/outputs/apk/debug/app-debug.apk, ARM64 only,
+  com.nfsu2.androidevolved.dev, version 0.14.10-phone-dev.
+- APK SHA-256: 9d298f04aa6bb3655066852f4b6cbb5be1b451402c478e76eebc90d84d60aabe.
+- apksigner verify: PASS, v2 signature. aapt confirms development ID/label/ABI.
+- User supplied new wireless port 192.168.1.169:37329; reconnected successfully.
+- Installed via T3 agent-device alongside upstream native release and web shell.
+  Granted its requested all-files permission in Android Settings. Launcher now
+  recognizes executable and game folders. Selected Balanced preset, verified
+  75% and 60 FPS in launcher; selected English (verified in launcher).
+- Native boot on SM-S938U1, Adreno 830, Vulkan API 1.3; initial render resolution
+  1756x810. Guest memory checks and actual runtime file checks pass. Intro movies
+  render locally and audio diagnostics initially report xruns=0.
+- Advanced via native touch controls through title, declined creating a test
+  profile, saw 3D main menu/car and a race countdown scene with cars/environment.
+  This is a rendering/startup smoke test, not proof of a completed playable race.
+- Observed additional live menu/settings changes between checks; stopped remote
+  input to avoid interfering. Later logs show an in-game reset to 1280x720;
+  do not describe the whole session as fixed at the initial launcher resolution.
+- Presentation logs report about 58-60 FPS in intros and 60 FPS in 3D menus.
+  Do not call these sustained racing FPS, battery results or a web/native comparison.
+- Evidence (local/ignored): build/verification/native-logcat.txt and native-screen.png.
+- Game deliberately left available for the user; no emulator, logcat watcher or
+  task HTTP server started. Completed Gradle's single-use daemon exits normally.
+
+Next work: controlled racing input and repeatable performance/thermal baseline;
+then profile bottlenecks before native rewrites, and evaluate optional graphics
+assets separately. No texture/model/renderer quality enhancement has shipped yet.
