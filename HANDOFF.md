@@ -419,3 +419,14 @@ residual at.35 and scale over1.2. Slow heave/pitch/weight transfer should be qui
 sharp curbs remain. Impact and slip algorithms unchanged. Host regression includes
 smooth1Hz suspension cycles versus sharp curb changes; all tests pass. Subjective
 hill-filter validation pending. No claim of direct tire-force measurements.
+
+## 2026-10-26: phone performance measurement pass
+
+User confirms hill filter feels better; leave haptics at this setting. User approved
+next performance pass. Baseline16 race-like windows (>30k calls) show57.6–60FPS,
+median59.35, graphics bridge median3.725ms; current thermal status0. This is not a
+sustained thermal result. Added bounded120-frame presentation interval percentiles
+and late count, plus lifecycle-scoped10s Android thermal/battery/charging logs.
+No preset changes justified yet; no claim of a speedup. docs/ANDROID_PHONE_PERFORMANCE.md
+explains evidence and limitations. Host quantile regression passed. Requested a
+~5minute normal race after installation; physical sustained validation pending.

@@ -7,6 +7,7 @@
 #include "guest_heap.h"
 #include "runtime_log.h"
 #include "frame_pacer.h"
+#include "frame_metrics.h"
 #include "force_feedback.h"
 #include "physics_probe.h"
 #include "physics_haptics.h"
@@ -358,10 +359,17 @@ void d3dDispatch(){
         renderThread=true;
         if(deadline>now)yieldGuestMachine(0,deadline);
         else if(machine.hasWaiters()){auto before=std::chrono::steady_clock::now();yieldGuestMachine();++renderYields;renderWait+=std::chrono::steady_clock::now()-before;}
+        static FrameMetrics intervals;
+        static auto previousFrame=std::chrono::steady_clock::now();
+        auto completed=std::chrono::steady_clock::now();
+        intervals.add(std::chrono::duration<double,std::milli>(completed-previousFrame).count());previousFrame=completed;
         static unsigned frames=0;static auto since=std::chrono::steady_clock::now();
         if(++frames==120){serviceGuestSound();auto now=std::chrono::steady_clock::now();double seconds=std::chrono::duration<double>(now-since).count();
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest D3D9 presentation %.1f FPS over %.2f seconds; bridge ~%.2f ms/frame (present %.2f), %.0f calls/frame",
                 frames/seconds,seconds,double(bridgeTime.count())/1e6/frames,double(presentTime.count())/1e6/frames,double(bridgeCalls)/frames);
+            auto timing=intervals.take(frameLimit.load(std::memory_order_relaxed));
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Frame intervals ms p50=%.2f p95=%.2f p99=%.2f max=%.2f late=%u/%u (over 1.5x target)",
+                timing.p50,timing.p95,timing.p99,timing.maximum,timing.late,timing.count);
             std::array<unsigned,5> top{};
             for(unsigned slot=0;slot<4096u;++slot)for(unsigned rank=0;rank<top.size();++rank)
                 if(methodTime[slot]>methodTime[top[rank]]){std::copy_backward(top.begin()+rank,top.end()-1,top.end());top[rank]=slot;break;}

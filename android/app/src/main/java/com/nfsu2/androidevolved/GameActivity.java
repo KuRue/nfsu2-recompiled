@@ -27,6 +27,19 @@ import android.util.DisplayMetrics;
 /** Storage permission gateway for the fixed Internal storage/nfsu2 directory. */
 public final class GameActivity extends NativeActivity {
     static { System.loadLibrary("nfsu2_android"); }
+    private final android.os.Handler performanceHandler=new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable performanceSample=new Runnable() {
+        @Override public void run() {
+            if(!foreground)return;
+            android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
+            Intent battery=registerReceiver(null,new android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            int temperature=battery==null?0:battery.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE,0);
+            int plugged=battery==null?0:battery.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED,0);
+            android.util.Log.i("NFSU2", "Phone performance thermal="+(power==null?-1:power.getCurrentThermalStatus())+
+                    " batteryC="+(temperature/10f)+" plugged="+plugged);
+            performanceHandler.postDelayed(this,10000);
+        }
+    };
     private boolean requested;
     private boolean foreground;
     private PhoneFeedback phoneFeedback;
@@ -312,6 +325,7 @@ public final class GameActivity extends NativeActivity {
     }
     @Override protected void onPause() {
         foreground=false;
+        performanceHandler.removeCallbacks(performanceSample);
         if(phoneFeedback!=null)phoneFeedback.stop();
         holdLanBroadcasts(false);
         updateTiltSensor();
@@ -324,6 +338,7 @@ public final class GameActivity extends NativeActivity {
     @Override protected void onResume() {
         super.onResume();
         foreground=true;
+        performanceHandler.removeCallbacks(performanceSample);performanceHandler.post(performanceSample);
         if(phoneFeedback!=null)phoneFeedback.start();
         holdLanBroadcasts(true);
         updateTiltSensor();
