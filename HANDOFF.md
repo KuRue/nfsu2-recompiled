@@ -449,3 +449,18 @@ Kept Balanced75%/60 and buffers unchanged: no sustained degradation observed.
 Full methodology and caveats in docs/ANDROID_PHONE_PERFORMANCE.md. Performance
 pass complete for this phone/run; occasional brief hitches remain. No new build,
 background process, device stream or emulator started for result collection.
+
+## 2026-10-26: fork-aware manual update workflow
+
+Added scripts/phone_upstream.py (fetch/report; optional isolated review worktree,
+no merge/push) and build_phone_update.py (clean-source versioned local ARM64 build,
+pinned package/certificate validation, APK/hash/dependency manifest archive; no
+install/publish). Config pins existing installed development certificate. In-app
+debug checks and release notes now use KuRue fork, separate cache, numeric release
+tags with known installed suffix handling; debug links go to release page for
+review. Production source unchanged. Default dev version26/0.14.11. README marks
+upstream downloads; docs/ANDROID_UPDATES.md explains prerequisites, signing backup,
+save preservation, qualified downgrade and manual publication boundary. No fork
+releases published; gh confirms zero. Upstream a8c7a39 has no unmerged commits.
+Java version-comparison regression and Python compile checks passed. No game data,
+keys or lifted C added. Next: run full artifact script and install/smoke-check it.

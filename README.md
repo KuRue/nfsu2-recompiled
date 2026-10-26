@@ -1,3 +1,5 @@
+> Phone fork: native Android work lives on `android/phone-presets`. See [safe upstream updates and APK builds](docs/ANDROID_UPDATES.md). The downloads below belong to upstream and do not include our phone changes.
+
 > Android phone fork: optional [HD textures, lighting, sharpening and reflections](docs/ANDROID_HD_GRAPHICS.md).
 
 # Need for Speed Underground 2 — Recompiled

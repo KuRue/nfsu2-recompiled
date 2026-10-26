@@ -8,6 +8,9 @@ final class ReleaseVersion {
         return new int[] {Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2])};
     }
     static boolean newer(String remote, String installed) {
+        // Our development APK has a fixed channel suffix; release tags stay strict.
+        if (installed != null && installed.endsWith("-phone-dev-physics"))
+            installed = installed.substring(0, installed.length() - "-phone-dev-physics".length());
         int[] a = parse(remote), b = parse(installed);
         if (a == null || b == null) return false;
         for (int i = 0; i < 3; i++) if (a[i] != b[i]) return a[i] > b[i];

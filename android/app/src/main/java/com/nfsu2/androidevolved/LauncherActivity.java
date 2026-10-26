@@ -405,7 +405,7 @@ public final class LauncherActivity extends Activity {
             if (result.error != null) { if (manual) message("Updates", result.error); return; }
             if (!ReleaseVersion.newer(result.tag, ReleaseUpdates.installed(this))) {
                 if (manual) message("Updates", "Your version is " + ReleaseUpdates.installed(this)
-                        + ". No newer version is available on GitHub.");
+                        + ". No newer version is published in " + BuildConfig.UPDATE_REPOSITORY + ".");
                 return;
             }
             android.content.SharedPreferences updates = ReleaseUpdates.prefs(this);

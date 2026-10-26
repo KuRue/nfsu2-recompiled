@@ -2,13 +2,15 @@ plugins { id 'com.android.application' }
 android {
     namespace 'com.nfsu2.androidevolved'
     compileSdk 35
+    buildFeatures { buildConfig true }
     ndkVersion '28.2.13676358'
     defaultConfig {
         applicationId 'com.nfsu2.androidevolved'
         minSdk 29
         targetSdk 35
-        versionCode 25
-        versionName '0.14.10'
+        versionCode Integer.parseInt(project.findProperty('phoneVersionCode') ?: '26')
+        versionName (project.findProperty('phoneVersionName') ?: '0.14.11')
+        buildConfigField 'String', 'UPDATE_REPOSITORY', '"codepdbh/nfsu2-recompiled"'
         manifestPlaceholders = [appLabel: 'NFSU2 Android Evolved']
         // -PnfsAbi=armeabi-v7a builds the separate 32-bit APK.
         ndk { abiFilters(project.findProperty('nfsAbi') ?: 'arm64-v8a') }
@@ -18,6 +20,7 @@ android {
         debug {
             // Keep locally signed development builds beside the upstream release.
             applicationIdSuffix '.dev'
+            buildConfigField 'String', 'UPDATE_REPOSITORY', '"KuRue/nfsu2-recompiled"'
             versionNameSuffix '-phone-dev-physics'
             manifestPlaceholders = [appLabel: 'NFSU2 Native Dev']
         }

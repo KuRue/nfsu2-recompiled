@@ -1,0 +1,7 @@
+{
+  "package": "com.nfsu2.androidevolved.dev",
+  "certificate_sha256": "a143c5d56262f25ae393d7a8b0b591808279596f327018c0a8d11a2d3d9927a0",
+  "upstream": "https://github.com/codepdbh/nfsu2-recompiled.git",
+  "fork": "https://github.com/KuRue/nfsu2-recompiled",
+  "branch": "android/phone-presets"
+}
