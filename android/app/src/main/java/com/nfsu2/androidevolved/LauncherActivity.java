@@ -211,6 +211,7 @@ public final class LauncherActivity extends Activity {
         // Custom drivers (libadrenotools) exist only in the 64-bit build.
         if (android.os.Process.is64Bit())
             optionsList.addView(optionRow("Vulkan driver", driver == null ? "System" : driver.name, this::chooseDriver));
+        optionsList.addView(optionRow("Test phone vibration", "Brief handset pulse", () -> {if(!PhoneFeedback.test(this))message("Phone vibration", "This device has no vibration motor.");}));
         optionsList.addView(optionRow("Test driver", "GPU and Vulkan features", () -> probeDriver(false)));
         optionsList.addView(optionRow("Game language", languageLabel(), this::chooseLanguage));
         optionsList.addView(optionRow("Reset graphics cache", "Rebuild shaders", () -> GraphicsCache.prompt(this)));

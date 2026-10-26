@@ -261,3 +261,42 @@ claim a completed physical brake test. Full local log controls-logcat.txt.
 
 User subsequently replied “Working” to the explicit RT gas / LT brake physical
 test request: both pedals confirmed. Implementation commit8259eec.
+
+## Phone force feedback — 2026-10-26
+
+User requested game force feedback through the phone's vibration motor. Added
+native DirectInput force capabilities and effect objects, magnitude/gain/duration/
+repeat/envelope handling, device gain/pause/actuator commands and a maximum128
+live effects. A neutral virtual joystick provides the endpoint without a physical
+pad too. Existing physical input and touch visibility remain separate. Condition
+forces (spring/damper) create no motor output; constant/ramp/periodic forces map
+to scalar vibration, not directional torque or waveform frequency reproduction.
+No artificial collision/engine signals. Normal VIBRATE manifest permission added.
+
+Java PhoneFeedback targets the handset default motor, polls25Hz and uses finite
+65ms pulses scaled to Light25/Medium50(default)/Strong100, plus Off. Lifecycle
+pause cancels the motor AND stops active guest effects. Missing motor disables
+capability. Added launcher Test phone vibration180ms pulse. Full details:
+docs/ANDROID_PHONE_FEEDBACK.md. Packet/duration mixer regression tests PASS;
+startup guest-pointer/partial/envelope/malformed parameter checks PASS; APK build
+PASS (18s) and signature verification PASS. Version0.14.10-phone-dev-haptics APK
+SHA256 d53469d979d665bfae74b1e15150c83e028f2f2b00acd45d5e97ba3fee2d4911.
+
+Old phone port37329 disconnected; user supplied192.168.1.169:33001. Installed
+same dev package there, retained all graphics/HUD/control prefs. User physically
+confirmed the test pulse (Yes). Game process2361 subsequently created/started
+real sine/square/spring force objects and updated their parameters; PhoneFeedback
+logged motor amplitudes19 and127 at Medium. Samsung vibrator_manager recorded
+65ms game-use pulses at0.07 and0.50 amplitude under the correct app UID10698,
+including explicit cancellation and supersession. This verifies the real game-
+effect-to-Android-service path, beyond the launcher test pulse. Evidence (ignored):
+build/verification/haptics-phone-{logcat,vibrator}.txt. Did not remotely drive the
+phone after game launch. User can tune Phone vibration in the launcher next launch.
+
+While phone was disconnected, booted s25u_sim and copied a separate base data
+clone for testing. Its vibration service accepted test pulse; startup guest force
+parameter checks passed and game reached title. No phone-feel inference from
+emulator. Emulator disappeared before final phone reconnection; rebooted it solely for
+cleanup and restored its MOVIES test backup from MOVIES_test_hold. Emulator is
+shut down at task completion.
+No task server or persistent logcat/watch process was started.

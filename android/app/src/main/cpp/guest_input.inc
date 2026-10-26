@@ -128,6 +128,7 @@ unsigned buildKeyboardActions(uint32_t format){
 void releaseInputObject(uint32_t address){auto found=inputObjects.find(address);if(found==inputObjects.end())return;
     if(--found->second.references)return;heaps->free(GuestHeaps::process,found->second.table);heaps->free(GuestHeaps::process,address);inputObjects.erase(found);
 }
+#include "guest_force_feedback.inc"
 // IDirectInputDevice8 methods whose joystick behaviour differs from the
 // keyboard/mouse path. Returns false for the shared ones (Acquire, cooperative
 // level, device info, ...).
@@ -143,19 +144,23 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
     auto fillObject=[&](uint32_t output,const PadObject& entry){
         uint32_t bytes=read32(output);std::memset(ptr(output+4,bytes-4),0,bytes-4);
         auto guid=directInputGuid(entry.guidData1);std::memcpy(ptr(output+4,16),guid.data(),16);
-        write32(output+20,entry.offset);write32(output+24,entry.type);write32(output+28,entry.flags);
+        bool actuator=phoneFeedbackEnabled&&entry.offset<=4;
+        write32(output+20,entry.offset);write32(output+24,entry.type|(actuator?0x01000000u:0));write32(output+28,entry.flags|(actuator?1u:0));
+        if(actuator&&bytes>=300){write32(output+292,10000);write32(output+296,10000);}
         std::memcpy(ptr(output+32,std::strlen(entry.name)+1),entry.name,std::strlen(entry.name)+1);
     };
     switch(method){
     case 3:{uint32_t output=arg(1);if(!output||read32(output)!=44){ret(diInvalid,2);return true;}
-        std::memset(ptr(output+4,40),0,40);write32(output+4,1);write32(output+8,0x10215);
-        write32(output+12,6);write32(output+16,10);write32(output+20,1);ret(0,2);return true;}
+        std::memset(ptr(output+4,40),0,40);write32(output+4,phoneFeedbackEnabled?0x101:1);write32(output+8,0x10215);
+        write32(output+12,6);write32(output+16,10);write32(output+20,1);if(phoneFeedbackEnabled){write32(output+24,1000);write32(output+28,1000);}ret(0,2);return true;}
     case 4:{uint32_t callback=arg(1),context=arg(2),flags=arg(3);if(!callback){ret(diInvalid,4);return true;}
         uint32_t instance=allocate(316);
         try{for(auto& entry:padObjects){
             uint32_t category=flags&0x1f;
             if(category&&!(entry.type&category))continue;
+            if((flags&0x01000000u)&&entry.offset>4)continue;
             write32(instance,316);fillObject(instance,entry);
+            if(phoneFeedbackEnabled&&entry.offset<=4)write32(instance+24,entry.type|0x01000000u);
             if(!callGuest(callback,{instance,context}))break;
         }}catch(...){heaps->free(GuestHeaps::process,instance);throw;}
         heaps->free(GuestHeaps::process,instance);ret(0,4);return true;}
@@ -167,6 +172,8 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
             if(method==6){if(object.acquired){ret(0x800700aa,3);return true;}if(read32(header+16)>4096){ret(diInvalid,3);return true;}object.bufferSize=read32(header+16);}
             else write32(header+16,object.bufferSize);ret(0,3);return true;}
         if(property==2){if(size!=20){ret(diInvalid,3);return true;}if(method==5)write32(header+16,0);ret(method==6&&read32(header+16)?0x80004001:0,3);return true;}
+        if(property==7){if(size!=20||how){ret(diInvalid,3);return true;}
+            std::lock_guard<std::mutex> lock(inputMutex);if(method==6)forceMixer.gain=std::min(read32(header+16),10000u);else write32(header+16,forceMixer.gain);ret(0,3);return true;}
         if(property==9){if(size!=20){ret(diInvalid,3);return true;}if(method==5)write32(header+16,0);ret(0,3);return true;}
         if(property!=4&&property!=5&&property!=6){ret(0x80004001,3);return true;}
         if(size!=(property==4?24u:20u)){ret(diInvalid,3);return true;}
@@ -243,11 +250,33 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
         if(!output||(read32(output)!=316&&read32(output)!=280)){ret(diInvalid,4);return true;}
         int found=objectFor(how,objectId);if(found<0){ret(0x80070002,4);return true;}
         fillObject(output,padObjects[found]);ret(0,4);return true;}
-    case 19:ret(0,4);return true;   // EnumEffects: no force feedback
+    case 18:{uint32_t type=forceType(arg(1)),params=arg(2),out=arg(3);
+        if(!out||!memory->writable(out,4)){ret(diInvalid,5);return true;}write32(out,0);
+        if(!phoneFeedbackEnabled||!type||arg(4)){ret(0x80004001,5);return true;}
+        nfs_ff::Effect effect;effect.owner=self;effect.type=type;
+        if(params&&!readForceParameters(effect,params,0x3ff)){ret(diInvalid,5);return true;}
+        {std::lock_guard<std::mutex> lock(inputMutex);if(forceMixer.effects.size()>=128){ret(0x8007000e,5);return true;}}
+        uint32_t address=createInputObject(5);{std::lock_guard<std::mutex> lock(inputMutex);forceMixer.effects.emplace(address,effect);}
+        write32(out,address);NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Phone force effect created type=%08x",type);ret(0,5);return true;}
+    case 19:{uint32_t callback=arg(1),context=arg(2),category=arg(3)&0xff;if(!callback){ret(diInvalid,4);return true;}
+        if(phoneFeedbackEnabled){uint32_t info=allocate(292);
+            try{for(uint32_t type=0x13541c20;type<=0x13541c2a;++type){if(category&&forceCategory(type)!=category)continue;
+                fillEffectInfo(info,type);if(!callGuest(callback,{info,context}))break;}}
+            catch(...){heaps->free(GuestHeaps::process,info);throw;}
+            heaps->free(GuestHeaps::process,info);}
+        ret(0,4);return true;}
+    case 20:{uint32_t type=forceType(arg(2));if(!type||!arg(1)||!memory->writable(arg(1),292)||read32(arg(1))!=292){ret(diInvalid,3);return true;}
+        fillEffectInfo(arg(1),type);ret(0,3);return true;}
+    case 21:{if(!arg(1)||!memory->writable(arg(1),4)){ret(diInvalid,2);return true;}write32(arg(1),phoneFeedbackEnabled?0x20:0x10);ret(0,2);return true;}
+    case 22:{std::lock_guard<std::mutex> lock(inputMutex);uint32_t command=arg(1);
+        if(command==1||command==2)forceMixer.stopAll(self);
+        else if(command==4)forceMixer.paused=true;else if(command==8)forceMixer.paused=false;
+        else if(command==16)forceMixer.actuators=true;else if(command==32)forceMixer.actuators=false;
+        else{ret(diInvalid,2);return true;}ret(0,2);return true;}
     case 25:ret(object.acquired?0:diNotAcquired,1);return true;
     case 29:ret(0x80004001,4);return true;
     case 30:ret(0x80004001,4);return true;
-    case 16:case 17:case 18:case 20:case 21:case 22:case 23:case 24:case 26:case 27:case 28:case 31:{
+    case 16:case 17:case 23:case 24:case 26:case 27:case 28:case 31:{
         // Argument counts including `this`, for the stdcall cleanup.
         static constexpr uint32_t args[32]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,4,5,0,3,2,2,4,2,0,5,5,5,0,0,2};
         ret(0x80004001,args[method]);return true;}
@@ -306,27 +335,30 @@ void inputDispatch(){
     if(method==0){
         if(!arg(2)){ret(0x80004003,3);return;}write32(arg(2),0);
         std::array<uint8_t,16> unknown={0,0,0,0,0,0,0,0,0xc0,0,0,0,0,0,0,0x46};
-        if(!inputGuidEquals(arg(1),kind==1?input8Guid:device8Guid)&&!inputGuidEquals(arg(1),unknown)){ret(0x80004002,3);return;}
+        if(!inputGuidEquals(arg(1),kind==1?input8Guid:device8Guid)&&!(kind==5&&inputGuidEquals(arg(1),forceEffectIid))&&!inputGuidEquals(arg(1),unknown)){ret(0x80004002,3);return;}
         ++object.references;write32(arg(2),self);ret(0,3);return;
     }
     if(method==1){ret(++object.references,1);return;}
     if(method==2){uint32_t refs=--object.references;if(!refs){if(kind==4&&object.acquired)--inputPadAcquired;
+        if(kind==4||kind==5){std::lock_guard<std::mutex> lock(inputMutex);if(kind==5)forceMixer.effects.erase(self);else forceMixer.stopAll(self);}
         heaps->free(GuestHeaps::process,object.table);heaps->free(GuestHeaps::process,self);inputObjects.erase(found);}ret(refs,1);return;}
+    if(kind==5){forceEffectDispatch(self,method);return;}
     if(kind==1){
         switch(method){
         case 3:{uint32_t output=arg(2);if(!output){ret(0x80004003,4);return;}write32(output,0);
             uint32_t device=inputGuidEquals(arg(1),keyboardGuid)?2:inputGuidEquals(arg(1),mouseGuid)?3:inputGuidEquals(arg(1),padGuid)?4:0;
-            if(device==4){std::lock_guard<std::mutex> lock(inputMutex);if(!inputPadConnected)device=0;}
+            if(device==4){std::lock_guard<std::mutex> lock(inputMutex);if(!inputPadConnected&&!phoneFeedbackEnabled)device=0;}
             if(inputGuidEquals(arg(1),padGuid))NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","DirectInput CreateDevice gamepad: %s",device?"created":"not connected");
             if(arg(3)){ret(0x80040110,4);return;}if(!device){ret(0x80070002,4);return;}
             write32(output,createInputObject(device));ret(0,4);return;}
         case 4:{uint32_t type=arg(1),callback=arg(2),context=arg(3),flags=arg(4);
             if(!callback||flags&~0x70111u){ret(diInvalid,5);return;}
-            bool pad;{std::lock_guard<std::mutex> lock(inputMutex);pad=inputPadConnected;}
+            bool pad;{std::lock_guard<std::mutex> lock(inputMutex);pad=inputPadConnected||phoneFeedbackEnabled;}
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","DirectInput EnumDevices type=%u flags=%x gamepad=%d",type,flags,int(pad));
             uint32_t instance=allocate(580);
             try{for(uint32_t device:{2u,3u,4u}){
-                if(device==4&&(!pad||(flags&0x100u)))continue;  // no force feedback
+                if(device==4&&(!pad||((flags&0x100u)&&!phoneFeedbackEnabled)))continue;
+                if(device!=4&&(flags&0x100u))continue;
                 uint32_t deviceType=device==2?0x13:device==3?0x12:0x15;
                 uint32_t deviceClass=device==2?3:device==3?2:4;
                 if(type!=0&&(type!=1||device==4)&&type!=deviceClass&&(type&0xff)!=deviceType)continue;
@@ -336,7 +368,7 @@ void inputDispatch(){
                 if(!proceed)break;
             }}catch(...){heaps->free(GuestHeaps::process,instance);throw;}
             heaps->free(GuestHeaps::process,instance);ret(0,5);return;}
-        case 5:{if(inputGuidEquals(arg(1),padGuid)){std::lock_guard<std::mutex> lock(inputMutex);ret(inputPadConnected?0:1,2);return;}
+        case 5:{if(inputGuidEquals(arg(1),padGuid)){std::lock_guard<std::mutex> lock(inputMutex);ret(inputPadConnected||phoneFeedbackEnabled?0:1,2);return;}
             ret(inputGuidEquals(arg(1),keyboardGuid)||inputGuidEquals(arg(1),mouseGuid)?0:0x80070002,2);return;}
         case 7:ret(arg(2)==0x800?0:diInvalid,3);return;
         case 9:{uint32_t format=arg(2),callback=arg(3),context=arg(4),flags=arg(5);
@@ -373,7 +405,7 @@ void inputDispatch(){
          if(kind==4){object.lastValues.clear();for(auto& item:object.format)object.lastValues.push_back(padItemValue(object,item));++inputPadAcquired;
              NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Gamepad acquired by the game: %zu objects",object.format.size());}}
         object.acquired=true;ret(0,1);return;
-    case 8:{bool previous=object.acquired;object.acquired=false;if(previous&&kind==4)--inputPadAcquired;ret(previous?0:1,1);return;}
+    case 8:{bool previous=object.acquired;object.acquired=false;if(previous&&kind==4){--inputPadAcquired;std::lock_guard<std::mutex> lock(inputMutex);forceMixer.stopAll(self);}ret(previous?0:1,1);return;}
     case 9:{if(!object.acquired){ret(diNotAcquired,3);return;}
         if(arg(1)!=object.size||!arg(2)){ret(diInvalid,3);return;}
         std::lock_guard<std::mutex> lock(inputMutex);std::memset(ptr(arg(2),object.size),0,object.size);
@@ -439,7 +471,22 @@ void inputDispatch(){
     default:throw GuestStop("DirectInput device method pending: "+std::to_string(method));
     }
 }
+void testGuestForceParameters(){
+    uint32_t p=allocate(56),data=allocate(16),envelope=allocate(20);
+    std::memset(ptr(p,56),0,56);std::memset(ptr(data,16),0,16);std::memset(ptr(envelope,20),0,20);
+    write32(p,56);write32(p+8,150000);write32(p+16,5000);write32(p+44,16);write32(p+48,data);write32(data,8000);
+    nfs_ff::Effect effect;effect.type=0x13541c23;
+    if(!readForceParameters(effect,p,0x3ff)||effect.magnitude!=8000||effect.durationUs!=150000||effect.gain!=5000)throw GuestStop("Force parameter decode failed");
+    write32(p+16,100);if(!readForceParameters(effect,p,4)||effect.gain!=100||effect.magnitude!=8000)throw GuestStop("Force partial update failed");
+    write32(p+40,envelope);write32(envelope,20);write32(envelope+4,500);write32(envelope+8,10000);
+    if(!readForceParameters(effect,p,0x80)||effect.attackUs!=10000||effect.attackLevel!=500)throw GuestStop("Force envelope decode failed");
+    write32(p+44,2);if(readForceParameters(effect,p,0x100)||effect.magnitude!=8000)throw GuestStop("Force invalid payload accepted");
+    write32(p+40,0xffffffffu);if(readForceParameters(effect,p,0x80))throw GuestStop("Force invalid envelope accepted");
+    heaps->free(GuestHeaps::process,p);heaps->free(GuestHeaps::process,data);heaps->free(GuestHeaps::process,envelope);
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Force parameter checks passed: guest pointers, partial updates, envelopes and malformed bounds");
+}
 void testGuestInput(){
+    testGuestForceParameters();
     uint32_t keyboard=createInputObject(2),format=allocate(24),items=allocate(32),output=allocate(9);
     write32(format,24);write32(format+4,16);write32(format+8,2);write32(format+12,8);write32(format+16,2);write32(format+20,items);
     write32(items+4,1);write32(items+8,(0xc8<<8)|4);write32(items+20,7);write32(items+24,(0x1c<<8)|4);

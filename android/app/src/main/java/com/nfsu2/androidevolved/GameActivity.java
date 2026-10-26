@@ -29,6 +29,7 @@ public final class GameActivity extends NativeActivity {
     static { System.loadLibrary("nfsu2_android"); }
     private boolean requested;
     private boolean foreground;
+    private PhoneFeedback phoneFeedback;
     private TextView status;
     private PopupWindow statusWindow;
     private PopupWindow controlsWindow;
@@ -141,6 +142,9 @@ public final class GameActivity extends NativeActivity {
     private static native void nativeTypeText(String value, boolean replace);
     private static native void nativePointer(float x, float y, int phase);
     private static native void nativeLanguage(String language);
+    private static native void nativePhoneFeedback(boolean enabled);
+    private static native int nativeFeedbackLevel();
+    private static native void nativeStopFeedback();
     private static native void nativeTriggerFallback(boolean enabled);
     private static native void nativeVisualOptions(boolean packs, int filtering, int sharpness, int look, int reflections);
     private static native void nativeResolution(int width, int height);
@@ -225,6 +229,9 @@ public final class GameActivity extends NativeActivity {
         nativeOnlineServer(GameOptions.validServer(server) ? server : GameOptions.onlineServer(this));
         nativeMinimapTop(launch.getBooleanExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top")));
         nativeBackBuffers(launch.getIntExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY))));
+        phoneFeedback=new PhoneFeedback(this,Integer.parseInt(GameOptions.get(this,GameOptions.FEEDBACK)),
+                GameActivity::nativeFeedbackLevel,GameActivity::nativeStopFeedback);
+        nativePhoneFeedback(phoneFeedback.enabled());
         nativeTriggerFallback(GameOptions.get(this, GameOptions.PEDALS).equals("triggers"));
         nativeVisualOptions(GameOptions.get(this, GameOptions.HD_PACKS).equals("on"),
                 Integer.parseInt(GameOptions.get(this, GameOptions.FILTERING)),
@@ -303,6 +310,7 @@ public final class GameActivity extends NativeActivity {
     }
     @Override protected void onPause() {
         foreground=false;
+        if(phoneFeedback!=null)phoneFeedback.stop();
         holdLanBroadcasts(false);
         updateTiltSensor();
         if(inputManager!=null)inputManager.unregisterInputDeviceListener(gamepadListener);
@@ -314,6 +322,7 @@ public final class GameActivity extends NativeActivity {
     @Override protected void onResume() {
         super.onResume();
         foreground=true;
+        if(phoneFeedback!=null)phoneFeedback.start();
         holdLanBroadcasts(true);
         updateTiltSensor();
         if(inputManager!=null){inputManager.registerInputDeviceListener(gamepadListener,null);updateGamepads();}

@@ -7,6 +7,7 @@
 #include "guest_heap.h"
 #include "runtime_log.h"
 #include "frame_pacer.h"
+#include "force_feedback.h"
 #if defined(__ANDROID__) || defined(NFS_D3D9_BACKEND)
 #include "d3d9_bridge.h"
 #include "nfs_widescreen.h"
@@ -774,7 +775,7 @@ extern "C" recomp_func_t recomp_lookup_manual(uint32_t va) {
 extern "C" recomp_func_t recomp_lookup_import(uint32_t va) {
     checkGuestProgress();
     if(va>=soundMethodBase+0x1000&&va<soundMethodBase+0x3000&&!(va%16)){soundToken=va;return soundDispatch;}
-    if(va>=inputMethodBase+0x1000&&va<inputMethodBase+0x5000&&!(va%16)){inputToken=va;return inputDispatch;}  // kinds 1-4: DirectInput, keyboard, mouse, gamepad
+    if(va>=inputMethodBase+0x1000&&va<inputMethodBase+0x6000&&!(va%16)){inputToken=va;return inputDispatch;}  // kinds 1-5: DirectInput, keyboard, mouse, gamepad, force effect
 #if defined(__ANDROID__) || defined(NFS_D3D9_BACKEND)
     if(va>=0x7e001000u&&va<0x7e010000u&&!(va%16)){d3dToken=va;return d3dDispatch;}
 #endif
@@ -925,8 +926,11 @@ void setGuestPad(const float axes[6],uint32_t buttons,int hatX,int hatY){
 void setGuestPadConnected(bool connected){
     std::lock_guard<std::mutex> lock(inputMutex);
     if(connected!=inputPadConnected)NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Gamepad %s",connected?"connected":"disconnected");
-    inputPadConnected=connected;if(!connected)inputPad=InputPad{};
+    inputPadConnected=connected;if(!connected){inputPad=InputPad{};forceMixer.stopAll();}
 }
+void setGuestForceFeedback(bool enabled){phoneFeedbackEnabled=enabled;if(!enabled){std::lock_guard<std::mutex> lock(inputMutex);forceMixer.stopAll();}}
+unsigned guestForceFeedbackLevel(){std::lock_guard<std::mutex> lock(inputMutex);return phoneFeedbackEnabled&&inputDrivingMode.load()?forceMixer.sample(feedbackNow()):0;}
+void stopGuestForceFeedback(){std::lock_guard<std::mutex> lock(inputMutex);forceMixer.stopAll();}
 bool guestGamepadInUse(){return inputPadAcquired.load()>0;}
 void setGuestDisplaySize(unsigned width,unsigned height){displayWidth=width;displayHeight=height;}
 void setGuestResolution(unsigned width,unsigned height){
