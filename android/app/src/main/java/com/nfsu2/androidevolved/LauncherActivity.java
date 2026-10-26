@@ -354,11 +354,13 @@ public final class LauncherActivity extends Activity {
             card.addView(row);
         }
         ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(Color.TRANSPARENT);
         scroll.addView(card);
         final Dialog picker = new Dialog(this);
         picker.requestWindowFeature(Window.FEATURE_NO_TITLE);
         picker.setContentView(scroll);
-        picker.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0xB3000000));
+        picker.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+        picker.getWindow().setDimAmount(0.6f);
         picker.show();
         dialog = picker;
     }
