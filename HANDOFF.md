@@ -477,3 +477,17 @@ Final archive script3347ee8 fixes prepared DXVK metadata (uses PINNED_REVISION a
 ANDROID_PREPARE_SHA256 rather than accidentally resolving parent Git). Full script
 run passed, archive build/phone-artifacts/26-3347ee895de6. No releases published,
 no game/key assets committed. No task background processes or emulator started.
+
+## 2026-10-26: signing recovery, fork homepage and source CI
+
+User authorized local signing backup, homepage cleanup and automated checks.
+Created verified local key backup ~/.local/share/nfsu2-signing-backup/
+phone-debug.keystore (0700 directory/0600 file), checked exact bytes and exported
+certificate against pinned phone signer. Original key now0600 too. No key uploaded;
+same-machine backup only, owner still needs independent encrypted backup.
+README now leads with this fork's features/channel/build guides/limits; no public
+release claimed and upstream APKs no longer presented as our downloads. Added
+standalone source-check runner and read-only pinned-checkout GitHub workflow;
+no game inputs/SDK/keys required, no APK or release publication. Maintenance docs
+explain coverage and backup boundary. Next verify local suite and GitHub run,
+and switch fork default branch to phone branch so homepage reflects this work.

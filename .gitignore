@@ -40,3 +40,9 @@ NFSU2-diagnostico-*.zip
 
 __pycache__/
 *.pyc
+
+# Private signing material (the phone key is kept outside the checkout)
+*.keystore
+*.jks
+*.p12
+*.key

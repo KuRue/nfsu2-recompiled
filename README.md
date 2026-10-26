@@ -1,23 +1,54 @@
-> Phone fork: native Android work lives on `android/phone-presets`. See [safe upstream updates and APK builds](docs/ANDROID_UPDATES.md). The downloads below belong to upstream and do not include our phone changes.
+# NFSU2 Native — Android phone fork
 
-> Android phone fork: optional [HD textures, lighting, sharpening and reflections](docs/ANDROID_HD_GRAPHICS.md).
+Native Android adaptation of [codepdbh/nfsu2-recompiled](https://github.com/codepdbh/nfsu2-recompiled), maintained in [KuRue/nfsu2-recompiled](https://github.com/KuRue/nfsu2-recompiled) on `android/phone-presets`.
 
-# Need for Speed Underground 2 — Recompiled
+[![Phone source checks](https://github.com/KuRue/nfsu2-recompiled/actions/workflows/phone-source-checks.yml/badge.svg?branch=android%2Fphone-presets)](https://github.com/KuRue/nfsu2-recompiled/actions/workflows/phone-source-checks.yml)
 
+This fork adds phone graphics presets, optional HD texture packs, lighting and
+reflection options, widescreen HUD adjustments, controller trigger compatibility,
+and phone vibration driven by checked vehicle physics estimates. The game runs
+through native recompilation and DXVK/Vulkan. Original game data is required and
+is not included in this repository or in the APK.
 
-### Android downloads / Descargas Android
+## Downloads and update channel
 
-[Underground 2 v0.14.9](https://github.com/codepdbh/nfsu2-recompiled/releases/tag/v0.14.9)
+**No public phone-fork APK release is published yet.** Development builds use
+package `com.nfsu2.androidevolved.dev` and keep the existing phone signing key.
+Our app checks [this fork's releases](https://github.com/KuRue/nfsu2-recompiled/releases);
+installation and publication remain manual. Upstream production APKs use a
+different channel and do not contain these phone changes.
 
-| APK | Architecture |
-|---|---|
-| [ARM64 / 64 bits](https://github.com/codepdbh/nfsu2-recompiled/releases/download/v0.14.9/NFSU2-AndroidEvolved-v0.14.9-arm64.apk) | arm64-v8a, recommended |
-| [ARMv7 / 32 bits](https://github.com/codepdbh/nfsu2-recompiled/releases/download/v0.14.9/NFSU2-AndroidEvolved-v0.14.9-armeabi-v7a.apk) | armeabi-v7a; requires Android with 32-bit app support |
+- [Build, upstream review, updates and rollback](docs/ANDROID_UPDATES.md)
+- [HD textures and graphics options](docs/ANDROID_HD_GRAPHICS.md)
+- [Physics-based phone vibration](docs/ANDROID_PHYSICS_HAPTICS.md)
+- [Measured phone performance and limitations](docs/ANDROID_PHONE_PERFORMANCE.md)
+- [Fork maintenance and automated checks](docs/FORK_MAINTENANCE.md)
 
-Android 10+ and Vulkan 1.1+. Both APKs use the same package and signing key;
-install the architecture supported by your device. Original game data is required.
-Audio, pacing and validation details: [runtime follow-up](docs/AUDIO_FRAME_PACING.md).
-Issue-driven changes and remaining limits: [16 October review](docs/ISSUE_REVIEW_2026_10_16.md).
+## Current validation
+
+Tested on a Samsung S25 Ultra with a physical controller. Balanced75%/60FPS
+held a median59.6FPS in the recorded run, with no reported Android thermal
+throttling. These are measurements for that phone/run, not guarantees for other
+devices. Tire feedback estimates slip; it does not measure tire forces or reproduce
+PS2 game-specific rumble. Optional packs are installed separately.
+
+The source-only checks run with:
+
+```sh
+python3 scripts/check_phone_source.py
+```
+
+They cover pacing, frame metrics, telemetry validation, haptics, controller pedals,
+audio mixing, texture-pack parsing and update-version comparisons. They need
+Linux, Python3, C++17 and JDK17; no game files, Android SDK or signing key.
+Full APK builds additionally require local generated sources and prepared native
+dependencies. See the update guide before attempting a build from a fresh clone.
+
+## Upstream project documentation
+
+The original project's architecture, gameplay images, build pipeline and credits
+follow. Upstream release information is available at
+[codepdbh/nfsu2-recompiled](https://github.com/codepdbh/nfsu2-recompiled/releases).
 
 <div align="center">
 
