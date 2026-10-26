@@ -464,3 +464,16 @@ save preservation, qualified downgrade and manual publication boundary. No fork
 releases published; gh confirms zero. Upstream a8c7a39 has no unmerged commits.
 Java version-comparison regression and Python compile checks passed. No game data,
 keys or lifted C added. Next: run full artifact script and install/smoke-check it.
+
+Update workflow validation complete: initial APK smoke check caught invalid slash
+in SharedPreferences filename; fixed in d810f05, reinstalled without clearing data.
+Launcher manual check now explicitly reports no newer release in KuRue fork.
+Game launched PID8361 and presents frames. English/Balanced/physics/HD packs still
+selected/detected. nfsu2_game.xml hash stayed5923cb91… through verification and
+launch. Existing installed code25 APK pulled before update into ignored
+build/phone-artifacts/25-installed-before-updater for rollback. New installed
+code26/0.14.11 APK a19bb2d99ac8ee63e526ca30034eadc04b30c42de680c34663e57ccbe20646c2.
+Final archive script3347ee8 fixes prepared DXVK metadata (uses PINNED_REVISION and
+ANDROID_PREPARE_SHA256 rather than accidentally resolving parent Git). Full script
+run passed, archive build/phone-artifacts/26-3347ee895de6. No releases published,
+no game/key assets committed. No task background processes or emulator started.
