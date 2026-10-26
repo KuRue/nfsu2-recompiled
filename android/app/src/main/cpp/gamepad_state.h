@@ -14,7 +14,10 @@ public:
     enum Button : unsigned {A,B,X,Y,L1,R1,L2,R2,Start,Select,ThumbL,ThumbR,Up,Down,Left,Right,ButtonCount};
     // The game switched between menus and driving, or started/stopped reading
     // the pad as a joystick: remap whatever is held.
-    template<class SetKey> void refresh(bool driving,SetKey&& setKey){if(driving!=driving_||emulate_!=sentEmulation_)apply(driving,setKey);}
+    template<class SetKey> bool refresh(bool driving,SetKey&& setKey){
+        if(driving==driving_&&emulate_==sentEmulation_)return false;
+        apply(driving,setKey);return true;
+    }
     template<class SetKey> void releaseAll(SetKey&& setKey){
         buttons_.fill(false);stickX_=stickY_=rightX_=rightY_=hatX_=hatY_=leftTrigger_=rightTrigger_=0;apply(driving_,setKey);
     }
@@ -27,7 +30,12 @@ public:
         state.leftTrigger=std::fmax(leftTrigger_,buttons_[L2]?1.f:0.f);
         state.rightTrigger=std::fmax(rightTrigger_,buttons_[R2]?1.f:0.f);
         static constexpr Button order[]={A,B,X,Y,L1,R1,Select,Start,ThumbL,ThumbR};
-        for(unsigned i=0;i<10;++i)if(buttons_[order[i]])state.buttons|=1u<<i;
+        for(unsigned i=0;i<10;++i){
+            // These driving actions use explicit keyboard bindings below. Do not
+            // also deliver the game's conflicting default joystick actions.
+            if(driving_&&(order[i]==X||order[i]==Y||order[i]==ThumbR))continue;
+            if(buttons_[order[i]])state.buttons|=1u<<i;
+        }
         state.hatX=buttons_[Left]||hatX_<-.5f?-1:buttons_[Right]||hatX_>.5f?1:0;
         state.hatY=buttons_[Up]||hatY_<-.5f?-1:buttons_[Down]||hatY_>.5f?1:0;
         return state;
@@ -48,10 +56,11 @@ protected:
         want[0xcb]=left;want[0xcd]=right;
         if(driving){
             // Xbox-style racing: RT gas, LT brake/reverse, A handbrake, B nitrous,
-            // X camera, Y look back, RB/LB shift up/down, Start pause.
+            // X camera, Y accept/free-roam action, R3 look back; RB/LB shift, Start pause.
             want[0xc8]=up||buttons_[R2]||past(rightTrigger_,0xc8);
             want[0xd0]=down||buttons_[L2]||past(leftTrigger_,0xd0);
-            want[0x39]=buttons_[A];want[0x38]=buttons_[B];want[0x2e]=buttons_[X];want[0x30]=buttons_[Y];
+            want[0x39]=buttons_[A];want[0x38]=buttons_[B];want[0x2e]=buttons_[X];
+            want[0x1c]=buttons_[Y];want[0x30]=buttons_[ThumbR];
             want[0x2a]=buttons_[R1];want[0x1d]=buttons_[L1];
             want[0x01]=buttons_[Start]||buttons_[Select];
         }else{
@@ -64,6 +73,9 @@ protected:
             want.fill(false);
             // The game may acquire DirectInput with button-only pedal bindings.
             // Keep RT/LT working through its keyboard pedal actions in this mode.
+            if(driving){
+                want[0x2e]=buttons_[X];want[0x1c]=buttons_[Y];want[0x30]=buttons_[ThumbR];
+            }
             if(driving&&triggerFallback_){
                 want[0xc8]=buttons_[R2]||past(rightTrigger_,0xc8);
                 want[0xd0]=buttons_[L2]||past(leftTrigger_,0xd0);

@@ -60,3 +60,14 @@ brake are working.
 Potential future work: HUD size/safe-margin sliders, steering dead-zone tuning,
 camera/FOV presets and skip-intro startup. These are candidate native additions,
 not claims that Windows ASI mods run unchanged on ARM64.
+
+### Backbone driving actions (phone0.14.12)
+
+While driving: RT gas, LT brake/reverse, A handbrake, B nitrous, X change view,
+Y accept/enter the highlighted free-roam race or garage, right-stick click look
+back. The last three use explicit keyboard actions even when the game acquires
+DirectInput; their conflicting joystick buttons are suppressed only while driving.
+Menus retain the normal joystick face buttons. Mode changes, disconnect and pause
+release held actions. Existing triggers and A/B joystick bindings are preserved.
+Tests cover both input modes, held-button mode transitions, duplicate suppression
+and release. Physical free-roam interaction confirmation is still required.

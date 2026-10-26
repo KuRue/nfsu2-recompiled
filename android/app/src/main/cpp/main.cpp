@@ -420,7 +420,7 @@ void android_main(android_app* app) {
         int id = ALooper_pollOnce(active ? (d3d9RequestsSurface()?16:0) : -1, nullptr, &events, reinterpret_cast<void**>(&source));
         if (id >= 0 && source) source->process(app, source);
         if(gamepadsRemoved.exchange(false)){gamepad.releaseAll(setPadKey);publishPad();}
-        gamepad.setKeyEmulation(!guestGamepadInUse());gamepad.refresh(guestDrivingControls(),setPadKey);
+        gamepad.setKeyEmulation(!guestGamepadInUse());if(gamepad.refresh(guestDrivingControls(),setPadKey))publishPad();
         if (app->destroyRequested) break;
         if (!host.resumed || !app->window || host.failed) continue;
         try {

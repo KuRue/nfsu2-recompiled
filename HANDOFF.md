@@ -496,3 +496,14 @@ Verified GitHub source CI run40343408201 succeeded on clean Ubuntu24.04/JDK17,
 including all eight C++ and Java regressions, with no game/SDK/key prerequisites.
 Fork default branch and description confirmed via gh. No APK rebuild needed for
 README/CI and whitespace-only braces. No background process/device cleanup needed.
+
+## 2026-10-26: Backbone free-roam and face-button correction
+
+User reports X look-back/Y camera and inability to enter races/garages. Game's
+DirectInput face mapping bypassed intended keyboard mapping. Phone driving now
+explicitly sends X=C(camera), Y=Enter(free-roam accept), R3=B(look-back), and masks
+only those three joystick buttons while driving to avoid duplicate actions. Menus
+retain joystick defaults; triggers/A/B untouched. Refresh now publishes updated
+pad state on mode changes, including held buttons. Host suite passes with added
+coverage for override/duplicate suppression/menu transitions/release in DI and
+keyboard modes. Default version27/0.14.12. Physical Backbone test pending.
