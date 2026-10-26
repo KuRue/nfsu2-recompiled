@@ -8,6 +8,8 @@
 #include "runtime_log.h"
 #include "frame_pacer.h"
 #include "force_feedback.h"
+#include "physics_probe.h"
+#include "physics_haptics.h"
 #if defined(__ANDROID__) || defined(NFS_D3D9_BACKEND)
 #include "d3d9_bridge.h"
 #include "nfs_widescreen.h"
@@ -329,6 +331,7 @@ uint32_t d3dToken{};
 void direct3DCreate(){ret(createGuestD3D9(arg(0)),1);}
 void freeD3DGuest(uint32_t address){heaps->free(GuestHeaps::process,address);}
 void serviceGuestSound();
+void samplePhysicsForPhone();
 void d3dDispatch(){
     // The arguments are read in place on the guest stack (one bounds check)
     // instead of copying 128 bytes for each of the ~40k calls of a race frame.
@@ -346,6 +349,7 @@ void d3dDispatch(){
         methodTime[((token-0x7e000000u)/16u)&4095u]+=token==0x7e002110u?spent:spent*64;}
     if(token==0x7e002110u){nfs_widescreen_apply_frame_rate();lastPresentMs=steadyMs();startStallWatch();}
     if(token==0x7e002110u&&result==0){
+        samplePhysicsForPhone();
         static FramePacer pacer;
         auto now=std::chrono::steady_clock::now();
         auto deadline=pacer.deadline(now,frameLimit.load(std::memory_order_relaxed));
@@ -381,6 +385,28 @@ inline uint32_t callGuest(uint32_t va,const std::vector<uint32_t>& args,uint32_t
 #include "guest_files.inc"
 #include "guest_kernel.inc"
 #include "guest_input.inc"
+std::atomic<bool> physicsFeedbackEnabled{true};
+nfs_physics::Haptics physicsHaptics;
+void samplePhysicsForPhone(){
+#ifndef NFSU2_EXE_F4BB0D99
+    if(!phoneFeedbackEnabled||!physicsFeedbackEnabled)return;
+    uint64_t now=feedbackNow();
+    auto snapshot=nfs_physics::readSnapshot([](uint32_t address,void* out,size_t count){
+        if(!memory||!memory->readable(address,count))return false;
+        std::memcpy(out,static_cast<const uint8_t*>(memory->base())+address,count);return true;
+    });
+    nfs_physics::Channels channels;uint32_t packet=0;
+    {std::lock_guard<std::mutex> lock(inputMutex);
+        if(inputDrivingMode.load())physicsHaptics.update(snapshot,now);else physicsHaptics.stop();
+        channels=physicsHaptics.channels;packet=physicsHaptics.packet(now);
+    }
+    static uint64_t lastLog=0;if(now-lastLog>=1000){lastLog=now;
+        auto& c=channels;
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Physics feedback valid=%d car=%08x clock=%u forward=%.2f lateral=%.2f slipDeg=%.2f wheelSlip=%.3f suspRate=%.3f accel=%.1f radius=%.3f channels=%u,%u packet=%08x",int(c.valid),snapshot.anchor,snapshot.clock,c.forwardSpeed,c.lateralSpeed,c.slipAngle,c.wheelSlip,c.suspensionRate,c.planarAcceleration,c.radius,c.grip,c.surface,packet);
+    }
+#endif
+}
+
 #include "guest_audio.inc"
 #include "guest_network.inc"
 void testGuestScheduling(){
@@ -929,8 +955,12 @@ void setGuestPadConnected(bool connected){
     inputPadConnected=connected;if(!connected){inputPad=InputPad{};forceMixer.stopAll();}
 }
 void setGuestForceFeedback(bool enabled){phoneFeedbackEnabled=enabled;if(!enabled){std::lock_guard<std::mutex> lock(inputMutex);forceMixer.stopAll();}}
-unsigned guestForceFeedbackLevel(){std::lock_guard<std::mutex> lock(inputMutex);return phoneFeedbackEnabled&&inputDrivingMode.load()?forceMixer.sample(feedbackNow(),inputPad.axis[0]):0;}
-void stopGuestForceFeedback(){std::lock_guard<std::mutex> lock(inputMutex);forceMixer.stopAll();}
+void setGuestFeedbackSource(bool physics){std::lock_guard<std::mutex> lock(inputMutex);physicsFeedbackEnabled=physics;physicsHaptics.stop();forceMixer.stopAll();}
+unsigned guestForceFeedbackLevel(){std::lock_guard<std::mutex> lock(inputMutex);
+    if(!phoneFeedbackEnabled||!inputDrivingMode.load())return 0;
+    return physicsFeedbackEnabled?physicsHaptics.packet(feedbackNow()):forceMixer.sample(feedbackNow(),inputPad.axis[0]);
+}
+void stopGuestForceFeedback(){std::lock_guard<std::mutex> lock(inputMutex);forceMixer.stopAll();physicsHaptics.stop();}
 bool guestGamepadInUse(){return inputPadAcquired.load()>0;}
 void setGuestDisplaySize(unsigned width,unsigned height){displayWidth=width;displayHeight=height;}
 void setGuestResolution(unsigned width,unsigned height){

@@ -1,5 +1,8 @@
 # Phone vibration from game force feedback
 
+The newer default is [vehicle-physics feedback](ANDROID_PHYSICS_HAPTICS.md).
+This document describes the selectable previous Game force effects mapping.
+
 The launcher has **Phone vibration**: Off, Light (25%), Medium (50%, default),
 and Strong (100%). **Test phone vibration** sends a separate brief180ms pulse.
 It always targets Android's default handset vibrator, even with a controller

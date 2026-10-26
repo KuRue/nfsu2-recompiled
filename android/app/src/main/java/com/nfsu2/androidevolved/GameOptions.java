@@ -21,11 +21,13 @@ final class GameOptions {
     }
 
     static final String RESOLUTION = "resolution", FPS = "fps", WIDESCREEN = "widescreen", LATENCY = "latency",
-            FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", LOOK = "lighting_look", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", LANGUAGE = "language";
+            FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", LOOK = "lighting_look", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", LANGUAGE = "language";
 
     static final Option[] ALL = {
+            new Option(FEEDBACK_SOURCE, "Phone feedback source", "physics",
+                    new String[] {"physics", "legacy"}, new String[] {"Vehicle physics · slip estimates", "Game force effects · previous mapping"}),
             new Option(FEEDBACK, "Phone vibration", "50",
-                    new String[] {"0", "25", "50", "100"}, new String[] {"Off", "Light · game force feedback", "Medium · game force feedback", "Strong · game force feedback"}),
+                    new String[] {"0", "25", "50", "100"}, new String[] {"Off", "Light", "Medium", "Strong"}),
             new Option(PEDALS, "Controller pedals", "triggers",
                     new String[] {"triggers", "game"}, new String[] {"RT gas / LT brake · compatibility", "Game bindings · manual axis setup"}),
             new Option(HD_PACKS, "Texture packs", "off",

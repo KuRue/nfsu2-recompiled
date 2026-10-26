@@ -142,6 +142,7 @@ public final class GameActivity extends NativeActivity {
     private static native void nativeTypeText(String value, boolean replace);
     private static native void nativePointer(float x, float y, int phase);
     private static native void nativeLanguage(String language);
+    private static native void nativeFeedbackSource(boolean physics);
     private static native void nativePhoneFeedback(boolean enabled);
     private static native int nativeFeedbackLevel();
     private static native void nativeStopFeedback();
@@ -231,6 +232,7 @@ public final class GameActivity extends NativeActivity {
         nativeBackBuffers(launch.getIntExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY))));
         phoneFeedback=new PhoneFeedback(this,Integer.parseInt(GameOptions.get(this,GameOptions.FEEDBACK)),
                 GameActivity::nativeFeedbackLevel,GameActivity::nativeStopFeedback);
+        nativeFeedbackSource(GameOptions.get(this,GameOptions.FEEDBACK_SOURCE).equals("physics"));
         nativePhoneFeedback(phoneFeedback.enabled());
         nativeTriggerFallback(GameOptions.get(this, GameOptions.PEDALS).equals("triggers"));
         nativeVisualOptions(GameOptions.get(this, GameOptions.HD_PACKS).equals("on"),

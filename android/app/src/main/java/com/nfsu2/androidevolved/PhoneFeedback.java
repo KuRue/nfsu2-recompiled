@@ -18,6 +18,7 @@ final class PhoneFeedback {
     private final Runnable stopSource;
     private final int strength;
     private boolean running,active;
+    private int lastImpact=-1;
     private final AudioAttributes attributes=new AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
     static Vibrator motor(Context context) {
@@ -31,7 +32,20 @@ final class PhoneFeedback {
     boolean enabled(){return available()&&strength>0;}
     private final Runnable poll=new Runnable(){@Override public void run(){
         if(!running)return;
-        int amplitude=Math.min(255,Math.max(0,source.getAsInt())*strength/100);
+        int packet=source.getAsInt(),channel=(packet>>>8)&255,event=(packet>>>16)&127;
+        int amplitude=Math.min(255,(packet&255)*strength/100);
+        if(channel==2&&amplitude>2){
+            if(event!=lastImpact||!active){
+                lastImpact=event;
+                try{
+                    if(vibrator.hasAmplitudeControl())vibrator.vibrate(VibrationEffect.createWaveform(
+                            new long[]{15,65,45,35},new int[]{0,amplitude,0,Math.max(1,amplitude*2/3)},-1),attributes);
+                    else vibrator.vibrate(VibrationEffect.createWaveform(new long[]{15,Math.max(8,65*strength/100),45,Math.max(8,35*strength/100)},-1),attributes);
+                    active=true;android.util.Log.i("NFSU2","Physics impact waveform event="+event+" amplitude="+amplitude);
+                }catch(SecurityException|IllegalArgumentException e){stop();return;}
+            }
+            handler.postDelayed(this,40);return;
+        }
         if(amplitude>2){
             try{
                 boolean amplitudeControl=vibrator.hasAmplitudeControl();
@@ -44,7 +58,7 @@ final class PhoneFeedback {
         handler.postDelayed(this,40);
     }};
     void start(){if(enabled()&&!running){running=true;handler.post(poll);}}
-    void stop(){running=false;handler.removeCallbacks(poll);if(vibrator!=null)vibrator.cancel();active=false;stopSource.run();}
+    void stop(){running=false;handler.removeCallbacks(poll);if(vibrator!=null)vibrator.cancel();active=false;lastImpact=-1;stopSource.run();}
     static boolean test(Context context){
         Vibrator motor=motor(context);if(motor==null||!motor.hasVibrator())return false;
         motor.vibrate(VibrationEffect.createOneShot(180,motor.hasAmplitudeControl()?110:VibrationEffect.DEFAULT_AMPLITUDE),

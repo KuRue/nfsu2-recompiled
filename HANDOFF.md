@@ -356,3 +356,53 @@ channels before phone synthesis. Candidate external offsets are not validated;
 no changes to APK or phone in this research turn, and no false claim of PS2 parity.
 No processes/devices/services started. This supersedes optimistic assumptions
 about the perceptual effectiveness of the prior pattern tuning.
+
+## Vehicle physics feedback implementation — 2026-10-26
+
+User authorized work on telemetry-driven haptics after steering-force patterns
+felt unchanged. Added a checked read-only physics reader for the pinned default
+build. Reads run on the guest-owning Present thread; Java never dereferences live
+guest data. Probe validates pointer bounds/overflow, finite/ranged fields and
+orthogonal body axes. User completed straight, stationary steering, slide, curb,
+wall test scenarios.343 captured4Hz samples show coherent player pose/velocity,
+wheel speed, suspension, RPM and pedal data. Radius median0.2958 in108 coherent
+straight samples, slide angles up to49.14°, stopped velocity/wheels zero; peak
+coarse horizontal acceleration~134m/s². Handbrake candidate stayedzero and is not
+used. Full research, algorithms and limitations: docs/ANDROID_PHYSICS_HAPTICS.md.
+Raw initial capture: build/verification/physics-probe-phone.txt (ignored).
+
+Implemented independent slip estimate (body lateral angle / axle wheel surface
+speed mismatch), softer suspension-change surface channel and planar impulse
+impact estimate. Slip does not use steering input. Gate low speeds, vertical
+motion, pauses/frozen race clock, invalid/stale data, car/race changes, long frame
+gaps and pose discontinuities. Coast/straight wheel-radius calibration reduces
+per-car mismatch. No collision-event tag or direct tire-force/contact field has
+been established: hard landings/extreme maneuvers can still confuse estimates.
+Quick-race validation does not prove all free-roam/replay/camera/other-car modes.
+
+Java feedback packets carry amplitude/channel/impact id. Each new impact sends
+one finite Android waveform (15ms quiet,65ms strong,45ms quiet,35ms softer), with
+210ms priority over other channels; repeated polls don't restart the waveform.
+Slip has pulsed chatter; surface stays quieter. New launcher Phone feedback source
+(default Vehicle physics · slip estimates); previous Game force effects is kept
+for comparison. Medium strength and all existing user preferences preserved.
+Unsupported f4bb0d99 build must use legacy mapping until its layout is validated.
+
+Host reader and haptic scenario tests PASS with-Wall-Wextra-Werror: pointer bounds,
+invalid axes/numerics, rolling/stopped silence, normal cornering and ordinary
+braking vs sliding/lock/spin, suspension without false wall, impact priority/id,
+clock freeze, teleports, car changes and calibration. Android assembleDebug PASS
+20s, APK signature PASS. Installed at192.168.1.169:33001, same dev package,
+version0.14.10-phone-dev-physics. APK SHA256:
+1e7f88d493c09a1dfe4ca96f0d78ae05d2c9399b0ac6bfd668d72552143cbad9.
+
+Final live process32198 proves separate channels: straight rolling grip0/surface0,
+coast radius~0.299; slide19.26° yields grip147, slide48.93° yields209; curb/surface
+channel values remain much lower. Java logged12 physics impact waveforms in the
+first~60s capture, including Medium amplitude127. Service evidence and diagnostic
+logs: build/verification/physics-haptics-{phone,vibrator}.txt (ignored). These are
+output-path observations, not subjective feel confirmation. Asked user to compare
+stationary steering, slide, curb and wall in this build; no answer yet. Native
+code and Android motor event path validated; no PS2-equivalence claim.
+No task server/emulator/watcher/logcat background process started. Leave physical
+game available and close only the device stream at completion.

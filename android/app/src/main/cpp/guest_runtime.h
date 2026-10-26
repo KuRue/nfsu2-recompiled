@@ -30,3 +30,5 @@ void setGuestFrameLimit(unsigned framesPerSecond);
 void setGuestForceFeedback(bool enabled);
 unsigned guestForceFeedbackLevel();
 void stopGuestForceFeedback();
+
+void setGuestFeedbackSource(bool physics);
