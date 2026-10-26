@@ -542,3 +542,22 @@ Android assembleDebug succeeds and signer matches pinned phone certificate.
 Final APK installed after 2s launcher-status refresh. Kept current graphics/user
 preferences. No persistent capture process/emulator started. Durable snapshot work
 NOT complete; do not relabel live RAM retention as a disk save state.
+
+## 2026-10-26: durable continuation architecture proof
+
+User asked to continue toward exact disk save states. Audited generated call
+conventions: RECOMP_CALL uses native C continuations/dummy guest return addresses;
+function-local register/flag state must be spilled by a new optional lift backend.
+Added isolated experimental/save_states/{snapshot.h,prototype.cpp,README.md} and
+scripts/check_snapshot_prototype.py. The handwritten integer fixture uses real
+GuestMemory and three explicit frames. Capture process exits mid-leaf (ticks49,
+sum3725), fresh restore matches uninterrupted output result71787/ticks100/flags0,
+independently checked by arithmetic formula. Codec validates compatibility/CRC,
+bounds/overlap/wrap, all truncations, corrupt/version/identity failures; unsupported
+host resource capture fails before replacing existing file. Atomic staging/fsync/
+rename protocol. CI gets separate proof step. No proprietary inputs or production
+runtime behavior changed; no APK/install. Real NFSU2 disk snapshots still NOT done.
+Docs/ANDROID_DURABLE_STATE_PROTOTYPE.md records generator next milestone and host
+resource inventory (threads/GPU/audio/files/network/time). Do not claim prototype
+restores actual races or supports x87/SSE/multiple threads. No background process,
+device stream, emulator or game-data mutation started in this prototype turn.

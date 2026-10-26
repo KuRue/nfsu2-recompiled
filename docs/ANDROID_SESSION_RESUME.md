@@ -39,3 +39,7 @@ policy. That is runtime work, not a launcher flag or career auto-load.
 
 Regression tests/guest_boot_worker.cpp checks process-lifetime ownership and
 idempotent starts using a fake runtime; existing source regressions still apply.
+
+The first isolated continuation proof now exists: see
+[durable-state prototype](ANDROID_DURABLE_STATE_PROTOTYPE.md). It demonstrates
+fresh-process restoration of a handwritten integer fixture, not the real game.

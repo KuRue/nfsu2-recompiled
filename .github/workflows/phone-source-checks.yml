@@ -23,3 +23,5 @@ jobs:
           echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
       - name: Run standalone phone regressions
         run: python3 scripts/check_phone_source.py
+      - name: Check experimental snapshot continuation proof
+        run: python3 scripts/check_snapshot_prototype.py

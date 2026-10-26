@@ -46,3 +46,7 @@ __pycache__/
 *.jks
 *.p12
 *.key
+
+# Experimental state files may eventually contain guest memory; never publish them.
+*.nfsproto
+*.partial-*
