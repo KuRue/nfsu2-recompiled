@@ -216,3 +216,12 @@ SPIR-V headers only if changed. See docs/ANDROID_HD_GRAPHICS.md for limitations.
 
 Evidence local/ignored: build/verification/hd-logcat.txt and hd-race.png (initial
 race smoke test). No emulator, task server, watcher or persistent logcat started.
+
+Final-effects verification: native process29231 logged all six runtime lighting/
+reflection overrides, successfully allocated the 256-edge dynamic RT car cube,
+512×512 mirror and original320×240 road targets. Final race screenshot:
+build/verification/hd-final-race.png; full logs hd-final-logcat.txt. Short race
+sample after loading reported59.8–60.0FPS (roughly30–36k bridge calls/frame).
+This is a smoke sample, not a sustained thermal/battery benchmark. Pulled the
+saved android_registry.dat after testing and byte-compared it to the earlier
+copy: unchanged. No further remote input after launch; leave game running.
