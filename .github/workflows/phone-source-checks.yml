@@ -52,3 +52,5 @@ jobs:
         run: build/continuation-venv/bin/python scripts/check_logical_scheduler.py --pcrecomp build/pcrecomp-continuation --sanitize
       - name: Reopen read-only file resources at saved positions under sanitizers
         run: python3 scripts/check_file_resources.py --sanitize
+      - name: Resume logical audio mixer state under sanitizers
+        run: python3 scripts/check_audio_state.py --sanitize

@@ -666,3 +666,11 @@ target, published by renameat only after all read-only files validate, then reop
 the saved offset. 302 bad inputs/resources rejected (symlink/dir/missing targets, mode, handle
 content disagreement); failed restores leave writable targets untouched. Standard + sanitizers pass.
 Multi-file publish isn't group-atomic; see FILE_RESOURCES.md. Production unchanged.
+
+## 2026-10-26: logical audio mixer state proof
+
+Experimental audio_state.h saves mixer voices (buffer ID+asset CRC, 16.16 position/pitch,
+volume, loop, playing) without sample data. 17 block-boundary fresh-process restores render
+PCM identical to the uninterrupted run; 157 bad inputs (incl. edited asset) rejected.
+Standard + ASan/UBSan pass; CI step added. Real DirectSound/stream decoder/device-queue state
+not covered; see AUDIO_STATE.md. Production unchanged.
