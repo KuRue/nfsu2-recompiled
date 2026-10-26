@@ -208,25 +208,89 @@ public final class LauncherActivity extends Activity {
 
     private void refreshOptions() {
         optionsList.removeAllViews();
-        GpuDrivers.Driver driver = GpuDrivers.selected(this);
-        // Custom drivers (libadrenotools) exist only in the 64-bit build.
-        if (android.os.Process.is64Bit())
-            optionsList.addView(optionRow("Vulkan driver", driver == null ? "System" : driver.name, this::chooseDriver));
-        optionsList.addView(optionRow("Test phone vibration", "Brief handset pulse", () -> {if(!PhoneFeedback.test(this))message("Phone vibration", "This device has no vibration motor.");}));
-        optionsList.addView(optionRow("Test driver", "GPU and Vulkan features", () -> probeDriver(false)));
-        optionsList.addView(optionRow("Game language", languageLabel(), this::chooseLanguage));
-        optionsList.addView(optionRow("Reset graphics cache", "Rebuild shaders", () -> GraphicsCache.prompt(this)));
         PhonePreset preset = GameOptions.phonePreset(this);
-        optionsList.addView(optionRow("Phone preset",
-                preset == null ? "Custom" : preset.label, this::choosePhonePreset));
+        optionsList.addView(optionRow("Graphics and display",
+                preset == null ? "Custom" : preset.label, () -> showGroup("Graphics and display", this::buildGraphicsGroup)));
+        optionsList.addView(optionRow("Controls and feedback",
+                GameOptions.get(this, GameOptions.PEDALS).equals("triggers") ? "Trigger pedals" : "Game bindings",
+                () -> showGroup("Controls and feedback", this::buildControlsGroup)));
+        optionsList.addView(optionRow("Game", languageLabel() + " · " + GameOptions.onlineServer(this),
+                () -> showGroup("Game", this::buildGameGroup)));
+        optionsList.addView(optionRow("Career saves", backupSummary(),
+                () -> showGroup("Career saves", this::buildSavesGroup)));
+        optionsList.addView(optionRow("Updates and support", "Version " + ReleaseUpdates.installed(this),
+                () -> showGroup("Updates and support", this::buildSupportGroup)));
+    }
+
+    // ---- Option groups ---------------------------------------------------------------------------------
+
+    private LinearLayout openGroupList;
+    private Runnable openGroupBuilder;
+
+    /** A sub-menu of the OPTIONS list: its rows refresh in place when a setting changes. */
+    private void showGroup(String title, Runnable build) {
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(list);
+        int pad = dp(16);
+        scroll.setPadding(pad, pad / 2, pad, pad / 2);
+        openGroupList = list;
+        openGroupBuilder = build;
+        build.run();
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(title).setView(scroll)
+                .setOnDismissListener(dialog -> { openGroupList = null; openGroupBuilder = null; refreshOptions(); })
+                .setNegativeButton("Back", null).show();
+    }
+
+    private void rebuildGroup() {
+        if (openGroupList != null) { openGroupList.removeAllViews(); openGroupBuilder.run(); }
+    }
+
+    private View groupRow(String title, String value, Runnable onClick) {
+        return optionRow(title, value, () -> { onClick.run(); rebuildGroup(); });
+    }
+
+    private static boolean isControlOption(GameOptions.Option option) {
+        return option.key.equals(GameOptions.FEEDBACK_SOURCE) || option.key.equals(GameOptions.FEEDBACK)
+                || option.key.equals(GameOptions.PEDALS);
+    }
+
+    private void buildGraphicsGroup() {
+        GpuDrivers.Driver driver = GpuDrivers.selected(this);
+        if (android.os.Process.is64Bit())
+            openGroupList.addView(groupRow("Vulkan driver", driver == null ? "System" : driver.name, this::chooseDriver));
+        PhonePreset preset = GameOptions.phonePreset(this);
+        openGroupList.addView(groupRow("Phone preset", preset == null ? "Custom" : preset.label, this::choosePhonePreset));
         for (GameOptions.Option option : GameOptions.ALL)
-            optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
-        optionsList.addView(optionRow("Online server", GameOptions.onlineServer(this), this::chooseOnlineServer));
-        optionsList.addView(optionRow("Backup career saves", backupSummary(), this::backupSaves));
-        optionsList.addView(optionRow("Restore career saves", "From a backup ZIP", this::restoreSaves));
-        optionsList.addView(optionRow("Check for updates",
+            if (!isControlOption(option))
+                openGroupList.addView(groupRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
+        openGroupList.addView(groupRow("Test driver", "GPU and Vulkan features", () -> probeDriver(false)));
+        openGroupList.addView(groupRow("Reset graphics cache", "Rebuild shaders", () -> GraphicsCache.prompt(this)));
+    }
+
+    private void buildControlsGroup() {
+        for (GameOptions.Option option : GameOptions.ALL)
+            if (isControlOption(option))
+                openGroupList.addView(groupRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
+        openGroupList.addView(groupRow("Test phone vibration", "Brief handset pulse", () -> {if(!PhoneFeedback.test(this))message("Phone vibration", "This device has no vibration motor.");}));
+    }
+
+    private void buildGameGroup() {
+        openGroupList.addView(groupRow("Game language", languageLabel(), this::chooseLanguage));
+        openGroupList.addView(groupRow("Online server", GameOptions.onlineServer(this), this::chooseOnlineServer));
+    }
+
+    private void buildSavesGroup() {
+        openGroupList.addView(groupRow("Backup career saves", backupSummary(), this::backupSaves));
+        openGroupList.addView(groupRow("Restore career saves", "From a backup ZIP", this::restoreSaves));
+    }
+
+    private void buildSupportGroup() {
+        openGroupList.addView(groupRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
-        optionsList.addView(optionRow("Report a problem", "Full log for GitHub", () -> prepareReport(null)));
+        openGroupList.addView(groupRow("Report a problem", "Full log for GitHub", () -> prepareReport(null)));
     }
 
     // ---- Options ---------------------------------------------------------------------------------------
@@ -257,7 +321,7 @@ public final class LauncherActivity extends Activity {
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Game language")
                 .setSingleChoiceItems(names, checked, (dialog, which) -> {
                     GameOptions.prefs(this).edit().putString(GameOptions.LANGUAGE, found.get(which)[1]).apply();
-                    dialog.dismiss(); refreshOptions();
+                    dialog.dismiss(); refreshOptions(); rebuildGroup();
                 }).setNegativeButton("Cancel", null).show();
     }
 
@@ -274,7 +338,7 @@ public final class LauncherActivity extends Activity {
                 .setTitle("Phone preset")
                 .setSingleChoiceItems(labels, checked, (dialog, which) -> {
                     GameOptions.applyPhonePreset(this, presets[which]);
-                    dialog.dismiss(); refreshOptions();
+                    dialog.dismiss(); refreshOptions(); rebuildGroup();
                 }).setNegativeButton("Cancel", null).show();
     }
 
@@ -285,7 +349,7 @@ public final class LauncherActivity extends Activity {
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle(option.title)
                 .setSingleChoiceItems(option.labels, checked, (dialog, which) -> {
                     GameOptions.set(this, option.key, option.values[which]);
-                    dialog.dismiss(); refreshOptions();
+                    dialog.dismiss(); refreshOptions(); rebuildGroup();
                 }).setNegativeButton("Cancel", null).show();
     }
 
@@ -306,11 +370,11 @@ public final class LauncherActivity extends Activity {
                     String value = input.getText().toString().trim();
                     if (!GameOptions.validServer(value)) { message("Online server", "\"" + value + "\" is not a valid server name."); return; }
                     GameOptions.prefs(this).edit().putString(GameOptions.ONLINE_SERVER, value).apply();
-                    refreshOptions();
+                    refreshOptions(); rebuildGroup();
                 })
                 .setNeutralButton("Restore default", (dialog, which) -> {
                     GameOptions.prefs(this).edit().remove(GameOptions.ONLINE_SERVER).apply();
-                    refreshOptions();
+                    refreshOptions(); rebuildGroup();
                 })
                 .setNegativeButton("Cancel", null).show();
     }
@@ -327,7 +391,7 @@ public final class LauncherActivity extends Activity {
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Vulkan driver")
                 .setSingleChoiceItems(names, selected, (dialog, which) -> {
                     GpuDrivers.select(this, which == 0 ? "" : drivers.get(which - 1).id);
-                    refreshOptions(); dialog.dismiss();
+                    refreshOptions(); rebuildGroup(); dialog.dismiss();
                 })
                 .setPositiveButton("Import ZIP", (dialog, which) -> startActivityForResult(
                         new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),
@@ -335,7 +399,7 @@ public final class LauncherActivity extends Activity {
                 .setNeutralButton("Remove selected", (dialog, which) -> {
                     GpuDrivers.Driver driver = GpuDrivers.selected(this);
                     if (driver == null) return;
-                    try { GpuDrivers.remove(this, driver); refreshOptions(); }
+                    try { GpuDrivers.remove(this, driver); refreshOptions(); rebuildGroup(); }
                     catch (java.io.IOException error) { message("Vulkan driver", error.getMessage()); }
                 })
                 .setNegativeButton("Back", null).show();
