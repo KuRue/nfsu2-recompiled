@@ -406,3 +406,16 @@ stationary steering, slide, curb and wall in this build; no answer yet. Native
 code and Android motor event path validated; no PS2-equivalence claim.
 No task server/emulator/watcher/logcat background process started. Leave physical
 game available and close only the device stream at completion.
+
+
+## 2026-10-26: quieter hills after physics-feedback user test
+
+User says the physics build works much better and hits feel good. Traction is
+still uncertain, with odd feedback over small hills. Logs in ignored
+build/verification/physics-hills-feedback.txt show low-slip straight running
+triggering surface levels17–33, often with ~1% wheel mismatch. Changed only the
+surface estimator: subtract a per-wheel120ms derivative trend, then threshold
+residual at.35 and scale over1.2. Slow heave/pitch/weight transfer should be quiet;
+sharp curbs remain. Impact and slip algorithms unchanged. Host regression includes
+smooth1Hz suspension cycles versus sharp curb changes; all tests pass. Subjective
+hill-filter validation pending. No claim of direct tire-force measurements.

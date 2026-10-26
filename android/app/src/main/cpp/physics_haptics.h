@@ -16,9 +16,10 @@ class Haptics {
     uint64_t lastUpdate=0,impactUntil=0,lastImpact=0;
     uint32_t impactSequence=0;unsigned impactStrength=0;
     float radius=.30f,gripFiltered=0,surfaceFiltered=0;
+    std::array<float,4> suspensionTrend{};
     static float clamp01(float n){return std::clamp(n,0.f,1.f);}
     static float length(const std::array<float,3>& v){return std::sqrt(dot(v,v));}
-    void clearState(){havePrevious=false;impactUntil=0;gripFiltered=surfaceFiltered=0;channels={};}
+    void clearState(){havePrevious=false;impactUntil=0;gripFiltered=surfaceFiltered=0;suspensionTrend={};channels={};}
 public:
     Channels channels;
     void stop(){clearState();lastUpdate=0;}
@@ -62,9 +63,17 @@ public:
         if(speed<1&&std::max(front,rear)<4)grip=0; // Parked steering/revving is silent.
         float response=std::min(1.f,dt*(grip>gripFiltered?12.f:6.f));gripFiltered+=(grip-gripFiltered)*response;
         c.grip=unsigned(std::clamp(gripFiltered*210.f,0.f,210.f));
-        float rate=0;for(unsigned i=0;i<4;++i)rate+=std::fabs(s.suspension[i]-previous.suspension[i])/dt;
+        float rate=0,sharpRate=0;
+        for(unsigned i=0;i<4;++i){
+            float derivative=(s.suspension[i]-previous.suspension[i])/dt;
+            rate+=std::fabs(derivative);
+            // Remove slow heave/pitch/weight transfer before generating road texture.
+            // A smooth hill is not evidence that a tire has lost grip.
+            suspensionTrend[i]+=(derivative-suspensionTrend[i])*(dt/(.12f+dt));
+            sharpRate+=std::fabs(derivative-suspensionTrend[i]);
+        }
         c.suspensionRate=rate*.25f;
-        float roughness=speed>2?clamp01((c.suspensionRate-.10f)/1.0f):0;
+        float roughness=speed>2?clamp01((sharpRate*.25f-.35f)/1.2f):0;
         surfaceFiltered+=(roughness-surfaceFiltered)*std::min(1.f,dt*14.f);
         c.surface=unsigned(std::clamp(surfaceFiltered*65.f,0.f,65.f));
         float horizontalDV=std::hypot(dv[0],dv[1]);c.planarAcceleration=horizontalDV/dt;

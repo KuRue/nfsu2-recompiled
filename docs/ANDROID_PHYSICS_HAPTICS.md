@@ -47,7 +47,10 @@ physics_haptics.h updates from every presented frame using race-clock time:
   steering/revving with stationary wheels gives no cue. Airborne-like vertical
   motion suppresses slip output. Actual contact flags/tire forces are not read.
   The output is a pulsed chatter with intensity following the filtered estimate.
-- **Surface:** changes in suspension values give quieter texture while moving.
+- **Surface:** sharp changes in suspension values give quieter texture while moving.
+  A per-wheel 120ms derivative trend removes slow hill/weight-transfer movement;
+  only residual rates above .35 contribute (scaled over 1.2, capped at65).
+  This avoids treating ordinary suspension travel as loss of grip.
 - **Impact estimate:** sufficiently abrupt horizontal velocity changes trigger a
   priority event, with a vertical-motion rejection and cooldown. This is an
   impulse estimate; hard landings or extreme maneuvers may still confuse it.
@@ -82,3 +85,15 @@ Analyzer tests cover straight/stopped silence, sliding, wheel lock/spin, suspens
 texture without a false impact, impact priority/event identity, frozen data,
 teleport/car changes and invalid snapshots. Phone perceptual results are recorded
 in HANDOFF.md; passing these tests alone does not establish a convincing feel.
+
+### Hill-feedback follow-up (2026-10-26)
+
+User confirmed physics feedback is substantially better and impacts feel good,
+but reported odd vibration on small hills. The capture contains straight-running
+samples with slip angles below1 degree and wheel mismatch around1%, yet surface
+levels17–33. This supports suspension texture as a likely contributor; the 1Hz
+log cannot identify every sensation. The surface filter now rejects slow changes.
+Regression tests exercise a smooth1Hz front/rear suspension cycle (silent), sharp
+curb movement (surface), sustained slide/spin/lock, and the unchanged hit pattern.
+Subjective confirmation of the revised hill filter is still pending. Grip remains
+an estimate of sliding/spin/lock, not a measurement of tire load or friction.
