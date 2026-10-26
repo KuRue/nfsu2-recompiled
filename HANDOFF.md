@@ -300,3 +300,44 @@ emulator. Emulator disappeared before final phone reconnection; rebooted it sole
 cleanup and restored its MOVIES test backup from MOVIES_test_hold. Emulator is
 shut down at task completion.
 No task server or persistent logcat/watch process was started.
+
+## Haptics follow-up: short impacts and steering grip cues — 2026-10-26
+
+User could feel sidewalks but not grip or car/wall hits. Previous implementation
+muted all condition effects and sampled only currently active effects25Hz. Added
+a bounded32-entry transient queue retaining game force peaks85ms, so very brief
+forces can survive UI polling and effect Stop/Unload/release. Device StopAll,
+pause/unacquire and gain mute still silence output. Individual effect Stop can
+leave its already-triggered85ms cue; this is a deliberate vibration adaptation.
+
+Parsed multi-axis DICONDITION coefficient/saturation payloads with checked sizes.
+Light cornering feedback uses these condition forces and physical steering
+magnitude above a dead zone. Resistance changes also produce brief cues. This
+approximates steering load, not actual tire-slip telemetry, and cannot guarantee
+an impact signal if the game sends no corresponding force. Kept Medium strength,
+all prior phone/graphics/controller settings and data. Startup logs on process7741
+confirmed a real damper condition with force7058; previous build discarded it.
+
+Extended force tests PASS:5ms effects retained across40ms polling/object deletion,
+cue expiry, StopAll/gain silence, grip at nonzero steering and resistance-change
+cues, bounded queue; original timing/gain/envelope tests pass too. Startup parser
+checks now include2-axis conditions and truncated condition rejection. Android
+build PASS18s, APK signature PASS. Installed same dev package at192.168.1.169:33001,
+version0.14.10-phone-dev-haptics2. SHA256:
+f0ae39799d4063bcc385dbe792c9abd708542ce6b4f88d3eee72ad70f814d7ff.
+Asked user to compare real wall/car impacts and corners. No subjective confirmation
+yet; record separately if received. No task servers/emulators/watchers started.
+
+User confirmed wall/car impacts work after short-pulse retention, but couldn't
+separate hits from sidewalk rumble; traction felt unchanged. Telemetry confirmed
+condition output was very weak (amplitude3–4 at Medium). Increased its nonlinear
+steering response while retaining a centered dead zone. Added distinct priority
+patterns for strong force peaks: quiet30ms, tap75ms, gap60ms, tap75ms, quiet10ms.
+Background force output is suppressed for this250ms pattern. Repeated updates
+strengthen rather than restart the pattern; strong-curb peaks may also trigger it
+because the game force stream carries no explicit collision label. Unit tests
+verify road hum is suppressed in the gaps, two pulses occur, hum resumes, and
+retriggering doesn't starve the onset. Final APK hash above is for this build.
+Installed and launched, physical distinction/stronger-cornering feel not yet
+confirmed. No claim of actual tire-slip feedback. Evidence from initial updated
+phone run: build/verification/haptics2-phone-logcat.txt. No task background jobs.

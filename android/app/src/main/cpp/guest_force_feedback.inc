@@ -36,6 +36,18 @@ bool readForceParameters(nfs_ff::Effect& e,uint32_t p,uint32_t flags){
         next.magnitude=int32_t(read32(data));next.offset=0;
         if(category==2){int64_t a=int32_t(read32(data)),b=int32_t(read32(data+4));next.magnitude=int32_t(std::max(a<0?-a:a,b<0?-b:b));}
         if(category==3)next.offset=int32_t(read32(data+4));
+        if(category==4){
+            uint32_t axes=std::max(1u,read32(p+28));if(axes>6||bytes<axes*24)return false;
+            int64_t strongest=0;
+            for(uint32_t axis=0;axis<axes;++axis){uint32_t c=data+axis*24;
+                int64_t positive=int32_t(read32(c+4)),negative=int32_t(read32(c+8));
+                int64_t coefficient=std::min<int64_t>(10000,std::max(positive<0?-positive:positive,negative<0?-negative:negative));
+                uint32_t saturation=std::min(10000u,std::max(read32(c+12),read32(c+16)));
+                strongest=std::max(strongest,coefficient*saturation/10000);
+            }
+            next.conditionForce=int32_t(strongest);
+            static unsigned loggedConditions=0;if(++loggedConditions<=8)NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Phone grip condition type=%08x force=%d",e.type,next.conditionForce);
+        }
     }
     e=next;return true;
 }
@@ -54,7 +66,7 @@ void forceEffectDispatch(uint32_t self,uint32_t method){
     case 4:if(!arg(1)||!memory->writable(arg(1),16)){ret(diInvalid,2);return;}{auto g=effectGuid(e.type);std::memcpy(ptr(arg(1),16),g.data(),16);ret(0,2);return;}
     case 5:ret(0x80004001,3);return;
     case 6:{if(!readForceParameters(e,arg(1),arg(2))){ret(diInvalid,3);return;}
-        if(arg(2)&0x20000000u)forceMixer.start(e,1,feedbackNow());ret(0,3);return;}
+        if(arg(2)&0x20000000u)forceMixer.start(e,1,feedbackNow());else forceMixer.parametersChanged(e,feedbackNow());ret(0,3);return;}
     case 7:{if(arg(2)&1)forceMixer.stopAll(e.owner);forceMixer.start(e,arg(1),feedbackNow());
         static unsigned loggedStarts=0;if(++loggedStarts<=12)NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Phone force effect start type=%08x magnitude=%d duration=%u",e.type,e.magnitude,e.durationUs);ret(0,3);return;}
     case 8:case 11:e.playing=false;ret(0,1);return;

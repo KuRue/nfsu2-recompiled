@@ -15,10 +15,28 @@ may exist. Unknown/custom waveforms and effect-file import are unsupported.
 
 Phone vibration is a scalar approximation: constant/ramp/periodic magnitudes
 become motor strength. Wave frequency and force direction are not reproduced.
-Spring/damper/friction resistance is accepted as a condition effect but produces
-no vibration because the phone cannot exert wheel resistance. Effects are mixed
+Spring/damper/friction resistance becomes a light steering-weight cue during
+cornering, using the physical steering axis and the game's condition coefficients.
+Changes in resistance produce a brief pulse. This is an approximation of steering
+resistance, not measurement of tire slip or a guarantee that the game emits a
+separate cue for every car/wall collision. A steady straight wheel produces no
+condition rumble. Effects are mixed
 using the maximum strength instead of summing into saturation. This does not
 invent engine or collision events; it needs the game to send force effects.
+Brief non-condition force peaks are retained for85ms (bounded32-cue queue), so
+an impact shorter than the40ms UI polling interval can still be felt, even if
+the effect object is subsequently released.
+Stronger peaks (native amplitude>=160/255 before the user's strength scaling)
+use a250ms priority pattern: a short quiet lead-in, two75ms taps separated by a
+60ms gap. This temporarily overrides other road/cornering output so a hit can
+be distinguished from ongoing sidewalk rumble. Repeated force updates within
+an existing pattern strengthen it without continuously restarting the quiet
+lead-in. This is a force-strength heuristic, not a separate wall/car event tag;
+a sufficiently strong curb force can also receive the impact pattern. Device StopAll, gain mute, actuator
+mute and lifecycle pause silence pending cues. An individual effect Stop/Unload
+ends its sustained output but allows its already-triggered short cue to finish.
+Condition changes use coefficients/saturation across all reported axes; malformed
+or truncated condition payloads are rejected.
 
 A neutral virtual joystick endpoint is offered while phone feedback is enabled,
 so the feature can be used with touch controls as well as a physical pad.

@@ -482,6 +482,13 @@ void testGuestForceParameters(){
     if(!readForceParameters(effect,p,0x80)||effect.attackUs!=10000||effect.attackLevel!=500)throw GuestStop("Force envelope decode failed");
     write32(p+44,2);if(readForceParameters(effect,p,0x100)||effect.magnitude!=8000)throw GuestStop("Force invalid payload accepted");
     write32(p+40,0xffffffffu);if(readForceParameters(effect,p,0x80))throw GuestStop("Force invalid envelope accepted");
+    uint32_t condition=allocate(48);std::memset(ptr(condition,48),0,48);
+    write32(condition+4,2000);write32(condition+8,uint32_t(-4000));write32(condition+12,10000);write32(condition+16,10000);
+    write32(condition+24+4,8000);write32(condition+24+12,10000);
+    write32(p+28,2);write32(p+44,48);write32(p+48,condition);effect.type=0x13541c27;
+    if(!readForceParameters(effect,p,0x100)||effect.conditionForce!=8000)throw GuestStop("Force multi-axis condition decode failed");
+    write32(p+44,24);if(readForceParameters(effect,p,0x100))throw GuestStop("Force truncated condition accepted");
+    heaps->free(GuestHeaps::process,condition);
     heaps->free(GuestHeaps::process,p);heaps->free(GuestHeaps::process,data);heaps->free(GuestHeaps::process,envelope);
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Force parameter checks passed: guest pointers, partial updates, envelopes and malformed bounds");
 }

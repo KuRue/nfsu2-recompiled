@@ -929,7 +929,7 @@ void setGuestPadConnected(bool connected){
     inputPadConnected=connected;if(!connected){inputPad=InputPad{};forceMixer.stopAll();}
 }
 void setGuestForceFeedback(bool enabled){phoneFeedbackEnabled=enabled;if(!enabled){std::lock_guard<std::mutex> lock(inputMutex);forceMixer.stopAll();}}
-unsigned guestForceFeedbackLevel(){std::lock_guard<std::mutex> lock(inputMutex);return phoneFeedbackEnabled&&inputDrivingMode.load()?forceMixer.sample(feedbackNow()):0;}
+unsigned guestForceFeedbackLevel(){std::lock_guard<std::mutex> lock(inputMutex);return phoneFeedbackEnabled&&inputDrivingMode.load()?forceMixer.sample(feedbackNow(),inputPad.axis[0]):0;}
 void stopGuestForceFeedback(){std::lock_guard<std::mutex> lock(inputMutex);forceMixer.stopAll();}
 bool guestGamepadInUse(){return inputPadAcquired.load()>0;}
 void setGuestDisplaySize(unsigned width,unsigned height){displayWidth=width;displayHeight=height;}
