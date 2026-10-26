@@ -193,20 +193,24 @@ int64_t steadyMs(){return std::chrono::duration_cast<std::chrono::milliseconds>(
 void startStallWatch(){
     static std::once_flag started;
     std::call_once(started,[]{std::thread([]{
-        int64_t reportedFor=0;
+        int64_t reportedFor=0;bool cancelledStall=false;
         while(!stopRequested.load()){
             std::this_thread::sleep_for(std::chrono::seconds(2));
             int64_t last=lastPresentMs.load(),idle=steadyMs()-last;
             if(guestPaused.load()||idle<12000||reportedFor==last)continue;
             reportedFor=last;
             NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Guest stall: no frame for %lld s; guest threads:",static_cast<long long>(idle/1000));
+            std::map<uint32_t,uint32_t> waitingFor;  // thread id -> critical section it wants
             std::lock_guard<std::mutex> lock(threadTracesMutex);
             for(auto& [id,trace]:threadTraces){
                 const char* wait=trace->wait.load();uint32_t handle=trace->handle.load();
                 std::string detail,held,callers;
                 // Read-only peeks at guest memory from this host thread: stable while the guest is stuck.
-                if(wait&&!std::strcmp(wait,"EnterCriticalSection")&&memory&&memory->readable(handle,24))
-                    detail=" (owner thread "+std::to_string(read32(handle+12))+", count "+std::to_string(read32(handle+8))+")";
+                if(wait&&!std::strcmp(wait,"EnterCriticalSection")&&memory&&memory->readable(handle,24)){
+                    uint32_t owner=read32(handle+12);
+                    detail=" (owner thread "+std::to_string(owner)+", count "+std::to_string(read32(handle+8))+")";
+                    if(owner&&owner!=id)waitingFor[id]=handle;
+                }
                 for(auto& slot:trace->held)if(uint32_t cs=slot.load())held+=" "+hex(cs);
                 uint32_t esp=trace->esp.load();
                 for(unsigned i=0,found=0;memory&&i<256&&found<10;++i){
@@ -216,6 +220,26 @@ void startStallWatch(){
                 }
                 NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","  thread %u at %08x %s %08x%s; holds:%s; stack:%s",id,trace->func.load(),
                     wait?wait:"running",wait?handle:0u,detail.c_str(),held.empty()?" none":held.c_str(),callers.c_str());
+            }
+            // A pair of threads each inside EnterCriticalSection on a lock the other
+            // owns can never resolve (observed once loading free roam with every
+            // setting maxed). Long asset loads also stall frames, so only a real
+            // wait cycle aborts: cancel the guest instead of hanging forever.
+            if(cancelledStall||idle<20000)continue;
+            std::map<uint32_t,uint32_t> owns;  // critical section -> owning thread
+            for(auto& [id,trace]:threadTraces)for(auto& slot:trace->held)if(uint32_t cs=slot.load())owns[cs]=id;
+            for(auto& [id,cs]:waitingFor){
+                auto owner=owns.find(cs);if(owner==owns.end())continue;
+                auto back=waitingFor.find(owner->second);
+                if(back!=waitingFor.end()&&owns.count(back->second)&&owns[back->second]==id){
+                    NFS_RUNTIME_LOG(ANDROID_LOG_ERROR,"NFSU2",
+                        "Critical-section deadlock: threads %u and %u wait on each other; cancelling the guest",
+                        id,owner->second);
+                    guestThreadFault="The game locked up while loading (two of its threads deadlocked). "
+                        "Progress was not lost beyond the last save; try a lower phone preset or fewer maxed settings.";
+                    cancelledStall=true;
+                    break;
+                }
             }
         }
     }).detach();});

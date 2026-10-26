@@ -36,7 +36,7 @@ import java.util.concurrent.Executors;
  * right (Vulkan driver, resolution, frame cap, widescreen, compatibility).
  */
 public final class LauncherActivity extends Activity {
-    private static final int REQUEST_DRIVER_ZIP = 45, REQUEST_DRIVER_PROBE = 46;
+    private static final int REQUEST_DRIVER_ZIP = 45, REQUEST_DRIVER_PROBE = 46, REQUEST_SAVE_ZIP = 47;
     // NFSU2 green.
     private static final int ACCENT = 0xFF8EE03A;
     /** {label, guest language name, LANGUAGES/<file>.bin}. */
@@ -221,6 +221,8 @@ public final class LauncherActivity extends Activity {
         for (GameOptions.Option option : GameOptions.ALL)
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
         optionsList.addView(optionRow("Online server", GameOptions.onlineServer(this), this::chooseOnlineServer));
+        optionsList.addView(optionRow("Backup career saves", backupSummary(), this::backupSaves));
+        optionsList.addView(optionRow("Restore career saves", "From a backup ZIP", this::restoreSaves));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
         optionsList.addView(optionRow("Report a problem", "Full log for GitHub", () -> prepareReport(null)));
@@ -389,6 +391,8 @@ public final class LauncherActivity extends Activity {
                     main.post(() -> { refresh(); message("Vulkan driver", "Could not import the driver: " + error.getMessage()); });
                 }
             });
+        } else if (requestCode == REQUEST_SAVE_ZIP && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            restoreSavesFrom(data.getData());
         }
     }
 
@@ -482,6 +486,91 @@ public final class LauncherActivity extends Activity {
                 .putExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu"))
                 .putExtra("onlineServer", GameOptions.onlineServer(this))
                 .putExtra("driverLoader", loader));
+    }
+
+    // ---- Saves -----------------------------------------------------------------------------------------
+
+    private static File savesRoot() {
+        return new File(gameRoot(), "AppData/Local/NFS Underground 2");
+    }
+
+    private static File savesBackupFolder() {
+        return new File(Environment.getExternalStorageDirectory(), "Download/NFSU2/saves");
+    }
+
+    private String backupSummary() {
+        if (!allowed()) return "Allow file access first";
+        File[] zips = savesBackupFolder().listFiles((dir, name) -> name.endsWith(".zip"));
+        return zips == null || zips.length == 0 ? "To Download/NFSU2/saves" : zips.length + " backup" + (zips.length == 1 ? "" : "s");
+    }
+
+    /** Backups copy files while the game may be writing them; refuse while it runs. */
+    private boolean gameRunning() {
+        android.app.ActivityManager manager = (android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        List<android.app.ActivityManager.RunningAppProcessInfo> processes = manager.getRunningAppProcesses();
+        if (processes != null) for (android.app.ActivityManager.RunningAppProcessInfo process : processes)
+            if (process.uid == android.os.Process.myUid() && process.processName.equals(getPackageName() + ":game"))
+                return true;
+        return false;
+    }
+
+    private void backupSaves() {
+        if (!requireStorageForSaves()) return;
+        if (gameRunning()) { message("Backup career saves", "The game is still running. Close it first so a save being written cannot end up in the backup."); return; }
+        status.setText("Backing up career saves…");
+        worker.execute(() -> {
+            try {
+                File zip = SaveArchive.backup(savesRoot(), savesBackupFolder());
+                main.post(() -> { refresh(); message("Backup career saves", "Saved " + zip.length() / 1024 + " KB to:\n" + zip.getPath()
+                        + "\n\nKeep copies of this file somewhere safe, for example cloud storage."); });
+            } catch (Exception error) {
+                main.post(() -> { refresh(); message("Backup career saves", error.getMessage()); });
+            }
+        });
+    }
+
+    private void restoreSaves() {
+        if (!requireStorageForSaves()) return;
+        if (gameRunning()) { message("Restore career saves", "The game is still running. Close it first so an autosave cannot conflict with the restore."); return; }
+        startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                .setType("application/zip").addCategory(Intent.CATEGORY_OPENABLE), REQUEST_SAVE_ZIP);
+    }
+
+    private boolean requireStorageForSaves() {
+        if (allowed()) return true;
+        message("Career saves", "Allow file access first so the launcher can read Internal storage/nfsu2.");
+        return false;
+    }
+
+    private void restoreSavesFrom(Uri zip) {
+        try (java.io.InputStream input = getContentResolver().openInputStream(zip)) {
+            if (input == null) throw new java.io.IOException("The selected file could not be opened.");
+            File staged = new File(getCacheDir(), "restore-save.zip");
+            java.io.OutputStream copy = new java.io.FileOutputStream(staged);
+            byte[] buffer = new byte[8192];
+            long total = 0;
+            for (int n; (n = input.read(buffer)) != -1; ) {
+                if ((total += n) > SaveArchive.MAX_BYTES) { copy.close(); staged.delete(); throw new java.io.IOException("The backup is larger than expected."); }
+                copy.write(buffer, 0, n);
+            }
+            copy.close();
+            status.setText("Restoring career saves…");
+            worker.execute(() -> {
+                try {
+                    SaveArchive.Restored result = SaveArchive.restore(staged, savesRoot(), savesBackupFolder());
+                    main.post(() -> {
+                        refresh();
+                        String text = "Restored " + result.files + " save file" + (result.files == 1 ? "" : "s") + ".";
+                        if (result.backup != null) text += "\n\nYour previous saves were backed up first to:\n" + result.backup.getPath();
+                        message("Restore career saves", text);
+                    });
+                } catch (Exception error) {
+                    main.post(() -> { refresh(); message("Restore career saves", error.getMessage()); });
+                } finally { staged.delete(); }
+            });
+        } catch (Exception error) {
+            message("Restore career saves", "Could not read the backup: " + error.getMessage());
+        }
     }
 
     // ---- Storage ---------------------------------------------------------------------------------------
