@@ -341,3 +341,18 @@ retriggering doesn't starve the onset. Final APK hash above is for this build.
 Installed and launched, physical distinction/stronger-cornering feel not yet
 confirmed. No claim of actual tire-slip feedback. Evidence from initial updated
 phone run: build/verification/haptics2-phone-logcat.txt. No task background jobs.
+
+## PS2 rumble investigation — 2026-10-26
+
+User says final haptic tuning still feels unchanged; asks to examine PS2 behavior.
+Reviewed PCSX2's actual DualShock2 motor decoding and a PC NFSU2 telemetry/custom
+FFB reference. Research notes and pinned sources:
+docs/HAPTICS_PS2_INVESTIGATION.md. PS2 protocol has large low-frequency byte motor
+and small high-frequency binary motor; NFSU2's specific PS2 event logic remains
+unknown without its executable or motor trace. No PS2 game image obtained.
+Current cornering cue is still steering load, not tire slip. Recommend validating
+read-only vehicle telemetry/collision signals and preserving separate haptic
+channels before phone synthesis. Candidate external offsets are not validated;
+no changes to APK or phone in this research turn, and no false claim of PS2 parity.
+No processes/devices/services started. This supersedes optimistic assumptions
+about the perceptual effectiveness of the prior pattern tuning.
