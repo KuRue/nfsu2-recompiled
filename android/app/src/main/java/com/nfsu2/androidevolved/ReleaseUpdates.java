@@ -22,7 +22,7 @@ final class ReleaseUpdates {
         final String tag, url, error;
         Result(String tag, String url, String error) { this.tag = tag; this.url = url; this.error = error; }
     }
-    static SharedPreferences prefs(Context context) { return context.getSharedPreferences("nfsu2_updates_" + BuildConfig.UPDATE_REPOSITORY, 0); }
+    static SharedPreferences prefs(Context context) { return context.getSharedPreferences("nfsu2_updates_" + BuildConfig.UPDATE_REPOSITORY.replace('/', '_'), 0); }
     static String installed(Context context) {
         try { return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName; }
         catch (Exception ignored) { return "0.0.0"; }
