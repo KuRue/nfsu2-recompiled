@@ -31,3 +31,10 @@ public:
     }
     std::string status(){std::lock_guard<std::mutex> guard(mutex_);return status_;}
 };
+
+// The paused machine and its worker context must outlive individual activities.
+// Android owns this process lifetime; do not free the worker beneath its thread.
+inline GuestBootWorker& processGuestWorker(){
+    static auto* worker=new GuestBootWorker;
+    return *worker;
+}

@@ -14,7 +14,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='nfsu2-source-checks-') as folder:
         build = Path(folder)
         for name in ['frame_pacer', 'frame_metrics', 'physics_probe', 'physics_haptics',
-                     'gamepad_state', 'force_feedback', 'audio_mixer', 'texture_pack']:
+                     'gamepad_state', 'force_feedback', 'audio_mixer', 'texture_pack', 'guest_boot_worker']:
             executable = build / name
             run(os.environ.get('CXX', 'g++'), '-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror',
                 '-pthread', ROOT / 'tests' / (name + '.cpp'), '-o', executable)

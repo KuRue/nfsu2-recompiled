@@ -236,7 +236,7 @@ struct Host {
     bool failed = false;
     bool guestAttempted = false;
     std::string guestStatus;
-    GuestBootWorker guestWorker;
+    GuestBootWorker& guestWorker=processGuestWorker();
 };
 static GamepadInput gamepad;
 // Device ids the Java side accepted as real gamepads (updateGamepads). Events
@@ -259,7 +259,7 @@ static void publishPad(){
     const float axes[6]={state.leftX,state.leftY,state.leftTrigger-state.rightTrigger,state.rightX,state.rightY,0.f};
     setGuestPad(axes,state.buttons,state.hatX,state.hatY);
 }
-// Set when the app pauses with the game live: the next unpause opens the game's own pause menu.
+// The app pauses with the game live: the next unpause opens the game's own pause menu.
 static bool pauseReturnPending=false;
 static std::chrono::steady_clock::time_point pauseReturnEscUp{};
 static void onCommand(android_app* app, int32_t command) {
@@ -457,6 +457,7 @@ void android_main(android_app* app) {
                 }
                 if (!host.guestAttempted) {
                     host.guestAttempted = true;
+                    // start() is idempotent: retain the original paused worker.
                     host.guestWorker.start(std::string(kGameRoot) + "/SPEED2.EXE");
                 }
             }
@@ -472,6 +473,7 @@ void android_main(android_app* app) {
             host.renderer.stop(); host.failed = true;
         }
     }
+    setGuestPaused(true);
     host.renderer.stop();
     acknowledgeD3D9Surface(false);setD3D9HostWindow(nullptr);
 }

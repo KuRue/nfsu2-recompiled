@@ -513,3 +513,32 @@ archive workflow. Local source suite and targeted refreshed mapping regression
 pass; GitHub run40344204827 success. Launched app after install. User must confirm
 Y enters a free-roam race/garage, X camera and R3 look-back with physical Backbone.
 No claim of physical confirmation yet. No task background processes/emulator.
+
+## 2026-10-26: repair unfinished live-resume implementation
+
+Recovered failed provider changes after user requested exact snapshot resume.
+Fixed malformed worker code and unsafe persist() that discarded ownership while
+thread still referenced an activity-local object. Worker now process-lifetime;
+start idempotent across hosts. Launcher no longer kills live guest for Resume;
+uses singleTask activity, retains foreground service with End session action.
+Removed automatic Enter-through-startup fake resume. Killed process is not offered
+as restorable based on marker. Restart explicit confirmation; foreground launcher
+polls process state every2s. Service failure logged. Version28/0.14.13.
+
+IMPORTANT: this only retains live memory. User's durable snapshot request remains
+unimplemented; docs/ANDROID_SESSION_RESUME.md identifies native continuations and
+host graphics/audio/file/thread resources requiring serialization. Do not claim
+survival of process death/reboot/update. User was explicitly informed in commentary.
+
+Built/signature verified/installed preliminary code28 on phone45041. Live
+Home→launcher→Resume kept PID31233 and one CRT startup; rendering/audio resumed.
+Killed only that test-started PID; stale Resume correctly says session ended,
+then PLAY. Mid-race exact-position physical validation still pending. No career
+data restored/overwritten. Added process-worker regression; standalone header
+needed explicit cstdint. Final build pending latest UI poll/header changes.
+
+Final source suite passes including new worker lifetime/idempotence regression;
+Android assembleDebug succeeds and signer matches pinned phone certificate.
+Final APK installed after 2s launcher-status refresh. Kept current graphics/user
+preferences. No persistent capture process/emulator started. Durable snapshot work
+NOT complete; do not relabel live RAM retention as a disk save state.

@@ -8,8 +8,8 @@ android {
         applicationId 'com.nfsu2.androidevolved'
         minSdk 29
         targetSdk 35
-        versionCode Integer.parseInt(project.findProperty('phoneVersionCode') ?: '27')
-        versionName (project.findProperty('phoneVersionName') ?: '0.14.12')
+        versionCode Integer.parseInt(project.findProperty('phoneVersionCode') ?: '28')
+        versionName (project.findProperty('phoneVersionName') ?: '0.14.13')
         buildConfigField 'String', 'UPDATE_REPOSITORY', '"codepdbh/nfsu2-recompiled"'
         manifestPlaceholders = [appLabel: 'NFSU2 Android Evolved']
         // -PnfsAbi=armeabi-v7a builds the separate 32-bit APK.

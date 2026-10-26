@@ -92,10 +92,20 @@ public final class LauncherActivity extends Activity {
         });
     }
 
+    private boolean lastGameRunning;
+    private final Runnable sessionRefresh=new Runnable(){
+        @Override public void run(){
+            if(!resumed)return;
+            if(lastGameRunning!=gameRunning())refresh();
+            main.postDelayed(this,2000);
+        }
+    };
+
     @Override protected void onResume() {
         super.onResume();
         resumed = true;
         refresh();
+        main.removeCallbacks(sessionRefresh);main.postDelayed(sessionRefresh,2000);
         String crash = Diagnostics.unreportedCrash(this);
         if (crash != null) {
             Diagnostics.acknowledgeCrashes(this);
@@ -108,6 +118,7 @@ public final class LauncherActivity extends Activity {
 
     @Override protected void onPause() {
         resumed = false;
+        main.removeCallbacks(sessionRefresh);
         super.onPause();
     }
 
@@ -211,8 +222,9 @@ public final class LauncherActivity extends Activity {
         boolean ready = exe && !languages().isEmpty();
         status.setText(!allowed ? "Allow file access to read Internal storage/nfsu2."
                 : ready ? "Internal storage/nfsu2" : "Copy your game files to Internal storage/nfsu2.");
-        // A surviving session marker means the game was killed mid-run: default to Resume.
-        boolean resumable = ready && !gameRunning() && GameActivity.sessionMarker().exists();
+        // Resume only a live process. A marker alone is not a restorable snapshot.
+        lastGameRunning=gameRunning();
+        boolean resumable = ready && lastGameRunning;
         resumeNextLaunch = resumable;
         play.setText(resumable ? "RESUME" : "PLAY");
         playArrow.setVisibility(resumable ? View.VISIBLE : View.GONE);
@@ -550,30 +562,47 @@ public final class LauncherActivity extends Activity {
     // ---- Launch ----------------------------------------------------------------------------------------
 
     private void chooseStartMode() {
-        chooseValue("How to start", new String[] {"Resume career", "Start fresh"},
+        chooseValue("How to start", new String[] {"Resume live session", "Restart game"},
                 new String[] {"resume", "fresh"}, resumeNextLaunch ? "resume" : "fresh", "resume",
-                mode -> { resumeNextLaunch = mode.equals("resume"); launch(); });
+                mode -> {
+                    if(mode.equals("resume")){resumeNextLaunch=true;launch();}
+                    else new AlertDialog.Builder(this).setTitle("Restart game?")
+                        .setMessage("The current live session will end. Unsaved progress will be lost.")
+                        .setPositiveButton("Restart",(dialog,which)->{resumeNextLaunch=false;launch();})
+                        .setNegativeButton("Cancel",null).show();
+                });
     }
 
     private void play() {
-        if (android.os.Process.is64Bit() && GpuDrivers.selected(this) != null) probeDriver(true);
+        if (!resumeNextLaunch && android.os.Process.is64Bit() && GpuDrivers.selected(this) != null) probeDriver(true);
         else launch();
     }
 
     private void launch() {
-        // Each launch uses a fresh guest machine in the dedicated :game process.
-        android.app.ActivityManager manager = (android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE);
-        List<android.app.ActivityManager.RunningAppProcessInfo> processes = manager.getRunningAppProcesses();
-        if (processes != null) for (android.app.ActivityManager.RunningAppProcessInfo process : processes)
-            if (process.uid == android.os.Process.myUid() && process.processName.equals(getPackageName() + ":game"))
-                android.os.Process.killProcess(process.pid);
+        if(resumeNextLaunch){
+            if(!gameRunning()){
+                refresh();message("Session ended", "Android has closed the previous session. Start the game and load your career save; no disk snapshot is available.");return;
+            }
+            startActivity(new Intent(this,GameActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));return;
+        }
+        android.app.ActivityManager manager=(android.app.ActivityManager)getSystemService(ACTIVITY_SERVICE);
+        List<android.app.ActivityManager.RunningAppProcessInfo> processes=manager.getRunningAppProcesses();
+        boolean stopped=false;
+        if(processes!=null)for(android.app.ActivityManager.RunningAppProcessInfo process:processes)
+            if(process.uid==android.os.Process.myUid()&&process.processName.equals(getPackageName()+":game")){
+                android.os.Process.killProcess(process.pid);stopped=true;
+            }
+        if(stopped){main.postDelayed(this::startGame,400);return;}
+        startGame();
+    }
+
+    private void startGame(){
         DisplayMetrics metrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
         int[] size = GameOptions.renderSize(this, Math.max(metrics.widthPixels, metrics.heightPixels),
                 Math.min(metrics.widthPixels, metrics.heightPixels));
         String[] loader = GpuDrivers.loaderArguments(this);
         startActivity(new Intent(this, GameActivity.class)
-                .putExtra("resume", resumeNextLaunch)
                 .putExtra("language", GameOptions.language(this))
                 .putExtra("renderWidth", size[0]).putExtra("renderHeight", size[1])
                 .putExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS)))
