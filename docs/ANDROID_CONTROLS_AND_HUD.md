@@ -54,7 +54,8 @@ under GCC's -Werror. Visual placement still requires checking actual game scenes
 Device smoke check (S25 Ultra, 2026-10-26): 73 anchors loaded and the race renders
 map upper-left, leaderboard upper-right, gauges lower-right near phone edges.
 Screenshot/local log under build/verification. Native callback received gas-down
-from the physical controller; brake confirmation is pending from the player.
+from the physical controller; the player subsequently confirmed RT gas and LT
+brake are working.
 
 Potential future work: HUD size/safe-margin sliders, steering dead-zone tuning,
 camera/FOV presets and skip-intro startup. These are candidate native additions,

@@ -258,3 +258,6 @@ upper-right edge and tachometer at lower-right edge at2340×1080 display /
 Physical controller callback emitted Controller pedal gas down at23:39:24; no
 brake/release confirmation yet. Host checks cover those transitions, but do not
 claim a completed physical brake test. Full local log controls-logcat.txt.
+
+User subsequently replied “Working” to the explicit RT gas / LT brake physical
+test request: both pedals confirmed. Implementation commit8259eec.
