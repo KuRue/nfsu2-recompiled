@@ -48,3 +48,5 @@ jobs:
         run: build/continuation-venv/bin/python scripts/check_generated_continuations.py --pcrecomp build/pcrecomp-continuation
       - name: Check extended continuations under sanitizers
         run: build/continuation-venv/bin/python scripts/check_generated_continuations.py --pcrecomp build/pcrecomp-continuation --sanitize
+      - name: Restore blocked logical threads, events and timers under sanitizers
+        run: build/continuation-venv/bin/python scripts/check_logical_scheduler.py --pcrecomp build/pcrecomp-continuation --sanitize

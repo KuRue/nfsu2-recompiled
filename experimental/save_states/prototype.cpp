@@ -53,7 +53,7 @@ void selftest(const std::string& build){
     auto damaged=bytes;damaged.back()^=1;rejected([&]{decode(damaged,build,state.game);});
     for(unsigned kind=0;kind<5;++kind){auto invalid=state;
         if(kind==0){invalid.fpTop=9;}if(kind==1){invalid.fpControl=0x10000;}if(kind==2){invalid.mxcsr=0x10000;}
-        if(kind==3){invalid.host[0]=3;}if(kind==4){invalid.host[1]=2;}
+        if(kind==3){invalid.host[0]=3;}if(kind==4){invalid.host[1]=99;}
         rejected([&]{encode(invalid);});
     }
     auto old=bytes;old[8]=1;rejected([&]{decode(old,build,state.game);});

@@ -26,7 +26,7 @@ def generate(functions, pcrecomp, imports=None):
     imports = imports or {}
     if set(imports) & set(functions):
         raise ValueError('Synthetic import overlaps a guest function')
-    if any(service != 1 for service in imports.values()):
+    if any(service not in {1,2,3,4} for service in imports.values()):
         raise ValueError("Unknown synthetic host service")
     if not functions or len(functions) > 128:
         raise ValueError('Invalid function count for experimental emitter')
@@ -76,7 +76,9 @@ def generate(functions, pcrecomp, imports=None):
     lines += ['default:throw std::runtime_error("Unknown generated continuation PC");}}',
               'inline bool generated_entry(uint32_t pc){switch(pc){']
     lines += [f'case 0x{address:x}u:return true;' for address in functions]
-    lines += ['default:return false;}}',
+    lines += ['default:return false;}}', 'inline uint32_t generated_service(uint32_t target){switch(target){']
+    lines += [f'case {target}u:return {service}u;' for target,service in imports.items()]
+    lines += ['default:throw std::runtime_error("Unknown declared synthetic service");}}',
               'inline void generated_step(snapshot_prototype::State& state){',
               'using snapshot_prototype::require;',
               'require(!state.frames.empty(),"No continuation");',
@@ -135,6 +137,11 @@ def generate(functions, pcrecomp, imports=None):
                     line = re.sub(r'goto L_([0-9A-Fa-f]+);', lambda m: f'next=0x{m[1]}u;', line)
                     if 'goto ' in line:
                         raise ValueError('Unexpected emitted control flow')
+                    # The pinned lifter emits some raw floating loads/stores.
+                    # Preserve x86 unaligned access in this experimental host backend.
+                    line = line.replace('*(double*)ADDR(', '*(volatile proto_f64*)ADDR(')
+                    line = line.replace('*(float*)ADDR(', '*(volatile proto_f32*)ADDR(')
+                    line = line.replace('*(float*)&MEM32(', '*(volatile proto_f32*)&MEM32(')
                     lines.append(line)
             lines.append('break;}')
     lines += ['default:throw std::runtime_error("Unknown continuation");}',
@@ -144,7 +151,7 @@ def generate(functions, pcrecomp, imports=None):
               'state.flags=recomp_eflags(_flag_k,_flag_a,_flag_b,_cf,_df);',
               'std::memcpy(state.fp.data(),g_st,64);std::memcpy(state.fpInt.data(),g_st_i64,64);std::memcpy(state.mm.data(),g_mm,64);std::memcpy(state.xmm.data(),g_xmm,128);',
               'state.fpTop=uint32_t(g_fp_top);state.fpControl=g_fpu_cw;state.mxcsr=g_mxcsr;',
-              'if(action==3)state.host={1,1,g_eax,g_ecx,0};',
+              'if(action==3)state.host={1,generated_service(target),g_eax,g_ecx,0};',
               'if(action==1)state.frames.push_back({target,target,frame.locals});',
               'if(action==2){state.frames.pop_back();',
               'if(state.frames.empty())require(target==0x400100u,"Invalid root return");',

@@ -34,7 +34,7 @@ inline bool identity(const std::string& s){return s.size()==64&&s.find_first_not
 inline void validate(const State& s){
     require(identity(s.build)&&identity(s.game),"Invalid compatibility identity");
     require(s.fpTop<=8&&s.fpControl<=0xffff&&s.mxcsr<=0xffff,"Invalid extended CPU state");
-    require(s.host[0]<=2&&(!s.host[0]?s.host==std::array<uint32_t,5>{}:s.host[1]==1),"Invalid pending synthetic host call");
+    require(s.host[0]<=2&&(!s.host[0]?s.host==std::array<uint32_t,5>{}:(s.host[1]>=1&&s.host[1]<=4)),"Invalid pending synthetic host call");
     require(!s.hostResources,"Host resource serialization is not implemented");
     require(!s.frames.empty()&&s.frames.size()<=64,"Invalid continuation count");
     require(!s.regions.empty()&&s.regions.size()<=128,"Invalid region count");
@@ -89,8 +89,8 @@ inline State decode(const Bytes& file,const std::string& build,const std::string
     for(unsigned i=0;i<count;++i){Region region;region.address=r.word();auto n=r.word();require(n<=maxBytes,"Region too large");region.bytes=r.take(n);s.regions.push_back(std::move(region));}
     require(r.offset==payload.size(),"Unexpected trailing state");validate(s);return s;
 }
-inline void writeAtomic(const std::filesystem::path& path,const State& s){
-    auto bytes=encode(s);std::string pattern=path.string()+".partial-XXXXXX";std::vector<char> name(pattern.begin(),pattern.end());name.push_back(0);
+inline void writeAtomicBytes(const std::filesystem::path& path,const Bytes& bytes){
+    std::string pattern=path.string()+".partial-XXXXXX";std::vector<char> name(pattern.begin(),pattern.end());name.push_back(0);
     int fd=mkstemp(name.data());require(fd>=0,"Cannot create snapshot staging file");
     try{
         size_t written=0;while(written<bytes.size()){auto n=::write(fd,bytes.data()+written,bytes.size()-written);require(n>0,"Cannot write snapshot");written+=size_t(n);}
@@ -101,9 +101,11 @@ inline void writeAtomic(const std::filesystem::path& path,const State& s){
         int synced=fsync(directory);close(directory);require(synced==0,"Cannot sync snapshot directory");
     }catch(...){if(fd>=0)close(fd);unlink(name.data());throw;}
 }
-inline State read(const std::filesystem::path& path,const std::string& build,const std::string& game){
+inline void writeAtomic(const std::filesystem::path& path,const State& s){writeAtomicBytes(path,encode(s));}
+inline Bytes readBytes(const std::filesystem::path& path){
     std::ifstream input(path,std::ios::binary|std::ios::ate);require(bool(input),"Cannot open snapshot");
     auto size=input.tellg();require(size>=0&&uint64_t(size)<=maxBytes+65536,"Invalid snapshot file size");
-    Bytes bytes(static_cast<size_t>(size));input.seekg(0);input.read(reinterpret_cast<char*>(bytes.data()),bytes.size());require(bool(input),"Cannot read snapshot");return decode(bytes,build,game);
+    Bytes bytes(static_cast<size_t>(size));input.seekg(0);input.read(reinterpret_cast<char*>(bytes.data()),bytes.size());require(bool(input),"Cannot read snapshot");return bytes;
 }
+inline State read(const std::filesystem::path& path,const std::string& build,const std::string& game){return decode(readBytes(path),build,game);}
 }

@@ -610,3 +610,33 @@ sanitizers. It exposed a pinned x86-host unaligned uint64 memory cast; isolated
 runner now uses byte-aligned alias access types (as ARM runtime already does),
 with strict aliasing disabled. Pinned dependency/production files untouched.
 CI now runs both standard and sanitized generated suites. No APK build needed.
+
+## 2026-10-26: checkpointable logical thread/event/timer model
+
+User requested continuing toward durable snapshots. Added isolated logical_scheduler.h,
+scheduler_runner.cpp, thread_fixtures.S and scripts/check_logical_scheduler.py.
+Complete synthetic process captures per-thread CPU/FP/SIMD images, round-robin
+cursor, virtual clock, stable event/timer IDs, handle allocator and wait deadlines.
+Synthetic service IDs2/3/4 extend pending host protocol with wait/set/sleep. State
+codec now recognizes declared synthetic IDs1..4, unknown IDs still rejected. Shared
+CPU harness factored to cpu_test_runtime.h; atomic byte envelope helpers shared.
+NFSSCHED/schema1 bundles CPU schema2 capsules with consistent shared-memory copies.
+
+Six scenarios96 dispatcher checkpoints match uninterrupted final process CRC/time,
+with independent expected outputs/counters for auto/manual events, one-shot and
+periodic timers, timeout and sleep. Different live x87 values survive wait/context
+switch; runnable/blocked/sleeping/finished captures all exercised. Permanently
+blocked wait captured and clean deadlock reported before/after restore. Graph
+checks reject duplicate/wrong IDs, allocator reuse, unknown wait/timer references,
+stale deadlines, wrong states, inconsistent memory and recomputed-CRC malformed
+metadata. No actual Windows scheduler oracle or production native-thread capture.
+
+New unaligned-double fixture exposed direct raw floating casts in pinned lifter;
+experimental emitter now substitutes byte-aligned floating aliases, keeping data
+unaligned for regression. Production/pinned source unchanged. Prior245 CPU tests
+and codec sanitizer regression passed before final normalization; final clean CI
+will rerun. New96 scheduler proof passes standard and fail-fast ASan/UBSan locally.
+CI gains scheduler sanitizer step. Docs LOGICAL_SCHEDULER.md describe limits.
+No device/game-data access, Android rebuild/install, background server or emulator.
+Actual game snapshots still unfinished: mutexes/critical sections, callbacks,
+files/audio/D3D resources, heap/protection metadata and coordinated capture remain.

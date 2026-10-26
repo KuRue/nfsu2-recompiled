@@ -75,3 +75,12 @@ service can be captured requested or completed-awaiting-return, with no duplicat
 snapshot-contained logical effect. This is not an exactly-once external-I/O
 protocol and does not restore a real NFSU2 host import. See the generated proof
 README for precision/alias/exception and host-side-effect limitations.
+
+## Logical scheduler and event/timer milestone
+
+experimental/save_states/LOGICAL_SCHEDULER.md documents the next proof: complete
+logical process state with per-thread CPU images, event/timer handles, virtual time,
+wait deadlines and deterministic round-robin position. Six scenarios/96 fresh
+restores match uninterrupted process state; a blocked deadlock reports cleanly
+before/after restore. This is not integration with guest_threads.inc or capture of
+real native workers. File, audio and graphics resource reconstruction remains open.

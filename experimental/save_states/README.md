@@ -60,3 +60,11 @@ patched pcrecomp integer instruction lifter, instead of handwritten dispatch.
 See [generated proof](GENERATED_CONTINUATIONS.md) for setup and coverage. It has a
 separate pinned-dependency/reference-test job in CI. Neither experiment is wired
 into Android's game generation or save UI.
+
+## Logical thread/event/timer milestone
+
+The [logical scheduler proof](LOGICAL_SCHEDULER.md) now restores complete groups
+of logical threads, including blocked waits, sleep, virtual timers and event handle
+relationships. Six scenarios/96 fresh-process checkpoints and blocked deadlock
+restoration pass. This is a synthetic cooperative scheduler, not a serialization
+of the actual game's native threads or graphics/audio resources.
