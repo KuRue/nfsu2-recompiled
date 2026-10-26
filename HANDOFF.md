@@ -436,3 +436,16 @@ PLAY, confirmed thermal log status0/battery32.1C/unplugged and frame quantile lo
 in PID29828. Initial loading window includes1s stalls (expected mixed startup);
 next window p50=16.67,p95=16.76,p99=19.86,max43.71ms. These are startup/menu data,
 not sustained race validation. No capture background processes started.
+
+## Sustained performance result
+
+User replied done. Pulled PID29828 logs10:20:21–10:26:19 into ignored
+build/verification/performance-sustained.txt.116 moving-car race-like windows:
+median59.6FPS, minimum56.9; median window p95 17.265ms/p99 18.79ms;
+11/13920 intervals>25ms, maximum41.51ms. Early/late thirds both59.6FPS,
+p95/p99 effectively stable. All37 thermal samples status0, unplugged;
+battery32.1→33.3C. After-run thermalservice status0, skin36.8C/AP43.5C.
+Kept Balanced75%/60 and buffers unchanged: no sustained degradation observed.
+Full methodology and caveats in docs/ANDROID_PHONE_PERFORMANCE.md. Performance
+pass complete for this phone/run; occasional brief hitches remain. No new build,
+background process, device stream or emulator started for result collection.
