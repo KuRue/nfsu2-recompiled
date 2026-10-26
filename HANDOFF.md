@@ -561,3 +561,25 @@ Docs/ANDROID_DURABLE_STATE_PROTOTYPE.md records generator next milestone and hos
 resource inventory (threads/GPU/audio/files/network/time). Do not claim prototype
 restores actual races or supports x87/SSE/multiple threads. No background process,
 device stream, emulator or game-data mutation started in this prototype turn.
+
+## 2026-10-26: generated integer continuations vs x86 reference
+
+User asked to continue durable save-state work. Added experimental emitter using
+existing patched pcrecomp Lifter.lift_instruction for integer semantics, explicit
+call/return/tail transitions and per-instruction spilled registers/lazy flags.
+Real guest return addresses replace dummy C-call continuation dependence. Original
+synthetic assembly7 programs matches Unicorn2.1.4 across8 GPRs/flag mask0xcd5 and
+CRC of full1MiB guest window including stack.191 checkpoints captured before every
+executed instruction, separate restore process each, match reference. Covers
+nested/recursive/register-indirect/tail calls, carry across calls,signed branches,
+ret4 cleanup. Malformed/unknown/floating/narrow/segmented/import instructions fail
+closed. Actual NFSU2 snapshots still NOT implemented, installedapp unchanged.
+
+Pinned Python dependencies capstone5.0.6/unicorn2.1.4 isolated in ignored
+build/continuation-venv. CI separate job prepares public pcrecomp35548b8 + existing14
+patches; verified four key source files exactly match local6e85308 and records
+SHA256 manifest. No external pcrecomp changes/push, no production lift/backend
+changes, no proprietary inputs. No device/game file access/background processes.
+Docs experimental/save_states/GENERATED_CONTINUATIONS.md cover model/limits and
+next work (FP/SIMD/imports/scheduler/resources). Local first191-checkpoint test passed;
+final expanded rejection suite/clean CI pending.

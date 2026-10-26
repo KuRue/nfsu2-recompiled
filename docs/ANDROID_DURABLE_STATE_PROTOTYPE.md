@@ -53,3 +53,14 @@ Installed0.14.13 still supports live-memory Resume only. Disk restoration of a
 race after Android kills the process or the phone restarts remains unfinished.
 Career-save ZIP backups are separate and remain useful for permanent progress.
 No snapshot button or misleading snapshot-success message has been added.
+
+## Generated integer backend milestone
+
+The next isolated step is implemented in
+experimental/save_states/generate_continuations.py. It reuses pcrecomp's patched
+integer instruction lifter and emits explicit PC/frame transitions for control
+flow. Seven synthetic x86 programs match Unicorn, including all registers, defined
+comparison flags and full guest-memory CRC;191 fresh-process checkpoints match at
+every executed instruction. See experimental/save_states/GENERATED_CONTINUATIONS.md
+for dependency pins, reproduction and explicit coverage limits. It remains an
+experimental integer-only backend, not a lift/restore of NFSU2.

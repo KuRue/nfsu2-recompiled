@@ -25,3 +25,24 @@ jobs:
         run: python3 scripts/check_phone_source.py
       - name: Check experimental snapshot continuation proof
         run: python3 scripts/check_snapshot_prototype.py
+  generated-continuations:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: sp00nznet/pcrecomp
+          ref: 35548b8d0fd8aa853da67edcf7cd6134f6b9cdc7
+          path: build/pcrecomp-continuation
+          persist-credentials: false
+      - name: Apply the existing local pcrecomp patch set
+        run: git -C build/pcrecomp-continuation apply "$GITHUB_WORKSPACE"/patches/pcrecomp/*.patch
+      - name: Prepare isolated reference-test dependencies
+        run: |
+          python3 -m venv build/continuation-venv
+          build/continuation-venv/bin/pip install -r experimental/save_states/requirements.txt
+      - name: Compare generated continuations and restored states with x86
+        run: build/continuation-venv/bin/python scripts/check_generated_continuations.py --pcrecomp build/pcrecomp-continuation

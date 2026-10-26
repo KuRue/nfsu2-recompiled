@@ -51,3 +51,11 @@ x87/MMX/SSE state, allocator metadata, protected-page metadata or guest schedule
 State files are ignored by Git. They must never be attached publicly if they
 contain proprietary guest memory in a future implementation. This format is
 experimental and has no compatibility promise or launcher button.
+
+## Generated continuation backend proof
+
+The next proof now consumes synthetic x86 machine code and reuses the existing
+patched pcrecomp integer instruction lifter, instead of handwritten dispatch.
+See [generated proof](GENERATED_CONTINUATIONS.md) for setup and coverage. It has a
+separate pinned-dependency/reference-test job in CI. Neither experiment is wired
+into Android's game generation or save UI.

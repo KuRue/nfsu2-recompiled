@@ -1,0 +1,10 @@
+{
+  "public_base": "35548b8d0fd8aa853da67edcf7cd6134f6b9cdc7",
+  "local_patched_commit": "6e8530893b1cbd66aa19a550839e5914cbe48726",
+  "files": {
+    "tools/lift/lift32.py": "020c8ff6906ae567020af200cd093b79a79f057b9a9c875001050adf8c85de62",
+    "tools/lift/simd32.py": "d6e604179b43a79ca6edec764d133ca76f115093d1ae2af9327d39139ba2eac4",
+    "runtime/recomp32/recomp_types.h": "419faa7c005406caca3619719918b7ebda49a406e4974f87fea5b400a5e87b31",
+    "runtime/recomp32/recomp_simd.h": "0618ebb916ff533f307db5851c37084eea14edb35021be90c491cc0dd46347aa"
+  }
+}
