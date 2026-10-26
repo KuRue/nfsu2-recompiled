@@ -658,3 +658,11 @@ abandonment (0x80) on owner exit. Three new scenarios bring the proof to 9 scena
 checkpoints, standard and ASan/UBSan; existing 245 continuation checkpoints still pass. Graph
 validation rejects orphaned/finished owners, recursion mismatch and lost-wakeup waiters. Docs in
 LOGICAL_SCHEDULER.md. Production app unchanged; no device/game data used.
+
+## 2026-10-26: writable file handle restore
+
+File resource schema 2 adds writable handles: saved bytes are authoritative, staged next to the
+target, published by renameat only after all read-only files validate, then reopened O_RDWR at
+the saved offset. 302 bad inputs/resources rejected (symlink/dir/missing targets, mode, handle
+content disagreement); failed restores leave writable targets untouched. Standard + sanitizers pass.
+Multi-file publish isn't group-atomic; see FILE_RESOURCES.md. Production unchanged.
