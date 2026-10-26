@@ -42,11 +42,22 @@ struct Machine {
 };
 template<class F>void rejected(F&& f){bool caught=false;try{f();}catch(const std::runtime_error&){caught=true;}require(caught,"Invalid state unexpectedly accepted");}
 void selftest(const std::string& build){
-    Machine m(build);while(!m.checkpoint())m.step();auto state=m.capture();auto bytes=encode(state);
+    Machine m(build);while(!m.checkpoint())m.step();auto state=m.capture();
+    for(unsigned i=0;i<8;++i){state.fp[i]=0x8000000000000000ull+i;state.fpInt[i]=9007199254740993ull+i;state.mm[i]=0xdeadbeef00000000ull+i;}
+    for(unsigned i=0;i<32;++i)state.xmm[i]=0x87654321u+i;
+    state.fpTop=3;state.fpControl=0xf7f;state.mxcsr=0x3f80;state.host={2,1,7,11,40};state.frames.back().locals[4]=0xffffffffu;
+    auto bytes=encode(state);
     auto decoded=decode(bytes,build,state.game);require(decoded.frames.size()==3&&decoded.registers==state.registers,"State round trip failed");
+    require(decoded.fp==state.fp&&decoded.fpInt==state.fpInt&&decoded.mm==state.mm&&decoded.xmm==state.xmm&&decoded.fpTop==3&&decoded.fpControl==0xf7f&&decoded.mxcsr==0x3f80&&decoded.host==state.host&&decoded.frames.back().locals[4]==0xffffffffu,"Extended state round trip failed");
     for(size_t n=0;n<bytes.size();++n){Bytes cut(bytes.begin(),bytes.begin()+n);rejected([&]{decode(cut,build,state.game);});}
     auto damaged=bytes;damaged.back()^=1;rejected([&]{decode(damaged,build,state.game);});
-    auto unknown=bytes;unknown[8]=2;rejected([&]{decode(unknown,build,state.game);});
+    for(unsigned kind=0;kind<5;++kind){auto invalid=state;
+        if(kind==0){invalid.fpTop=9;}if(kind==1){invalid.fpControl=0x10000;}if(kind==2){invalid.mxcsr=0x10000;}
+        if(kind==3){invalid.host[0]=3;}if(kind==4){invalid.host[1]=2;}
+        rejected([&]{encode(invalid);});
+    }
+    auto old=bytes;old[8]=1;rejected([&]{decode(old,build,state.game);});
+    auto unknown=bytes;unknown[8]=99;rejected([&]{decode(unknown,build,state.game);});
     rejected([&]{decode(bytes,std::string(64,'3'),state.game);});
     rejected([&]{decode(bytes,build,std::string(64,'4'));});
     auto resource=state;resource.hostResources=1;rejected([&]{encode(resource);});

@@ -34,7 +34,7 @@ power failure, concurrent capture, graphics, audio, networking or real game thre
 
 ## Experimental format boundary
 
-N F S P R O T O magic, little-endian schema1, payload length and CRC32 precede a
+N F S P R O T O magic, little-endian schema2, payload length and CRC32 precede a
 bounded payload. Exact64-character build/game identifiers are required. The test
 build ID is the executable SHA256; its game ID is a synthetic constant, not the
 SPEED2.EXE hash. Maximum payload memory is16MiB, with64 continuation frames and128
@@ -45,8 +45,9 @@ Publication writes a unique0600 staging file, syncs it, renames it over the targ
 and syncs the parent directory. Invalid state is rejected before staging begins.
 Only validated decoded state is applied to the fixture's new memory mapping.
 The host-resource mask must be zero: graphics/audio/file/thread state must never
-be silently omitted from a real capture. The prototype has no floating-point,
-x87/MMX/SSE state, allocator metadata, protected-page metadata or guest scheduler.
+be silently omitted from a real capture. Schema2 also stores selected x87/MMX/SSE runtime fields and a pending synthetic
+host-call descriptor. It still has no allocator metadata, protected-page metadata
+or guest scheduler. Schema1 files are rejected rather than guessed/migrated.
 
 State files are ignored by Git. They must never be attached publicly if they
 contain proprietary guest memory in a future implementation. This format is

@@ -1,4 +1,4 @@
-"""Opt-in integer-only continuation emitter reusing pcrecomp's instruction lifter.
+"""Opt-in restricted CPU continuation emitter reusing pcrecomp's instruction lifter.
 Not used by run_lift.py or Android builds. All unsupported input is rejected.
 """
 from pathlib import Path
@@ -10,6 +10,7 @@ from capstone.x86 import X86_OP_IMM, X86_OP_REG, X86_OP_MEM
 
 INTEGER = {'mov', 'lea', 'add', 'sub', 'xor', 'and', 'or', 'cmp', 'test', 'inc', 'dec',
            'push', 'pop', 'adc', 'sbb', 'neg', 'not', 'nop', 'imul'}
+EXTENDED = {'fld', 'fld1', 'fldz', 'fstp', 'faddp', 'fmulp', 'fchs', 'fxch', 'fldcw', 'fnstcw', 'ftst', 'fnstsw', 'fild', 'fistp', 'movdqu', 'movups', 'movaps', 'addps', 'mulps', 'pxor', 'paddd', 'movq', 'ldmxcsr', 'stmxcsr'}
 JCC = {'je', 'jne', 'ja', 'jae', 'jb', 'jbe', 'jg', 'jge', 'jl', 'jle', 'js', 'jns', 'jo', 'jno', 'jp', 'jnp'}
 
 class Instruction:
@@ -21,7 +22,12 @@ class Instruction:
         op = self.operands[0] if self.operands else None
         return op.imm & 0xffffffff if op is not None and op.type == X86_OP_IMM else None
 
-def generate(functions, pcrecomp):
+def generate(functions, pcrecomp, imports=None):
+    imports = imports or {}
+    if set(imports) & set(functions):
+        raise ValueError('Synthetic import overlaps a guest function')
+    if any(service != 1 for service in imports.values()):
+        raise ValueError("Unknown synthetic host service")
     if not functions or len(functions) > 128:
         raise ValueError('Invalid function count for experimental emitter')
     spans = sorted((address, address + len(code)) for address, code in functions.items())
@@ -46,14 +52,14 @@ def generate(functions, pcrecomp):
             if i.address in owner:
                 raise ValueError('Overlapping functions')
             owner[i.address] = address
-            if i.mnemonic not in INTEGER | JCC | {'call', 'jmp', 'ret'}:
+            if i.mnemonic not in INTEGER | EXTENDED | JCC | {'call', 'jmp', 'ret'}:
                 raise ValueError(f'Unsupported instruction: {i.mnemonic}')
             if i.addr_size != 4:
                 raise ValueError('Only 32-bit addressing is supported')
             for op in i.operands:
-                if op.type == X86_OP_REG and op.reg not in module.REG_NAMES_32:
+                if i.mnemonic not in EXTENDED and op.type == X86_OP_REG and op.reg not in module.REG_NAMES_32:
                     raise ValueError('Only 32-bit integer registers are supported')
-                if op.type == X86_OP_MEM and (op.size != 4 or op.mem.segment):
+                if op.type == X86_OP_MEM and (op.mem.segment or (i.mnemonic not in EXTENDED and op.size != 4)):
                     raise ValueError('Only unsegmented 32-bit memory operands are supported')
         decoded[address] = instructions
     def target(insn, lifter):
@@ -76,11 +82,14 @@ def generate(functions, pcrecomp):
               'require(!state.frames.empty(),"No continuation");',
               'require(!(state.flags&0x400u),"Direction flag state is unsupported");',
               'auto frame=state.frames.back();',
+              'std::memcpy(g_st,state.fp.data(),64);std::memcpy(g_st_i64,state.fpInt.data(),64);std::memcpy(g_mm,state.mm.data(),64);std::memcpy(g_xmm,state.xmm.data(),128);',
+              'g_fp_top=int(state.fpTop);g_fpu_cw=uint16_t(state.fpControl);g_mxcsr=state.mxcsr;',
               'require(generated_owner(frame.pc)==frame.function,"PC/function mismatch");',
+              'if(state.host[0]){generated_host_step(state);return;}',
               'g_eax=state.registers[0];g_ecx=state.registers[1];g_edx=state.registers[2];g_ebx=state.registers[3];',
               'g_esp=state.registers[4];g_ebp=state.registers[5];g_esi=state.registers[6];g_edi=state.registers[7];',
               'uint32_t _flag_a=frame.locals[0],_flag_b=frame.locals[1],_flag_k=frame.locals[2],_cf=frame.locals[3];',
-              '[[maybe_unused]] int _df=1,_fpu_cmp=0;',
+              '[[maybe_unused]] int _df=1,_fpu_cmp=int32_t(frame.locals[4]);',
               'uint32_t next=0,target=0,action=0;switch(frame.pc){']
     for function, instructions in decoded.items():
         lifter = module.Lifter(precise_carry=True)
@@ -91,8 +100,12 @@ def generate(functions, pcrecomp):
             lines.append(f'case 0x{i.address:x}u:{{next=0x{following:x}u; // {i.mnemonic} {i.op_str}')
             if i.mnemonic == 'call':
                 immediate = i.get_branch_target()
-                if immediate is not None and immediate not in decoded:
+                if immediate is not None and immediate not in decoded and immediate not in imports:
                     raise ValueError('Unlifted/import call is unsupported')
+                if immediate in imports:
+                    lines += [f'target={immediate}u;', 'esp-=4;MEM32(esp)=next;action=3;']
+                    lines.append('break;}')
+                    continue
                 lines += [f'target={target(i,lifter)};',
                           'require(generated_entry(target),"Unknown call target");',
                           'require(state.frames.size()<64,"Continuation stack limit");',
@@ -125,10 +138,13 @@ def generate(functions, pcrecomp):
                     lines.append(line)
             lines.append('break;}')
     lines += ['default:throw std::runtime_error("Unknown continuation");}',
-              'frame.pc=next;frame.locals={_flag_a,_flag_b,_flag_k,_cf};',
+              'frame.pc=next;frame.locals={_flag_a,_flag_b,_flag_k,_cf,uint32_t(_fpu_cmp)};',
               'state.frames.back()=frame;',
               'state.registers={g_eax,g_ecx,g_edx,g_ebx,g_esp,g_ebp,g_esi,g_edi};',
               'state.flags=recomp_eflags(_flag_k,_flag_a,_flag_b,_cf,_df);',
+              'std::memcpy(state.fp.data(),g_st,64);std::memcpy(state.fpInt.data(),g_st_i64,64);std::memcpy(state.mm.data(),g_mm,64);std::memcpy(state.xmm.data(),g_xmm,128);',
+              'state.fpTop=uint32_t(g_fp_top);state.fpControl=g_fpu_cw;state.mxcsr=g_mxcsr;',
+              'if(action==3)state.host={1,1,g_eax,g_ecx,0};',
               'if(action==1)state.frames.push_back({target,target,frame.locals});',
               'if(action==2){state.frames.pop_back();',
               'if(state.frames.empty())require(target==0x400100u,"Invalid root return");',

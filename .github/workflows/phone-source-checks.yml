@@ -46,3 +46,5 @@ jobs:
           build/continuation-venv/bin/pip install -r experimental/save_states/requirements.txt
       - name: Compare generated continuations and restored states with x86
         run: build/continuation-venv/bin/python scripts/check_generated_continuations.py --pcrecomp build/pcrecomp-continuation
+      - name: Check extended continuations under sanitizers
+        run: build/continuation-venv/bin/python scripts/check_generated_continuations.py --pcrecomp build/pcrecomp-continuation --sanitize

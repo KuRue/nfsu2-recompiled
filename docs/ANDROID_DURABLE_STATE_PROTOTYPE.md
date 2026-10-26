@@ -64,3 +64,14 @@ comparison flags and full guest-memory CRC;191 fresh-process checkpoints match a
 every executed instruction. See experimental/save_states/GENERATED_CONTINUATIONS.md
 for dependency pins, reproduction and explicit coverage limits. It remains an
 experimental integer-only backend, not a lift/restore of NFSU2.
+
+## Selected FP/SIMD and pending-host milestone
+
+The generated proof now serializes selected x87 runtime fields/comparison locals,
+MMX/XMM values and control registers. Schema2 rejects old/invalid states. Fourteen
+synthetic programs/245 dispatch checkpoints match the x86 reference and fresh
+restores. The exact-int64 shadow test preserves9007199254740993. A synthetic host
+service can be captured requested or completed-awaiting-return, with no duplicate
+snapshot-contained logical effect. This is not an exactly-once external-I/O
+protocol and does not restore a real NFSU2 host import. See the generated proof
+README for precision/alias/exception and host-side-effect limitations.

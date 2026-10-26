@@ -14,13 +14,18 @@
 namespace snapshot_prototype {
 using Bytes=std::vector<uint8_t>;
 constexpr size_t maxBytes=16*1024*1024;
-struct Frame {uint32_t function=0,pc=0;std::array<uint32_t,4> locals{};};
+struct Frame {uint32_t function=0,pc=0;std::array<uint32_t,5> locals{};};
 struct Region {uint32_t address=0;Bytes bytes;};
 struct State {
     std::string build,game;
     uint32_t hostResources=0; // Nonzero is unsupported: never silently lose resources.
     std::array<uint32_t,8> registers{};
     uint32_t flags=0;
+    std::array<uint64_t,8> fp{},fpInt{},mm{};
+    std::array<uint32_t,32> xmm{};
+    uint32_t fpTop=0,fpControl=0x27f,mxcsr=0x1f80;
+    std::array<uint32_t,5> host{}; // phase, synthetic service ID, inputs, result
+
     std::vector<Frame> frames;
     std::vector<Region> regions;
 };
@@ -28,6 +33,8 @@ inline void require(bool value,const char* reason){if(!value)throw std::runtime_
 inline bool identity(const std::string& s){return s.size()==64&&s.find_first_not_of("0123456789abcdef")==std::string::npos;}
 inline void validate(const State& s){
     require(identity(s.build)&&identity(s.game),"Invalid compatibility identity");
+    require(s.fpTop<=8&&s.fpControl<=0xffff&&s.mxcsr<=0xffff,"Invalid extended CPU state");
+    require(s.host[0]<=2&&(!s.host[0]?s.host==std::array<uint32_t,5>{}:s.host[1]==1),"Invalid pending synthetic host call");
     require(!s.hostResources,"Host resource serialization is not implemented");
     require(!s.frames.empty()&&s.frames.size()<=64,"Invalid continuation count");
     require(!s.regions.empty()&&s.regions.size()<=128,"Invalid region count");
@@ -51,23 +58,32 @@ inline Bytes encode(const State& s){
     validate(s);Bytes payload;
     payload.insert(payload.end(),s.build.begin(),s.build.end());payload.insert(payload.end(),s.game.begin(),s.game.end());
     word(payload,s.hostResources);for(auto n:s.registers)word(payload,n);word(payload,s.flags);
+    for(const auto* values:{&s.fp,&s.fpInt,&s.mm})for(auto n:*values){word(payload,uint32_t(n));word(payload,uint32_t(n>>32));}
+    for(auto n:s.xmm)word(payload,n);
+    word(payload,s.fpTop);word(payload,s.fpControl);word(payload,s.mxcsr);
+    for(auto n:s.host)word(payload,n);
     word(payload,uint32_t(s.frames.size()));
     for(const auto& f:s.frames){word(payload,f.function);word(payload,f.pc);for(auto n:f.locals)word(payload,n);}
     word(payload,uint32_t(s.regions.size()));
     for(const auto& r:s.regions){word(payload,r.address);word(payload,uint32_t(r.bytes.size()));payload.insert(payload.end(),r.bytes.begin(),r.bytes.end());}
-    Bytes file={'N','F','S','P','R','O','T','O'};word(file,1);word(file,uint32_t(payload.size()));word(file,crc(payload));
+    Bytes file={'N','F','S','P','R','O','T','O'};word(file,2);word(file,uint32_t(payload.size()));word(file,crc(payload));
     file.insert(file.end(),payload.begin(),payload.end());return file;
 }
 inline State decode(const Bytes& file,const std::string& build,const std::string& game){
     require(file.size()<=maxBytes+65536,"Snapshot too large");Reader header{file};
     require(header.take(8)==Bytes({'N','F','S','P','R','O','T','O'}),"Not a prototype snapshot");
-    require(header.word()==1,"Unsupported snapshot schema");uint32_t size=header.word(),checksum=header.word();
+    require(header.word()==2,"Unsupported snapshot schema");uint32_t size=header.word(),checksum=header.word();
     require(size==file.size()-header.offset,"Invalid snapshot size");Bytes payload=header.take(size);
     require(crc(payload)==checksum,"Snapshot checksum mismatch");Reader r{payload};State s;
     auto b=r.take(64),g=r.take(64);s.build.assign(b.begin(),b.end());s.game.assign(g.begin(),g.end());
     require(s.build==build&&s.game==game,"Snapshot build/game mismatch");s.hostResources=r.word();
     for(auto& n:s.registers){n=r.word();}
-    s.flags=r.word();auto count=r.word();require(count>0&&count<=64,"Invalid continuation count");
+    s.flags=r.word();
+    for(auto* values:{&s.fp,&s.fpInt,&s.mm})for(auto& n:*values){uint32_t low=r.word(),high=r.word();n=uint64_t(low)|(uint64_t(high)<<32);}
+    for(auto& n:s.xmm){n=r.word();}
+    s.fpTop=r.word();s.fpControl=r.word();s.mxcsr=r.word();
+    for(auto& n:s.host){n=r.word();}
+    auto count=r.word();require(count>0&&count<=64,"Invalid continuation count");
     for(unsigned i=0;i<count;++i){Frame f;f.function=r.word();f.pc=r.word();for(auto& n:f.locals)n=r.word();s.frames.push_back(f);}
     count=r.word();require(count>0&&count<=128,"Invalid region count");
     for(unsigned i=0;i<count;++i){Region region;region.address=r.word();auto n=r.word();require(n<=maxBytes,"Region too large");region.bytes=r.take(n);s.regions.push_back(std::move(region));}

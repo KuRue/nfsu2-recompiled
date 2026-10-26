@@ -583,3 +583,30 @@ changes, no proprietary inputs. No device/game file access/background processes.
 Docs experimental/save_states/GENERATED_CONTINUATIONS.md cover model/limits and
 next work (FP/SIMD/imports/scheduler/resources). Local first191-checkpoint test passed;
 final expanded rejection suite/clean CI pending.
+
+## 2026-10-26: selected FP/SIMD state and synthetic host-call checkpoint
+
+Extended isolated snapshot codec to schema2: raw x87 double/int64-shadow words,
+stack depth/control, MMX/XMM/MXCSR and fifth per-frame FPU comparison local. Added
+restricted supported FP/vector whitelist in experimental generator, spilling all
+extended fields each step. Added x87 stack/arithmetic/comparison-across-call,
+exact-int64>2^53, SSE/MMX across-call and control-register fixtures. Added declared
+synthetic import service with requested/completed/return phases serialized; fake
+service only modifies serialized guest memory. Tests require result74/effectcount2
+and exercise both pending phases at fresh-process restoration, without duplicate
+logical effects. This does NOT solve external file/network exactly-once behavior.
+
+Final standard suite14 programs/245 dispatch checkpoints passes against Unicorn
+(GPRs/flags/full guest-memory CRC plus XMM lanes/control registers). Existing codec
+proof passes schema2 including extended bit-pattern roundtrip and invalid metadata,
+and its ASan/UBSan run passes. Generated sanitizer suite pending. Schema1 rejects;
+format experimental, no installed app state files. Actual game snapshots/imports,
+complete x87 precision/alias/exception semantics, scheduler and graphics/audio/file
+resource reconstruction remain unfinished. No Android runtime/app/game-data
+changes, no device access or background processes. Docs updated with exact limits.
+
+Final generated ASan/UBSan suite passes all245 dispatch checkpoints with fail-fast
+sanitizers. It exposed a pinned x86-host unaligned uint64 memory cast; isolated
+runner now uses byte-aligned alias access types (as ARM runtime already does),
+with strict aliasing disabled. Pinned dependency/production files untouched.
+CI now runs both standard and sanitized generated suites. No APK build needed.
