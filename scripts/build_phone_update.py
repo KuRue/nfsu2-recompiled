@@ -17,6 +17,11 @@ def digest(path):
     with path.open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 def dependency(path):
+    if (path / 'PINNED_REVISION').is_file():
+        return {'pinned_revision': (path / 'PINNED_REVISION').read_text().strip(),
+                'prepare_sha256': (path / 'ANDROID_PREPARE_SHA256').read_text().strip()}
+    if Path(output('git', '-C', str(path), 'rev-parse', '--show-toplevel')).resolve() != path.resolve():
+        raise RuntimeError(f'Dependency is not its own Git checkout: {path}')
     return {'commit': output('git', '-C', str(path), 'rev-parse', 'HEAD'),
             'dirty': bool(output('git', '-C', str(path), 'status', '--porcelain'))}
 
