@@ -33,7 +33,7 @@ final class ReleaseUpdates {
         Thread worker = new Thread(() -> {
             Result result;
             try { result = fetch(app, force); }
-            catch (Exception error) { result = new Result(null, null, "No se pudo consultar GitHub. Comprueba tu conexión e inténtalo después."); }
+            catch (Exception error) { result = new Result(null, null, "Could not reach GitHub. Check your connection and try again later."); }
             Result value = result;
             main.post(() -> callback.accept(value));
         }, "GitHubReleaseCheck");
@@ -131,7 +131,7 @@ final class ReleaseUpdates {
             try (InputStream input = connection.getInputStream()) {
                 byte[] buffer = new byte[8192]; int n;
                 while ((n = input.read(buffer)) != -1) {
-                    if (body.size() + n > 512 * 1024) throw new IOException("Respuesta demasiado grande");
+                    if (body.size() + n > 512 * 1024) throw new IOException("Response is too large");
                     body.write(buffer, 0, n);
                 }
             }

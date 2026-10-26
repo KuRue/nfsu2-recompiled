@@ -2,9 +2,9 @@ package com.nfsu2.androidevolved;
 
 /** Explicit starting points, not promises of achieved FPS or automatic thermal tuning. */
 enum PhonePreset {
-    BATTERY("Batería · 50% / 30 FPS", "50", "30", "2"),
-    BALANCED("Equilibrado · 75% / 60 FPS", "75", "60", "2"),
-    QUALITY("Calidad · nativa / 60 FPS", "100", "60", "2");
+    BATTERY("Battery · 50% / 30 FPS", "50", "30", "2"),
+    BALANCED("Balanced · 75% / 60 FPS", "75", "60", "2"),
+    QUALITY("Quality · native / 60 FPS", "100", "60", "2");
 
     final String label, resolution, fps, backBuffers;
 

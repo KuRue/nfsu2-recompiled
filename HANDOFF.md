@@ -138,3 +138,33 @@ analysis inputs remain ignored and must never be committed.
 Next work: controlled racing input and repeatable performance/thermal baseline;
 then profile bottlenecks before native rewrites, and evaluate optional graphics
 assets separately. No texture/model/renderer quality enhancement has shipped yet.
+
+
+## English native app UI — 2026-10-26
+
+User requested translating the app itself and assessing visual upgrades. Translated
+launcher/settings, phone presets, touch-editor toolbar and dialogs, tilt steering,
+text entry, driver import/probe/errors, cache/reset dialogs, crash/report UI and
+startup status messages. Preserved preference keys, layout IDs, language-file
+identifiers and all user selections. Fresh installs now default game language to
+English UK; existing saved language remains respected. Language names remain in
+their own languages. Remote upstream release notes keep their supplied language;
+`Novedades` in LauncherActivity is a parser marker, not untranslated app UI.
+
+Changed the native Starting game status and Java's status-hide marker together,
+so translating startup text does not break the delayed diagnostic overlay hide.
+Build suffix: 0.14.10-phone-dev-en; same development application ID/signing key.
+Incremental assembleDebug: PASS in 13s. APK signature verification: PASS. Installed
+in place via agent-device on 192.168.1.169:37329. Verified English launcher labels,
+English Battery/Balanced/Quality preset dialog, retained Balanced + English values,
+and native game boot. Controller scan recognizes the user's Backbone One; the
+native game correctly hides touch controls. Did not manipulate the controller or
+force the touch editor open while the user could be playing; editor/error text
+was verified in source and compiled, not exhaustively triggered on-device.
+
+Graphics assessment: docs/ANDROID_GRAPHICS_ROADMAP.md. The web UHUD GPU-replacement
+loader is not implemented in this native fork. Texture packs need native
+integration/testing; no pack or ray tracing has been enabled by this translation.
+Recommend optional HUD/font and environment textures, then measured filtering/
+reflection improvements, before custom models or ray-tracing research.
+No emulator, task server or log watcher started. Leave the game available to user.
