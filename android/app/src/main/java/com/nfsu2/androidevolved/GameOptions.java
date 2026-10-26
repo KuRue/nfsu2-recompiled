@@ -69,6 +69,19 @@ final class GameOptions {
         prefs(context).edit().putString(key, value).apply();
     }
 
+    static PhonePreset phonePreset(Context context) {
+        for (PhonePreset preset : PhonePreset.values())
+            if (preset.matches(get(context, RESOLUTION), get(context, FPS), get(context, LATENCY)))
+                return preset;
+        return null; // Individual settings remain editable and are shown as custom.
+    }
+
+    static void applyPhonePreset(Context context, PhonePreset preset) {
+        // One transaction; leave language, driver, controls, textures and saves alone.
+        prefs(context).edit().putString(RESOLUTION, preset.resolution)
+                .putString(FPS, preset.fps).putString(LATENCY, preset.backBuffers).apply();
+    }
+
     static final String ONLINE_SERVER = "online_server", DEFAULT_ONLINE_SERVER = "eahub.eu";
 
     /** EA Nation replacement server: the game's *.ea.com hosts resolve to this name or IPv4 address. */

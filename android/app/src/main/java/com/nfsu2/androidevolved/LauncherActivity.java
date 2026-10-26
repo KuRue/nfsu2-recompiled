@@ -212,6 +212,9 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Probar driver", "GPU y funciones Vulkan", () -> probeDriver(false)));
         optionsList.addView(optionRow("Idioma", languageLabel(), this::chooseLanguage));
         optionsList.addView(optionRow("Reiniciar caché gráfica", "Regenerar shaders", () -> GraphicsCache.prompt(this)));
+        PhonePreset preset = GameOptions.phonePreset(this);
+        optionsList.addView(optionRow("Perfil del teléfono",
+                preset == null ? "Personalizado" : preset.label, this::choosePhonePreset));
         for (GameOptions.Option option : GameOptions.ALL)
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
         optionsList.addView(optionRow("Servidor online", GameOptions.onlineServer(this), this::chooseOnlineServer));
@@ -248,6 +251,23 @@ public final class LauncherActivity extends Activity {
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Idioma")
                 .setSingleChoiceItems(names, checked, (dialog, which) -> {
                     GameOptions.prefs(this).edit().putString(GameOptions.LANGUAGE, found.get(which)[1]).apply();
+                    dialog.dismiss(); refreshOptions();
+                }).setNegativeButton("Cancelar", null).show();
+    }
+
+    private void choosePhonePreset() {
+        PhonePreset[] presets = PhonePreset.values();
+        String[] labels = new String[presets.length];
+        PhonePreset current = GameOptions.phonePreset(this);
+        int checked = -1;
+        for (int i = 0; i < presets.length; i++) {
+            labels[i] = presets[i].label;
+            if (presets[i] == current) checked = i;
+        }
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Perfil del teléfono")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    GameOptions.applyPhonePreset(this, presets[which]);
                     dialog.dismiss(); refreshOptions();
                 }).setNegativeButton("Cancelar", null).show();
     }
