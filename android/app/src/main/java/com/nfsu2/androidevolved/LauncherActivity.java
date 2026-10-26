@@ -1,5 +1,6 @@
 package com.nfsu2.androidevolved;
 
+import android.media.MediaScannerConnection;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -521,6 +522,8 @@ public final class LauncherActivity extends Activity {
         worker.execute(() -> {
             try {
                 File zip = SaveArchive.backup(savesRoot(), savesBackupFolder());
+                // Index the file so the system file picker (and other apps) can see it.
+                MediaScannerConnection.scanFile(this, new String[] {zip.getPath()}, new String[] {"application/zip"}, null);
                 main.post(() -> { refresh(); message("Backup career saves", "Saved " + zip.length() / 1024 + " KB to:\n" + zip.getPath()
                         + "\n\nKeep copies of this file somewhere safe, for example cloud storage."); });
             } catch (Exception error) {
@@ -532,6 +535,25 @@ public final class LauncherActivity extends Activity {
     private void restoreSaves() {
         if (!requireStorageForSaves()) return;
         if (gameRunning()) { message("Restore career saves", "The game is still running. Close it first so an autosave cannot conflict with the restore."); return; }
+        File[] zips = savesBackupFolder().listFiles((dir, name) -> name.endsWith(".zip"));
+        if (zips == null || zips.length == 0) {
+            openSavePicker(); return;
+        }
+        java.util.Arrays.sort(zips, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+        String[] names = new String[zips.length + 1];
+        for (int i = 0; i < zips.length; i++)
+            names[i] = zips[i].getName().replace("nfsu2-saves-", "").replace("-", " ").replace(".zip", "  (" + zips[i].length() / 1024 + " KB)");
+        names[zips.length] = "Import ZIP from elsewhere…";
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Restore career saves")
+                .setItems(names, (dialog, which) -> {
+                    if (which < zips.length) restoreSavesFrom(Uri.fromFile(zips[which]));
+                    else openSavePicker();
+                })
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void openSavePicker() {
         startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT)
                 .setType("application/zip").addCategory(Intent.CATEGORY_OPENABLE), REQUEST_SAVE_ZIP);
     }
