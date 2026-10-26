@@ -674,3 +674,13 @@ volume, loop, playing) without sample data. 17 block-boundary fresh-process rest
 PCM identical to the uninterrupted run; 157 bad inputs (incl. edited asset) rejected.
 Standard + ASan/UBSan pass; CI step added. Real DirectSound/stream decoder/device-queue state
 not covered; see AUDIO_STATE.md. Production unchanged.
+
+## 2026-10-26: logical graphics device state proof
+
+Experimental graphics_state.h saves device state (blend/texture/target/scissor/tint), asset
+textures by ID+CRC (recreated on restore), and render-target pixels. 15 frame-boundary
+fresh-process restores reproduce identical frames incl. persistent RT content; 622 bad inputs
+rejected. Standard + sanitizers pass; CI step added. Real D3D9/DXVK state (buffers, shaders,
+depth, samplers) not yet covered; see GRAPHICS_STATE.md. Production unchanged.
+All standalone subsystem proofs now exist (CPU, scheduler/mutex, files, audio, graphics).
+Next: integrate with the actual game (quiesce threads at a frame boundary, hook real APIs).
