@@ -192,8 +192,8 @@ public final class LauncherActivity extends Activity {
         for (String folder : new String[] {"GLOBAL", "TRACKS", "CARS", "FRONTEND", "LANGUAGES"})
             if (!(allowed && new File(root, folder).isDirectory())) missing.append(missing.length() == 0 ? "" : ", ").append(folder);
         addCheck(missing.length() == 0 ? "Game folders" : "Missing folders: " + missing, missing.length() == 0, true);
-        addCheck("Widescreen HUD (scripts/…WidescreenFix.dat)",
-                allowed && new File(root, "scripts/NFSUnderground2.WidescreenFix.dat").isFile(), false);
+        addCheck(allowed && new File(root, "scripts/NFSUnderground2.WidescreenFix.dat").isFile()
+                ? "HUD anchors · custom table" : "HUD anchors · built-in widescreen table", true, false);
         addCheck("HD HUD pack (optional)", allowed && new File(root, "TEXPACKS/uhud.pak").isFile(), false);
         addCheck("HD world pack (optional)", allowed && new File(root, "TEXPACKS/world.pak").isFile(), false);
         boolean ready = exe && !languages().isEmpty();

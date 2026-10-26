@@ -249,7 +249,10 @@ static bool acceptedGamepad(const AInputEvent* event){
     std::lock_guard<std::mutex> lock(gamepadDevicesMutex);
     return std::find(gamepadDevices.begin(),gamepadDevices.end(),AInputEvent_getDeviceId(event))!=gamepadDevices.end();
 }
-static void setPadKey(unsigned scan,bool down){setGuestKey(scan,down);}
+static void setPadKey(unsigned scan,bool down){
+    if(scan==0xc8||scan==0xd0)__android_log_print(ANDROID_LOG_INFO,"NFSU2","Controller pedal %s %s",scan==0xc8?"gas":"brake",down?"down":"up");
+    setGuestKey(scan,down);
+}
 static void publishPad(){
     auto state=gamepad.padState();
     // Z: LT pushes it one way and RT the other, as DirectInput shows an Xbox pad.
@@ -279,6 +282,8 @@ static void notePadUse(const AInputEvent* event){
 extern "C" JNIEXPORT jboolean JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadUsed(JNIEnv*,jclass){return gamepadUsed.exchange(false)?JNI_TRUE:JNI_FALSE;}
 static int32_t onInput(android_app*,AInputEvent* event){
     int32_t type=AInputEvent_getType(event);
+    const char* pedals=std::getenv("NFSU2_TRIGGER_FALLBACK");
+    gamepad.setTriggerFallback(!pedals||std::strcmp(pedals,"0")!=0);
     gamepad.setKeyEmulation(!guestGamepadInUse());
     if(type==AINPUT_EVENT_TYPE_MOTION){
         if(!acceptedGamepad(event))return 0;
@@ -340,6 +345,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
 }
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeResolution(JNIEnv*,jclass,jint width,jint height){setGuestResolution(unsigned(width),unsigned(height));}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFrameLimit(JNIEnv*,jclass,jint cap){setGuestFrameLimit(unsigned(cap));}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeTriggerFallback(JNIEnv*,jclass,jboolean enabled){setenv("NFSU2_TRIGGER_FALLBACK",enabled?"1":"0",1);}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadConnected(JNIEnv*,jclass,jboolean connected){setGuestPadConnected(connected==JNI_TRUE);}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadDevices(JNIEnv* env,jclass,jintArray ids){
     std::vector<int32_t> devices;

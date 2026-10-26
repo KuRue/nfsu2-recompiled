@@ -13,7 +13,7 @@
  * own byte patterns in the pinned SPEED2.EXE (scripts/widescreen_sites.py).
  *
  * HUD element offsets come from the mod's NFSUnderground2.WidescreenFix.dat,
- * read from <game>/scripts/ when present (the player supplies the mod).
+ * read from <game>/scripts/ when present, with the credited built-in table as fallback.
  */
 #include "recomp_types.h"
 #include "nfs_widescreen.h"
@@ -23,6 +23,7 @@
 #include <string.h>
 
 typedef struct { float pos_x, pos_y, offset_x, offset_y; } hud_entry;
+#include "hud_defaults.inc"
 static hud_entry s_hud[256];
 static unsigned s_hud_count;
 static int s_enabled;
@@ -103,10 +104,15 @@ static const uint32_t k_sites[SITE_COUNT] = {
 #endif
 void nfs_widescreen_init(const char* game_root) {
     char path[1024];
+    s_hud_count = 0;
     snprintf(path, sizeof path, "%s/scripts/NFSUnderground2.WidescreenFix.dat", game_root);
     load_dat(path);
     /* Ports may ship the mod's table themselves (MIT): NFSU2_WIDESCREEN_DAT=<path>. */
     if (!s_hud_count && getenv("NFSU2_WIDESCREEN_DAT")) load_dat(getenv("NFSU2_WIDESCREEN_DAT"));
+    if (!s_hud_count) {
+        s_hud_count = sizeof k_default_hud / sizeof k_default_hud[0];
+        memcpy(s_hud, k_default_hud, sizeof k_default_hud);
+    }
     s_enabled = 1;
 }
 

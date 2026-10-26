@@ -18,7 +18,7 @@ android {
         debug {
             // Keep locally signed development builds beside the upstream release.
             applicationIdSuffix '.dev'
-            versionNameSuffix '-phone-dev-hd'
+            versionNameSuffix '-phone-dev-controls'
             manifestPlaceholders = [appLabel: 'NFSU2 Native Dev']
         }
     }

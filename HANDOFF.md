@@ -225,3 +225,36 @@ sample after loading reported59.8–60.0FPS (roughly30–36k bridge calls/frame)
 This is a smoke sample, not a sustained thermal/battery benchmark. Pulled the
 saved android_registry.dat after testing and byte-compared it to the earlier
 copy: unchanged. No further remote input after launch; leave game running.
+
+## Trigger pedals and widescreen HUD — 2026-10-26
+
+User reported gas/brake only worked on face buttons and requested HUD near screen
+edges. Found keyboard fallback was entirely disabled once DirectInput acquired
+the pad, leaving unbound Z triggers ineffective; base game also lacked the HUD
+DAT, so native widescreen had zero anchor entries. Added default trigger pedal
+compatibility while driving, with launcher opt-out for manual analog bindings;
+this mode is digital threshold gas/brake, not proportional throttle. Kept raw pad
+axes, joystick buttons and steering. Split pure state/mapping from Android event
+parsing and added regression tests for acquisition/holds/release/menu isolation.
+
+Bundled 73 ThirteenAG MIT HUD anchors as a native fallback, external custom table
+still preferred. Actual aspect drives edge displacement; existing minimap choice
+now has anchors even with no DAT. License/source hash recorded in
+ docs/ANDROID_CONTROLS_AND_HUD.md. No Windows DLL/ASI installed. Host pad and HUD
+checks PASS, incremental Android build PASS (12s), APK signature PASS. HUD test
+needs the known preexisting misleading-indentation warning demoted under GCC.
+
+Installed same dev package with version suffix -phone-dev-controls, SHA256:
+49c5c98c46bae21cadbdee1e43432e49702d45b1927f936d0da8dc6e3d4c77db.
+Launcher verifies built-in HUD and RT/LT compatibility default. Left HD settings,
+Balanced preset and all saved game files unchanged. Asked user to physically test
+RT/LT because remote ADB cannot squeeze the Backbone's real triggers. No emulator,
+server or watcher started. Device verification continues below.
+
+Device smoke test: process7030 reports73 HUD offsets; race screenshot
+build/verification/wide-hud-race.png shows map at upper-left edge, leaderboard at
+upper-right edge and tachometer at lower-right edge at2340×1080 display /
+1756×810 rendering. Backing panels/artwork are present. Short race sample~59–60FPS.
+Physical controller callback emitted Controller pedal gas down at23:39:24; no
+brake/release confirmation yet. Host checks cover those transitions, but do not
+claim a completed physical brake test. Full local log controls-logcat.txt.
