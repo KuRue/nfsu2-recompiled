@@ -62,3 +62,47 @@ chosen tag/commit into this branch normally; never force-push. Inspect changed
 build dependencies and reapply/review pcrecomp patches against their documented
 base if upstream changes them. Rebuild shaders and rerun validation after renderer
 updates. Native updates do not automatically inherit the website's features.
+
+
+## Website data and first full build — 2026-10-26
+
+The user asked to obtain the data directly from nfsu2.xyz. Its public
+/data-manifest and /data/<path> expose the original executable and base assets.
+Downloaded 1,295 base files (2,847,509,714 bytes) to
+/home/ubuntu/projects/nfsu2-game, excluding LANGPACKS/TEXPACKS. SPEED2.EXE matches
+the supported SHA-256; all other files checked by manifest size only. Copied all
+to the connected phone at /sdcard/nfsu2 and verified executable SHA-256 there.
+The PC-copy blocker above is resolved; no manual copying by the user is needed.
+The shell repository has the repeatable downloader native/download-game.py.
+
+Removed SDATA from native and Python preflight checks: absent from the website
+manifest and not a required base asset folder. No dummy files/folders added.
+Debug builds now use com.nfsu2.androidevolved.dev and the label NFSU2 Native Dev,
+so locally signed APKs can coexist with the upstream release. Java compiles and
+the merged manifest confirms the development ID and label.
+
+Generation commands run in this checkout:
+
+```bash
+python3 -m venv build/venv
+build/venv/bin/pip install capstone==5.0.9 pefile==2024.8.26 unicorn==2.1.4 keystone-engine==0.9.2
+mkdir -p work
+build/venv/bin/python scripts/normalize_exe.py /home/ubuntu/projects/nfsu2-game/SPEED2.EXE work/SPEED2.analysis.exe
+build/venv/bin/python ../pcrecomp/tools/cpp/vtable_scan.py work/SPEED2.analysis.exe --seeds work/vtable_seeds.json
+build/venv/bin/python ../pcrecomp/tools/cpp/rtti.py work/SPEED2.analysis.exe --seeds work/rtti_seeds.json
+```
+
+Merged both seed lists by integer address into work/seeds_all.json (4,438 entries), then:
+
+```bash
+build/venv/bin/python -u scripts/run_lift.py catalog work/SPEED2.analysis.exe work/seeds_all.json work/catalog.json
+build/venv/bin/python -u scripts/run_lift.py lift work/SPEED2.analysis.exe work/catalog.json src/recomp/gen
+cd android
+env CMAKE_BUILD_PARALLEL_LEVEL=4 bash gradlew --no-daemon --console=plain --max-workers=2 assembleDebug
+```
+
+Catalog: 27,742 functions, 393 seconds. Lift: 70 units, 9,001,374 C lines,
+zero lift failures, 131 seconds. Lift statistics still include 2,910
+RECOMP_UNIMPL sites (2,890 3dnow, 17 int, 2 override, 1 excluded); zero failures
+is not a claim of complete instruction/runtime support. Generated files and
+analysis inputs remain ignored and must never be committed.

@@ -7,7 +7,7 @@ from pathlib import Path
 EXPECTED_SIZE = 4_800_512
 EXPECTED_SHA256 = "f9dd86c054878ce6276beb07c1fd61874f7a1e4bf1f241b084c65b73e24168a7"
 DIRECTORIES = ("CARS", "CREDITS", "FRONTEND", "GLOBAL", "LANGUAGES", "MOVIES",
-               "NIS", "SDATA", "SOUND", "SUBTITLES", "TRACKS")
+               "NIS", "SOUND", "SUBTITLES", "TRACKS")
 
 
 def check(root):

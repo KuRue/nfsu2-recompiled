@@ -19,7 +19,7 @@ inline void checkGameData() {
         stat((root + "/SPEED2.EXE").c_str(), &info) || info.st_size != 4800512)
         throw std::runtime_error("SPEED2.EXE does not match expected image size/header");
     for (const char* name : {"CARS", "CREDITS", "FRONTEND", "GLOBAL", "LANGUAGES", "MOVIES",
-                             "NIS", "SDATA", "SOUND", "SUBTITLES", "TRACKS"}) {
+                             "NIS", "SOUND", "SUBTITLES", "TRACKS"}) {
         const auto path = root + "/" + name;
         DIR* dir = opendir(path.c_str());
         if (!dir) throw std::runtime_error("Cannot read game directory: " + path);
