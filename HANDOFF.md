@@ -640,3 +640,12 @@ CI gains scheduler sanitizer step. Docs LOGICAL_SCHEDULER.md describe limits.
 No device/game-data access, Android rebuild/install, background server or emulator.
 Actual game snapshots still unfinished: mutexes/critical sections, callbacks,
 files/audio/D3D resources, heap/protection metadata and coordinated capture remain.
+
+## 2026-10-26: read-only file resource reconstruction proof
+
+Experimental `file_resources.h`/`file_runner.cpp` save logical file handles (ID, safe relative
+path, position, content) instead of descriptors. Fresh-process restore with shifted descriptor
+layout reopens via `openat`+`O_NOFOLLOW`, validates content, restores independent positions
+(mid/EOF) and seek. 206 malformed states/changed or symlinked resources rejected. Standard and
+fail-fast ASan/UBSan pass locally; CI step added. Limits in FILE_RESOURCES.md: read-only,
+64 KiB, no write journaling/mmaps/real game file layer. No device/game data/APK changes.
