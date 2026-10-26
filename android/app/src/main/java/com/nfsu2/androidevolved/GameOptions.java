@@ -21,9 +21,19 @@ final class GameOptions {
     }
 
     static final String RESOLUTION = "resolution", FPS = "fps", WIDESCREEN = "widescreen", LATENCY = "latency",
-            TEXTURES = "textures", MINIMAP = "minimap", LANGUAGE = "language";
+            TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", LOOK = "lighting_look", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", LANGUAGE = "language";
 
     static final Option[] ALL = {
+            new Option(HD_PACKS, "Texture packs", "off",
+                    new String[] {"off", "on"}, new String[] {"Original textures", "HD HUD + world pack"}),
+            new Option(FILTERING, "Texture filtering", "0",
+                    new String[] {"0", "4", "8", "16"}, new String[] {"Game default", "4× anisotropic", "8× anisotropic", "16× anisotropic"}),
+            new Option(SHARPEN, "Sharpening", "0",
+                    new String[] {"0", "15", "30"}, new String[] {"Off", "Subtle", "Crisp"}),
+            new Option(LOOK, "Lighting look", "0",
+                    new String[] {"0", "1"}, new String[] {"Original", "Night lighting + balanced color"}),
+            new Option(REFLECTIONS, "Reflections", "0",
+                    new String[] {"0", "1"}, new String[] {"Original resolution", "On · 2× mirror and car resolution"}),
             new Option(RESOLUTION, "Internal resolution", "75",
                     new String[] {"100", "75", "50", "720"},
                     new String[] {"Native · highest quality", "75% · balanced", "50% · best performance",

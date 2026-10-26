@@ -194,6 +194,8 @@ public final class LauncherActivity extends Activity {
         addCheck(missing.length() == 0 ? "Game folders" : "Missing folders: " + missing, missing.length() == 0, true);
         addCheck("Widescreen HUD (scripts/…WidescreenFix.dat)",
                 allowed && new File(root, "scripts/NFSUnderground2.WidescreenFix.dat").isFile(), false);
+        addCheck("HD HUD pack (optional)", allowed && new File(root, "TEXPACKS/uhud.pak").isFile(), false);
+        addCheck("HD world pack (optional)", allowed && new File(root, "TEXPACKS/world.pak").isFile(), false);
         boolean ready = exe && !languages().isEmpty();
         status.setText(!allowed ? "Allow file access to read Internal storage/nfsu2."
                 : ready ? "Internal storage/nfsu2" : "Copy your game files to Internal storage/nfsu2.");

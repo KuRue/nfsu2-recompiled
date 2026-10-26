@@ -95,4 +95,8 @@ replace("src/vulkan/vulkan_presenter.cpp", '    m_vki->vkDestroySurfaceKHR(m_vki
 shutil.copy2(pathlib.Path(__file__).parent / "pipeline_cache.cpp", args.output / "src/dxvk/dxvk_pipecache.cpp")
 shutil.copy2(pathlib.Path(__file__).parent / "pipeline_cache.h", args.output / "src/dxvk/dxvk_pipecache.h")
 replace("src/dxvk/dxvk_pipemanager.cpp", '    m_cache     (new DxvkPipelineCache(device->vkd())) {', '    m_cache     (new DxvkPipelineCache(device->vkd(), device->properties().core.properties)) {')
-(args.output / "ANDROID_PREPARE_SHA256").write_text(hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest() + "\n", encoding="ascii")
+# Native phone post-processing is applied in the final presentation pass.
+from visual_patch import apply as apply_visual_patch
+apply_visual_patch(args.output)
+(args.output / "ANDROID_PREPARE_SHA256").write_text(hashlib.sha256("".join(hashlib.sha256((pathlib.Path(__file__).parent / name).read_bytes()).hexdigest()
+    for name in ("prepare.py", "visual_patch.py", "visual_effects.glsl")).encode("ascii")).hexdigest() + "\n", encoding="ascii")

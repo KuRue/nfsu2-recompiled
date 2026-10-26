@@ -168,3 +168,51 @@ integration/testing; no pack or ray tracing has been enabled by this translation
 Recommend optional HUD/font and environment textures, then measured filtering/
 reflection improvements, before custom models or ray-tracing research.
 No emulator, task server or log watcher started. Leave the game available to user.
+
+## Optional HD/native visual enhancements — 2026-10-26
+
+User authorized HD textures, lighting without ray tracing, sharpening and better
+reflections. Implemented NTXP GPU binding replacements (guest dimensions/readback
+unchanged), bounded 256 MiB conservative residency budget, original/HD switch,
+4×/8×/16× anisotropic filtering, final-presentation subtle/crisp sharpening and
+night grading. The night option also enables existing game car lighting,
+headlights, car shadows and glow. Reflections On enables the game's car/road
+reflection effects and doubles game-owned mirror dimensions 256→512 and car
+cube edge 128→256, guarded for the exact executable. Road target size unchanged.
+Registry query/write overrides preserve previously saved options for the Original
+mode; all features default off for existing installs. No ray tracing or new models.
+
+The phone had persisted lighting/reflection effects disabled. First HD smoke test
+rendered a race, with about 58–60 FPS after loading, but those existing lighting
+and reflection effects were still disabled. Added the runtime overrides afterward;
+do not conflate this initial sample with the cost of fully enabled effects.
+
+Assets separately obtained/converted, not committed: Upscaled HUD by LunicAura106,
+574 larger textures, 101 MiB; New HD Textures Pack v1.1 by I_NEED_SPEED / Azazel,
+90 compatible matches (70 larger), 212.6 MiB. Source credits and links retained in
+tools/texpacks/SOURCES.md. Base game bundles unchanged. Full mip-chain conversion
+preserved, TexMod CRC is zlib CRC32 XOR 0xffffffff, while NTXP keeps standard CRC32
+plus Adler32. Alternate PLUS World converter included with AJLethal credit; that
+pack has refreshed original-resolution art and is not the installed world pack.
+
+Files installed on phone /sdcard/nfsu2/TEXPACKS/{uhud,world}.pak:
+uhud SHA256 2a0eb5adb888f54d341dd429ca089280cacca0a03fdc5191b286133db0ba7df7
+world SHA256 302e3b843457293dbb069fba4d600264b9f72a044505c59603b8d90bc3d707c1
+Both fully passed native parser/payload validation locally. Final debug APK
+0.14.10-phone-dev-hd SHA256:
+18ce3ce7fe2f869dfdcf833ed1617fe06613b84621534fd0ac8a09d5f0535913.
+Signature verified, installed over the same dev package on 192.168.1.169:37329.
+Phone selections: Balanced 75%/60FPS, packs on, AF8, sharpen15, look1, reflections1.
+Previous option XML backed up to /tmp/nfsu2-prefs-before-hd.xml; game language and
+other settings retained. Backbone controller remains unchanged.
+
+Validation: NTXP host malformed-index/hash/padding/mip tests PASS; existing host
+memory/DXT and COM ownership/mode checks PASS; all 54 DXVK shaders compile and
+validate Vulkan1.1; incremental APK builds PASS (15–19s), apksigner PASS. Generator
+now retains both new binding hooks and preexisting handwritten reset/depth/vertex
+hooks; regenerating the device methods exactly matches the checked-in file.
+DXVK patch cache signature includes presentation shader/patch source and writes
+SPIR-V headers only if changed. See docs/ANDROID_HD_GRAPHICS.md for limitations.
+
+Evidence local/ignored: build/verification/hd-logcat.txt and hd-race.png (initial
+race smoke test). No emulator, task server, watcher or persistent logcat started.

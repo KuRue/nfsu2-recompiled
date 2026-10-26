@@ -1,3 +1,5 @@
+> Android phone fork: optional [HD textures, lighting, sharpening and reflections](docs/ANDROID_HD_GRAPHICS.md).
+
 # Need for Speed Underground 2 — Recompiled
 
 

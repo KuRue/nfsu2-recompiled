@@ -329,6 +329,15 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
     const char* value=env->GetStringUTFChars(language,nullptr);if(!value)return;
     setGuestLanguage(value);env->ReleaseStringUTFChars(language,value);
 }
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeVisualOptions(JNIEnv*,jclass,jboolean packs,jint filtering,jint sharpness,jint look,jint reflections){
+    auto set=[](const char* name,int value){auto text=std::to_string(value);setenv(name,text.c_str(),1);};
+    set("NFSU2_NATIVE_HD",packs==JNI_TRUE?1:0);
+    set("NFSU2_NATIVE_AF",filtering==4||filtering==8||filtering==16?filtering:0);
+    set("NFSU2_NATIVE_SHARPNESS",sharpness==15||sharpness==30?sharpness:0);
+    set("NFSU2_NATIVE_LOOK",look==1?1:0);set("NFSU2_NATIVE_REFLECTIONS",reflections==1?1:0);
+    setenv("NFSU2_NATIVE_TEXROOT","/storage/emulated/0/nfsu2/TEXPACKS",1);
+    __android_log_print(ANDROID_LOG_INFO,"NFSU2","Native visuals: packs=%d AF=%d sharpen=%d look=%d reflections=%d",int(packs),filtering,sharpness,look,reflections);
+}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeResolution(JNIEnv*,jclass,jint width,jint height){setGuestResolution(unsigned(width),unsigned(height));}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFrameLimit(JNIEnv*,jclass,jint cap){setGuestFrameLimit(unsigned(cap));}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadConnected(JNIEnv*,jclass,jboolean connected){setGuestPadConnected(connected==JNI_TRUE);}

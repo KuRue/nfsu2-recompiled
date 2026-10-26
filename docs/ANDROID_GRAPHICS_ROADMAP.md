@@ -1,6 +1,11 @@
 # Native Android graphics upgrades
 
-Status: assessment only, 2026-10-26. No new graphics feature or asset pack is enabled
+Historical assessment from the English UI update, 2026-10-26.
+The subsequent implementation is documented in [ANDROID_HD_GRAPHICS.md](ANDROID_HD_GRAPHICS.md);
+it adds optional HD packs, filtering, presentation sharpening/grading and
+mirror/car-reflection sizing. The assessment below predates those changes.
+
+Original status: assessment only, 2026-10-26. No new graphics feature or asset pack is enabled
 by the English UI update. Current rendering is D3D9 through DXVK Native/Vulkan.
 The existing resolution/FPS presets are not texture or model upgrades.
 

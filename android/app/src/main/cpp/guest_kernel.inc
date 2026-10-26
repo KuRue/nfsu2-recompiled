@@ -329,20 +329,34 @@ void registryOpen(uint32_t output,uint32_t argc){
 }
 void regOpenKeyA(){registryOpen(arg(2),3);}void regOpenKeyExA(){registryOpen(arg(4),5);}
 void regCloseKey(){ret(registryHandles.erase(arg(0))?0:6,1);}
+// Launcher overrides do not replace saved in-game values.
+bool visualRegistryOverride(const std::string& name){
+    auto enabled=[](const char* key){const char* v=std::getenv(key);return v&&std::strcmp(v,"1")==0;};
+    bool night=enabled("NFSU2_NATIVE_LOOK"),reflections=enabled("NFSU2_NATIVE_REFLECTIONS");
+    return (night&&(name=="g_carlightingenable"||name=="g_carheadlightenable"||
+                         name=="g_carshadowenable"||name=="g_lightglowenable"))||
+                 (reflections&&(name=="g_carenvironmentmapenable"||name=="g_roadreflectionenable"));
+}
 void regQueryValueExA(){
     auto name=lower(guestString(arg(1)));NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Registry query %08x value=%s",arg(0),name.c_str());
     if(!registryHandles.count(arg(0))){ret(6,6);return;}
-    auto value=gameRegistry.find(name);if(value==gameRegistry.end()){ret(2,6);return;}
-    if(!arg(5)){ret(87,6);return;}uint32_t size=read32(arg(5));write32(arg(5),value->second.bytes.size());
-    if(arg(3))write32(arg(3),value->second.type);
-    if(arg(4)){if(size<value->second.bytes.size()){ret(234,6);return;}std::memcpy(ptr(arg(4),value->second.bytes.size()),value->second.bytes.data(),value->second.bytes.size());}
+    bool forceOn=visualRegistryOverride(name);
+    auto value=gameRegistry.find(name);if(value==gameRegistry.end()&&!forceOn){ret(2,6);return;}
+    RegistryValue visual{4,{1,0,0,0}};
+    const auto& queried=forceOn?visual:value->second;
+    if(forceOn)NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Visual override %s = 1 (saved value unchanged)",name.c_str());
+    if(!arg(5)){ret(87,6);return;}uint32_t size=read32(arg(5));write32(arg(5),queried.bytes.size());
+    if(arg(3))write32(arg(3),queried.type);
+    if(arg(4)){if(size<queried.bytes.size()){ret(234,6);return;}std::memcpy(ptr(arg(4),queried.bytes.size()),queried.bytes.data(),queried.bytes.size());}
     ret(0,6);
 }
 void regSetValueExA(){
     if(!registryHandles.count(arg(0))){ret(6,6);return;}
     uint32_t size=arg(5);if(size>1048576){ret(87,6);return;}
     RegistryValue value{arg(3),std::vector<uint8_t>(size)};if(size)std::memcpy(value.bytes.data(),ptr(arg(4),size),size);
-    auto name=lower(guestString(arg(1)));gameRegistry[name]=std::move(value);
+    auto name=lower(guestString(arg(1)));
+    if(visualRegistryOverride(name)){ret(0,6);return;}
+    gameRegistry[name]=std::move(value);
     if(registryPersisted(name))savePersistedRegistry();
     ret(0,6);
 }

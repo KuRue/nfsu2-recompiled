@@ -141,6 +141,7 @@ public final class GameActivity extends NativeActivity {
     private static native void nativeTypeText(String value, boolean replace);
     private static native void nativePointer(float x, float y, int phase);
     private static native void nativeLanguage(String language);
+    private static native void nativeVisualOptions(boolean packs, int filtering, int sharpness, int look, int reflections);
     private static native void nativeResolution(int width, int height);
     private static native void nativeFrameLimit(int framesPerSecond);
     private static native void nativeWidescreen(boolean enabled);
@@ -223,6 +224,11 @@ public final class GameActivity extends NativeActivity {
         nativeOnlineServer(GameOptions.validServer(server) ? server : GameOptions.onlineServer(this));
         nativeMinimapTop(launch.getBooleanExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top")));
         nativeBackBuffers(launch.getIntExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY))));
+        nativeVisualOptions(GameOptions.get(this, GameOptions.HD_PACKS).equals("on"),
+                Integer.parseInt(GameOptions.get(this, GameOptions.FILTERING)),
+                Integer.parseInt(GameOptions.get(this, GameOptions.SHARPEN)),
+                Integer.parseInt(GameOptions.get(this, GameOptions.LOOK)),
+                Integer.parseInt(GameOptions.get(this, GameOptions.REFLECTIONS)));
         nativeCpuTextures(launch.getBooleanExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu")));
         String[] loader = launch.getStringArrayExtra("driverLoader");
         if (loader == null || loader.length != 4) loader = GpuDrivers.loaderArguments(this);
