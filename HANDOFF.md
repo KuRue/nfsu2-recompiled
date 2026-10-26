@@ -430,3 +430,9 @@ and late count, plus lifecycle-scoped10s Android thermal/battery/charging logs.
 No preset changes justified yet; no claim of a speedup. docs/ANDROID_PHONE_PERFORMANCE.md
 explains evidence and limitations. Host quantile regression passed. Requested a
 ~5minute normal race after installation; physical sustained validation pending.
+
+Performance build47ee486 installed successfully (signature verified). Launched
+PLAY, confirmed thermal log status0/battery32.1C/unplugged and frame quantile logs
+in PID29828. Initial loading window includes1s stalls (expected mixed startup);
+next window p50=16.67,p95=16.76,p99=19.86,max43.71ms. These are startup/menu data,
+not sustained race validation. No capture background processes started.
