@@ -34,7 +34,7 @@ inline bool identity(const std::string& s){return s.size()==64&&s.find_first_not
 inline void validate(const State& s){
     require(identity(s.build)&&identity(s.game),"Invalid compatibility identity");
     require(s.fpTop<=8&&s.fpControl<=0xffff&&s.mxcsr<=0xffff,"Invalid extended CPU state");
-    require(s.host[0]<=2&&(!s.host[0]?s.host==std::array<uint32_t,5>{}:(s.host[1]>=1&&s.host[1]<=4)),"Invalid pending synthetic host call");
+    require(s.host[0]<=2&&(!s.host[0]?s.host==std::array<uint32_t,5>{}:(s.host[1]>=1&&s.host[1]<=6)),"Invalid pending synthetic host call");
     require(!s.hostResources,"Host resource serialization is not implemented");
     require(!s.frames.empty()&&s.frames.size()<=64,"Invalid continuation count");
     require(!s.regions.empty()&&s.regions.size()<=128,"Invalid region count");

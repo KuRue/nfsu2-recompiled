@@ -96,3 +96,20 @@ native workers concurrently; captures happen only between logical turns. Real
 integration needs a coordinated quiescence contract and reconstruction of each
 supported resource class before the game can restore a race. Existing live-memory
 Resume and the installed0.14.13 app are unchanged.
+
+## Mutexes (schema 2)
+
+Logical mutexes share the handle namespace and save `{id, owner thread, recursion, abandoned}`.
+Synthetic services: 5 = acquire (handle, timeout; 0 polls, `0xffffffff` infinite), 6 = release.
+Acquire is recursive for the owner; contended acquire blocks with optional timeout (`0x102`).
+Release by a non-owner returns 0. The final release hands ownership to the first waiter in
+thread-creation order. A thread that finishes while owning a mutex abandons it: the next acquirer
+gets `0x80` (WAIT_ABANDONED) and becomes owner. Validation rejects owners that are missing or finished,
+owner/recursion mismatches, abandoned-but-owned mutexes, and waiters on free or self-owned mutexes
+(lost wake-ups).
+
+Scenarios: `mutex` (three recursive lockers serialize a read-sleep-write; extra release fails),
+`abandoned` and `mutex_timeout` (poll and timed acquire fail, then infinite acquire succeeds after release):
+175 extra fresh-process checkpoints. Critical sections are expected to map to the same model
+(they also allow recursive entry and have one owner). Spin counts, priority, and real Win32
+fairness are not modeled.

@@ -649,3 +649,12 @@ layout reopens via `openat`+`O_NOFOLLOW`, validates content, restores independen
 (mid/EOF) and seek. 206 malformed states/changed or symlinked resources rejected. Standard and
 fail-fast ASan/UBSan pass locally; CI step added. Limits in FILE_RESOURCES.md: read-only,
 64 KiB, no write journaling/mmaps/real game file layer. No device/game data/APK changes.
+
+## 2026-10-26: logical mutex/critical-section ownership proof
+
+Scheduler snapshot schema 2 adds mutexes (owner, recursion, abandoned) with acquire/release
+synthetic services: recursive entry, timed/polled contention, FIFO-by-creation handoff, and
+abandonment (0x80) on owner exit. Three new scenarios bring the proof to 9 scenarios/271 fresh-process
+checkpoints, standard and ASan/UBSan; existing 245 continuation checkpoints still pass. Graph
+validation rejects orphaned/finished owners, recursion mismatch and lost-wakeup waiters. Docs in
+LOGICAL_SCHEDULER.md. Production app unchanged; no device/game data used.

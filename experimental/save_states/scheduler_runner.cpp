@@ -26,7 +26,11 @@ Process initial(const std::string& build,const std::string& scenario,GuestMemory
     else if(scenario=="timeout")roots={entry_timeout_waiter};
     else if(scenario=="sleep")roots={entry_sleeper};
     else if(scenario=="deadlock")roots={entry_waiter};
+    else if(scenario=="mutex")roots={entry_locker,entry_locker,entry_locker};
+    else if(scenario=="abandoned")roots={entry_abandoner,entry_abandon_waiter};
+    else if(scenario=="mutex_timeout")roots={entry_long_holder,entry_mutex_timeout_waiter};
     else throw std::runtime_error("Unknown scheduler scenario");
+    if(scenario=="mutex"||scenario=="abandoned"||scenario=="mutex_timeout"){p.mutexes.push_back({2,0,0,0});p.nextHandle=3;}
     std::memcpy(memory.address(0x401000,sizeof fixture_bytes),fixture_bytes,sizeof fixture_bytes);
     for(unsigned i=0;i<roots.size();++i){Thread t;t.id=i+1;t.cpu.build=build;t.cpu.game=p.game;t.cpu.flags=0x202;t.cpu.registers[4]=0x4f0000-i*0x1000;t.cpu.registers[7]=0x480000+i*0x20;t.cpu.frames.push_back({roots[i],roots[i],{0x202,0,FK_EFLAGS,0}});uint32_t stop=0x400100;std::memcpy(memory.address(t.cpu.registers[4],4),&stop,4);p.threads.push_back(t);}
     return p;
@@ -50,9 +54,19 @@ void selftest(const std::string& build,GuestMemory& memory){
     // Recompute the checksum after changing graph fields: decoder must validate
     // semantics, not merely reject accidental corruption.
     auto put=[](Bytes& b,size_t offset,uint32_t value){for(unsigned i=0;i<4;++i)b[offset+i]=uint8_t(value>>(i*8));};
-    for(auto offset:{size_t(24),size_t(28),size_t(60),size_t(84)}){
+    for(auto offset:{size_t(24),size_t(28),size_t(60),size_t(88)}){
         auto forged=bytes;put(forged,offset,offset==28?1:99);Bytes body(forged.begin()+20,forged.end());put(forged,16,crc(body));
         rejected([&]{decodeProcess(forged,build,p.game);});
+    }
+    auto locked=capture(initial(build,"mutex",memory),memory);encodeProcess(locked);
+    for(unsigned kind=0;kind<6;++kind){auto invalid=locked;auto& m=invalid.mutexes[0];
+        if(kind==0){m.owner=9;m.recursion=1;}
+        if(kind==1){m.owner=1;}
+        if(kind==2){m.recursion=1;}
+        if(kind==3){m.abandoned=1;m.owner=1;m.recursion=1;}
+        if(kind==4){auto& t=invalid.threads[1];t.status=Waiting;t.wait=2;t.deadline=infinite;t.cpu.host={1,5,2,infinite,0};}
+        if(kind==5){m.owner=1;m.recursion=1;invalid.threads[0].status=Finished;invalid.threads[0].cpu.frames={{0,0,{}}};invalid.threads[0].cpu.host={};}
+        rejected([&]{encodeProcess(invalid);});
     }
     auto poll=p;poll.threads[0].cpu.host={1,2,1,0,0};request(poll,poll.threads[0]);
     require(poll.threads[0].status==Runnable&&poll.threads[0].cpu.host[4]==0x102,"Zero-time wait should not block");

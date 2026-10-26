@@ -32,7 +32,7 @@ def main():
             if len(fields)!=4 or fields[2].lower()!='t':continue
             address,length=int(fields[0],16),int(fields[1],16);name=fields[3]
             if name.startswith('import_'):
-                imports[address]={'import_wait':2,'import_signal':3,'import_sleep':4}[name]
+                imports[address]={'import_wait':2,'import_signal':3,'import_sleep':4,'import_acquire':5,'import_release':6}[name]
             else:
                 functions[address]=code[address-0x401000:address-0x401000+length];entries[name]=address
         (work/'fixture_continuations.h').write_text(generator.generate(functions,source,imports))
@@ -53,7 +53,11 @@ def main():
             'timer':(1,1,0,[0],[bits(1)]),
             'periodic':(2,2,0,[0],[0]),
             'timeout':(0,0,0,[0x102],[0]),
-            'sleep':(0,0,0,[42],[0])}
+            'sleep':(0,0,0,[42],[0]),
+            # Three recursive lockers serialize a read-sleep-write; extra release fails.
+            'mutex':(3,0,0,[0x10]*3,[0]*3),
+            'abandoned':(0,0,0,[0,0x80],[0,0]),
+            'mutex_timeout':(0,0,0,[0,0x204],[0,0])}
         total=0;seen=set()
         for scenario,values in expected.items():
             baseline=json.loads(run('baseline',scenario))
@@ -74,6 +78,6 @@ def main():
         for mode,extra in [('baseline',[]),('restore',[str(path)])]:
             failed=subprocess.run([str(binary),mode,build,'deadlock',*extra],capture_output=True,text=True)
             if failed.returncode==0 or 'Logical scheduler deadlock' not in failed.stderr:raise RuntimeError('Deadlock did not fail closed')
-        print(f'Logical scheduler proof passed:6 scenarios/{total} checkpoints plus blocked deadlock restore. Actual game snapshots remain unfinished.')
+        print(f'Logical scheduler proof passed:{len(expected)} scenarios/{total} checkpoints plus blocked deadlock restore. Actual game snapshots remain unfinished.')
 
 if __name__=='__main__':main()

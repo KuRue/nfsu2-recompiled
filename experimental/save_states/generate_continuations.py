@@ -26,7 +26,7 @@ def generate(functions, pcrecomp, imports=None):
     imports = imports or {}
     if set(imports) & set(functions):
         raise ValueError('Synthetic import overlaps a guest function')
-    if any(service not in {1,2,3,4} for service in imports.values()):
+    if any(service not in {1,2,3,4,5,6} for service in imports.values()):
         raise ValueError("Unknown synthetic host service")
     if not functions or len(functions) > 128:
         raise ValueError('Invalid function count for experimental emitter')
