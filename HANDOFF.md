@@ -507,3 +507,9 @@ retain joystick defaults; triggers/A/B untouched. Refresh now publishes updated
 pad state on mode changes, including held buttons. Host suite passes with added
 coverage for override/duplicate suppression/menu transitions/release in DI and
 keyboard modes. Default version27/0.14.12. Physical Backbone test pending.
+
+Controller build27/0.14.12 installed successfully, package/signer verified by
+archive workflow. Local source suite and targeted refreshed mapping regression
+pass; GitHub run40344204827 success. Launched app after install. User must confirm
+Y enters a free-roam race/garage, X camera and R3 look-back with physical Backbone.
+No claim of physical confirmation yet. No task background processes/emulator.
