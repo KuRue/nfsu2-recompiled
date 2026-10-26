@@ -84,3 +84,33 @@ wait deadlines and deterministic round-robin position. Six scenarios/96 fresh
 restores match uninterrupted process state; a blocked deadlock reports cleanly
 before/after restore. This is not integration with guest_threads.inc or capture of
 real native workers. File, audio and graphics resource reconstruction remains open.
+
+## Real-game coverage and the hybrid plan (2026-10-26)
+
+All standalone proofs now exist: CPU continuations, scheduler with events/timers/mutexes,
+read-only and writable files (FILE_RESOURCES.md), audio mixer voices (AUDIO_STATE.md) and a
+logical graphics device (GRAPHICS_STATE.md). None is integrated into the game.
+
+`scripts/continuation_coverage.py` measures the experimental emitter against the real
+executable: 12,853 of 27,742 functions (46%) use only proven instructions; 88% of decoded
+instructions are covered. There are 245 unsupported mnemonics; the most common are `leave`, shifts,
+`movzx/movsx`, x87 arithmetic/compares, `rep movs/stos`, `setcc`, `div`, `cdq`. The production lifter
+already handles all of them (zero lift failures), so closing this is mostly whitelisting each
+instruction group with x86/Unicorn differential tests, not new semantics.
+
+Converting all 27,742 functions to dispatcher form is unnecessary and would cost speed. Only the
+functions that can be *on a thread's stack at the capture point* need explicit continuations;
+everything they call that returns before capture can stay ordinary native C. Plan:
+
+1. Choose capture points: the main thread at its per-frame Present call, every worker blocked
+   in a wait/sleep import. Capture only when every guest thread is at one of them.
+2. Record, on the phone, the guest call stacks at those points (RECOMP_ENTER hook / the
+   runtime's shadow return addresses) across menus, races and loading. That gives the small
+   function set needing continuation form.
+3. Lift only that set with the continuation backend; keep a runtime guard that
+   defers capture to the next frame if any native-C frame is still live.
+4. Wire guest_threads.inc, guest_files.inc, guest_audio.inc and d3d9_bridge.cpp to the logical
+   models; reject capture while sockets are open (offline only).
+5. Restore into a fresh process; career/profile save files are never rolled back.
+
+Step 2 needs the phone connected; steps 1-3 decide whether the approach is affordable.

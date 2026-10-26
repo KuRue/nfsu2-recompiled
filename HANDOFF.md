@@ -684,3 +684,7 @@ rejected. Standard + sanitizers pass; CI step added. Real D3D9/DXVK state (buffe
 depth, samplers) not yet covered; see GRAPHICS_STATE.md. Production unchanged.
 All standalone subsystem proofs now exist (CPU, scheduler/mutex, files, audio, graphics).
 Next: integrate with the actual game (quiesce threads at a frame boundary, hook real APIs).
+
+## 2026-10-26: real-game coverage and hybrid plan
+
+scripts/continuation_coverage.py: 46% of functions/88% of instructions already accepted by the experimental emitter; gaps are known instruction groups. Plan recorded in docs/ANDROID_DURABLE_STATE_PROTOTYPE.md: convert only functions live on stacks at capture points (per-frame Present, worker waits), keep the rest native. Next step needs phone: sample real guest stacks at those points. Phone (adb) not connected at this time.
