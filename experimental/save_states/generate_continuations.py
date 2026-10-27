@@ -15,9 +15,9 @@ INTEGER = {'mov', 'lea', 'add', 'sub', 'xor', 'and', 'or', 'cmp', 'test', 'inc',
 # Sub-32-bit integer operands are allowed for these; the lifter handles partial registers.
 NARROW = INTEGER - {'push', 'pop', 'leave', 'cdq'}
 # String operations are lifted as one atomic step, so a checkpoint never sees them half done.
-STRING = {'rep stosd', 'rep stosb', 'rep movsd', 'rep movsb', 'stosd', 'stosb', 'movsd', 'movsb'}
+STRING = {'rep stosd', 'rep stosw', 'stosw', 'rep stosb', 'rep movsd', 'rep movsb', 'stosd', 'stosb', 'movsd', 'movsb'}
 X87 = {'fadd', 'fsub', 'fsubr', 'fmul', 'fdiv', 'fdivr', 'fsubp', 'fsubrp', 'fdivp', 'fdivrp', 'fcom', 'fcomp', 'fcompp',
-       'fst', 'fabs', 'fimul', 'fiadd', 'fist', 'fsqrt'}
+       'fst', 'fabs', 'fimul', 'fiadd', 'fist', 'fsqrt', 'fisub', 'fisubr', 'fidiv', 'fidivr', 'fucompp', 'fucomp', 'fucom'}
 EXTENDED = {'fld', 'fld1', 'fldz', 'fstp', 'faddp', 'fmulp', 'fchs', 'fxch', 'fldcw', 'fnstcw', 'ftst', 'fnstsw', 'fild', 'fistp', 'movdqu', 'movups', 'movaps', 'addps', 'mulps', 'pxor', 'paddd', 'movq', 'ldmxcsr', 'stmxcsr'}
 EXTENDED |= X87
 JCC = {'je', 'jne', 'ja', 'jae', 'jb', 'jbe', 'jg', 'jge', 'jl', 'jle', 'js', 'jns', 'jo', 'jno', 'jp', 'jnp'}

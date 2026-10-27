@@ -277,3 +277,20 @@ begin root_x87
  xor eax,eax
  ret
 end root_x87
+begin root_x87_integer
+ fld qword ptr[data_double_other]
+ fisub dword ptr[data_mmx_other]
+ fisubr dword ptr[data_mmx]
+ fidiv dword ptr[data_mmx_other+4]
+ fld1
+ fucompp
+ fnstsw ax
+ mov [0x480410],eax
+ mov edi,0x480420
+ mov eax,0x7788
+ mov ecx,3
+ rep stosw
+ stosw
+ xor eax,eax
+ ret
+end root_x87_integer

@@ -156,7 +156,7 @@ Mnemonic coverage:
 | Probe live set | 511 of 521 (was 316) | — |
 | Whole executable | 25,389 of 27,742 (was 46%) | 99.4% |
 
-The remaining live blockers are `int3` padding, `fisub`/`fisubr`/`fidiv`, `rdtsc`, `stosw` and `fucompp`.
+A follow-up added `fisub`, `fisubr`, `fidiv`, `fidivr`, `fucom`, `fucomp`, `fucompp` and `stosw` (fixture `root_x87_integer`), for 20 programs and 345 checkpoints. That brings the live set to 517 of 521 and the whole executable to 26,287 of 27,742 (95%). The only remaining live blockers are `int3` padding (3) and `rdtsc` (1, which needs a host-provided value).
 This is a mnemonic-level estimate; operand checks and call-target rules can still reject individual functions.
 
 Policy (user-confirmed 2026-10-27): career and profile save files are never rolled back by a save-state restore.
