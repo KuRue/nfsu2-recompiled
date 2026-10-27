@@ -721,3 +721,7 @@ The launch path no longer pins the fastest mode up to 120 Hz. The paced rate is 
 ## 2026-10-27: performance hint for the guest thread — not run on the phone
 
 While a frame cap is set, the presenting guest thread reports its busy time to Android's performance hint and asks for power-efficient scheduling. The target is the paced period, the same length the frame pacer waits. The sleep that fills the rest of the frame is not counted, and the report runs after the machine lock is released for that wait. A gap longer than four periods is a pause and is not reported. Uncapped closes the session. The hint API needs Android 13, and the efficiency preference needs Android 15. This binary is built for API 29, so the entry points are loaded at runtime. Only the presenting thread is in the session. No phone session, so nothing shows that clocks fell or that frames still held.
+
+## 2026-10-27: Wi-Fi multicast lock follows LAN sockets — not run on the phone
+
+The lock used to be acquired for the whole time the game was in front, so Wi-Fi power save stayed off during solo play. It is now held only while a datagram socket has broadcast enabled or is bound to UDP port 9999, which is how LAN games announce themselves. Pause still releases it, and resume acquires it again only if such a socket is still open. The configured EA Nation host does not acquire it. Releasing a lock that is not held is skipped. No phone session, so nothing shows that LAN broadcasts still arrive or that the radio sleeps during a solo race.

@@ -100,6 +100,33 @@ static void applyDisplaySchedule(android_app* app){
         __android_log_print(ANDROID_LOG_INFO,"NFSU2","Display schedule content %u Hz, panel preference %u Hz",content,panel);
     reportedGeneration=generation;appliedGeneration=generation;appliedWindow=window;appliedEpoch=epoch;
 }
+static bool setJavaLanBroadcasts(android_app* app){
+    if(!app||!app->activity||!app->activity->vm||!app->activity->clazz)return false;
+    JNIEnv* env=nullptr;
+    if(app->activity->vm->AttachCurrentThread(&env,nullptr)!=JNI_OK||!env)return false;
+    jclass cls=env->GetObjectClass(app->activity->clazz);
+    jmethodID method=cls?env->GetMethodID(cls,"setLanBroadcasts","()V"):nullptr;
+    if(method)env->CallVoidMethod(app->activity->clazz,method);
+    bool failed=env->ExceptionCheck()||!method;
+    if(env->ExceptionCheck()){env->ExceptionDescribe();env->ExceptionClear();}
+    if(cls)env->DeleteLocalRef(cls);
+    app->activity->vm->DetachCurrentThread();
+    return !failed;
+}
+static void applyLanBroadcasts(android_app* app){
+    static int applied=-1;
+    int next=guestLanBroadcasts()?1:0;
+    if(next==applied)return;
+    if(!setJavaLanBroadcasts(app)){
+        static int warned=-2;
+        if(warned!=next){
+            warned=next;
+            __android_log_print(ANDROID_LOG_WARN,"NFSU2","LAN broadcasts %s, the activity did not accept it",next?"needed":"idle");
+        }
+        return;
+    }
+    applied=next;
+}
 static void deliverBenchmarkReport(const char* path){
     if(!benchmarkApp||!benchmarkApp->activity||!benchmarkApp->activity->vm)return;
     JNIEnv* env=nullptr;
@@ -482,6 +509,9 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
 }
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeWidescreen(JNIEnv*,jclass,jboolean enabled){setGuestWidescreen(enabled==JNI_TRUE);}
 // Minimap at the top-left: the bottom-left corner sits under the steering thumb.
+extern "C" JNIEXPORT jboolean JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeLanBroadcasts(JNIEnv*,jclass){
+    return guestLanBroadcasts()?JNI_TRUE:JNI_FALSE;
+}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeOnlineServer(JNIEnv* env,jclass,jstring host){
     const char* text=env->GetStringUTFChars(host,nullptr);setGuestOnlineServer(text?text:"");env->ReleaseStringUTFChars(host,text);
 }
@@ -543,6 +573,7 @@ void android_main(android_app* app) {
         int id = ALooper_pollOnce(active ? (d3d9RequestsSurface()?16:0) : -1, nullptr, &events, reinterpret_cast<void**>(&source));
         if (id >= 0 && source) source->process(app, source);
         applyDisplaySchedule(app);
+        applyLanBroadcasts(app);
         if(gamepadsRemoved.exchange(false)){gamepad.releaseAll(setPadKey);publishPad();}
         gamepad.setKeyEmulation(!guestGamepadInUse());if(gamepad.refresh(guestDrivingControls(),setPadKey))publishPad();
         if (app->destroyRequested) break;

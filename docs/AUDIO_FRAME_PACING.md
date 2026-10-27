@@ -86,6 +86,10 @@ other guest thread has queued for the machine; queued work is still checked
 on the existing 500-microsecond scheduling interval. Native COM/import stubs
 skip the lifted-function hash table, with a startup guard against overlapping
 lifted modules. No controlled FPS percentage is claimed for these CPU changes.
+The Wi-Fi multicast lock is held only while a datagram socket has broadcast
+enabled or is bound to the LAN discovery port, 9999, and it is released while
+the activity is paused. The EA Nation server name does not hold it, so solo
+play leaves Wi-Fi power save alone. That lock has not been measured on a phone.
 
 Run the standalone tests from a Visual Studio developer prompt:
 

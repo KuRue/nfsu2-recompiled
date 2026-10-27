@@ -36,6 +36,8 @@ void setGuestDisplayModes(const unsigned* hertz,unsigned count);
 // Latest request for the display. False until a schedule exists, or while a
 // concurrent update makes the triple inconsistent.
 bool guestDisplaySchedule(unsigned& contentFps,unsigned& panelHz,unsigned& generation);
+// True while a datagram socket has broadcast enabled or is bound to UDP 9999.
+bool guestLanBroadcasts();
 // seconds 0 disables the run. resolution is the launcher key ("75", "720").
 // The handler is called on the guest thread after the report is written.
 void setGuestBenchmark(unsigned seconds,const std::string& reportPath,const std::string& resolution);

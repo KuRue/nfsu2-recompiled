@@ -9,6 +9,7 @@
 #include "runtime_log.h"
 #include "frame_pacer.h"
 #include "performance_hint.h"
+#include "lan_broadcast.h"
 #include "frame_metrics.h"
 #include "frame_benchmark.h"
 #include "guest_boot_worker.h"
@@ -707,6 +708,7 @@ void samplePhysicsForPhone(){
 }
 
 #include "guest_audio.inc"
+std::atomic<bool> lanBroadcastWanted{false};
 #include "guest_network.inc"
 #ifdef NFS_RESUMABLE
 #ifndef NFS_GIT_IDENTITY
@@ -1477,6 +1479,7 @@ bool guestDisplaySchedule(unsigned& contentFps,unsigned& panelHz,unsigned& gener
     generation=first;
     return first!=0&&first==second;
 }
+bool guestLanBroadcasts(){return lanBroadcastWanted.load(std::memory_order_acquire);}
 void setGuestBenchmark(unsigned seconds,const std::string& reportPath,const std::string& resolution){
     std::lock_guard<std::mutex> lock(benchmarkMutex);
     benchmarkSeconds=seconds>=5&&seconds<=120?seconds:0;

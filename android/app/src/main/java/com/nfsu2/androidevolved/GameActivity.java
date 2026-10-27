@@ -169,6 +169,7 @@ public final class GameActivity extends NativeActivity {
     private static native void nativeBenchmark(int seconds, String reportPath, String resolution);
     private static native void nativeWidescreen(boolean enabled);
     private static native void nativeOnlineServer(String host);
+    private static native boolean nativeLanBroadcasts();
     private static native void nativeGamepadConnected(boolean connected);
     private static native void nativeGamepadDevices(int[] ids);
     private static native void nativeMinimapTop(boolean top);
@@ -357,23 +358,42 @@ public final class GameActivity extends NativeActivity {
             controlsWindow.showAtLocation(getWindow().getDecorView(), Gravity.TOP | Gravity.START, 0, 0);
         }
     }
-    // LAN games announce and discover themselves with UDP broadcasts on port 9999;
-    // without this lock many devices drop incoming Wi-Fi broadcasts to save power.
+    // LAN games announce and discover themselves with UDP broadcasts on port 9999.
+    // The lock stops Wi-Fi from dropping those packets. It is held only while this
+    // activity is in front and a datagram socket has broadcast enabled or is bound
+    // to that port. The EA Nation hostname is not one of those sockets.
     private android.net.wifi.WifiManager.MulticastLock lanBroadcasts;
-    private void holdLanBroadcasts(boolean hold) {
+    /** Called from the native looper. The UI thread reads the socket state itself. */
+    public void setLanBroadcasts() {
+        runOnUiThread(() -> applyLanBroadcasts(nativeLanBroadcasts()));
+    }
+    private void applyLanBroadcasts(boolean needed) {
+        boolean hold = foreground && needed;
         if (lanBroadcasts == null) {
+            if (!hold) return;
             android.net.wifi.WifiManager wifi = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
-            if (wifi == null) return;
+            if (wifi == null) {
+                android.util.Log.w("NFSU2", "LAN broadcasts needed, Wi-Fi service missing");
+                return;
+            }
             lanBroadcasts = wifi.createMulticastLock("nfsu2-lan");
             lanBroadcasts.setReferenceCounted(false);
         }
-        if (hold) lanBroadcasts.acquire(); else lanBroadcasts.release();
+        if (hold) {
+            if (!lanBroadcasts.isHeld()) {
+                lanBroadcasts.acquire();
+                android.util.Log.i("NFSU2", "Wi-Fi multicast lock held for LAN broadcasts");
+            }
+        } else if (lanBroadcasts.isHeld()) {
+            lanBroadcasts.release();
+            android.util.Log.i("NFSU2", "Wi-Fi multicast lock released");
+        }
     }
     @Override protected void onPause() {
         foreground=false;
         performanceHandler.removeCallbacks(performanceSample);
         if(phoneFeedback!=null)phoneFeedback.stop();
-        holdLanBroadcasts(false);
+        applyLanBroadcasts(nativeLanBroadcasts());
         updateTiltSensor();
         if(inputManager!=null)inputManager.unregisterInputDeviceListener(gamepadListener);
         if (statusWindow != null) statusWindow.dismiss();
@@ -386,7 +406,7 @@ public final class GameActivity extends NativeActivity {
         foreground=true;
         performanceHandler.removeCallbacks(performanceSample);performanceHandler.post(performanceSample);
         if(phoneFeedback!=null)phoneFeedback.start();
-        holdLanBroadcasts(true);
+        applyLanBroadcasts(nativeLanBroadcasts());
         updateTiltSensor();
         if(inputManager!=null){inputManager.registerInputDeviceListener(gamepadListener,null);updateGamepads();}
         if(touchControls!=null) {touchControls.removeCallbacks(updateControlMode);touchControls.post(updateControlMode);}

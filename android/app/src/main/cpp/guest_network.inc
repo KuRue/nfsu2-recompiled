@@ -22,7 +22,7 @@ constexpr uint32_t wsaEinval=10022,wsaEwouldblock=10035,wsaEnotsock=10038,wsaEfa
     wsaEtimedout=10060,wsaEafnosupport=10047,wsaNotinitialised=10093,wsaHostNotFound=11001,wsaNoData=11004;
 constexpr char localHostName[]="nfsu2-android";
 // icmp: a Windows raw ICMP socket (ping) on an unprivileged Linux ping socket; see icmpReceive.
-struct Socket{int fd;bool guestNonBlocking=false,connecting=false,icmp=false;uint16_t icmpId=0;uint32_t recvTimeout=0,sendTimeout=0;std::set<std::string> peersLogged;
+struct Socket{int fd;bool guestNonBlocking=false,connecting=false,icmp=false,datagram=false,broadcast=false;unsigned boundPort=0;uint16_t icmpId=0;uint32_t recvTimeout=0,sendTimeout=0;std::set<std::string> peersLogged;
     struct Counter{uint32_t sentPackets=0,sentBytes=0,receivedPackets=0,receivedBytes=0;};
     std::map<std::string,Counter> traffic;std::chrono::steady_clock::time_point nextSummary{};};
 std::map<uint32_t,Socket> sockets;
@@ -168,6 +168,15 @@ std::vector<in_addr> interfaceAddresses(bool includeLoopback){
 bool endsWith(const std::string& value,const std::string& suffix){
     return value.size()>=suffix.size()&&value.compare(value.size()-suffix.size(),suffix.size(),suffix)==0;
 }
+void publishLanBroadcasts(){
+    bool wanted=false;
+    for(const auto& entry:sockets){
+        const Socket& socket=entry.second;
+        if(lanSocketNeedsWifiBroadcast(LanSocketView(socket.datagram,socket.broadcast,socket.boundPort))){wanted=true;break;}
+    }
+    if(lanBroadcastWanted.exchange(wanted,std::memory_order_acq_rel)==wanted)return;
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","LAN broadcasts %s",wanted?"needed":"idle");
+}
 }  // namespace net
 
 // WSAStartup(version, WSADATA*): returns the error directly.
@@ -186,7 +195,7 @@ void wsaStartup(){
 }
 void wsaCleanup(){
     if(!net::startups){lastError=net::wsaNotinitialised;ret(net::socketError,0);return;}
-    if(!--net::startups){for(auto& entry:net::sockets)::close(entry.second.fd);net::sockets.clear();}
+    if(!--net::startups){for(auto& entry:net::sockets)::close(entry.second.fd);net::sockets.clear();net::publishLanBroadcasts();}
     ret(0,0);
 }
 void wsaGetLastError(){ret(lastError,0);}
@@ -213,13 +222,14 @@ void socketCreate(){
         lastError=net::wsaError(errno);ret(net::invalidSocket,3);return;
     }
     uint32_t handle=net::newHandle(fd,false);
+    net::sockets[handle].datagram=type==SOCK_DGRAM;
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: socket %08x %s from %08x",handle,type==SOCK_STREAM?"TCP":"UDP",read32(g_esp));
     ret(handle,3);
 }
 void socketClose(){
     auto found=net::sockets.find(arg(0));
     if(found==net::sockets.end()){ret(net::fail(net::wsaEnotsock),1);return;}
-    ::close(found->second.fd);net::sockets.erase(found);ret(0,1);
+    ::close(found->second.fd);net::sockets.erase(found);net::publishLanBroadcasts();ret(0,1);
 }
 void socketBind(){
     auto* socket=net::find(arg(0));if(!socket){ret(net::fail(net::wsaEnotsock),3);return;}
@@ -228,6 +238,14 @@ void socketBind(){
     // A raw ICMP socket ignores the port; on a ping socket it is the echo id and low ones need privileges.
     if(socket->icmp&&address.ss_family==AF_INET)reinterpret_cast<sockaddr_in*>(&address)->sin_port=0;
     int status=::bind(socket->fd,reinterpret_cast<sockaddr*>(&address),length);int error=errno;
+    if(!status&&!socket->icmp&&address.ss_family==AF_INET){
+        unsigned port=ntohs(reinterpret_cast<sockaddr_in*>(&address)->sin_port);
+        if(!port){
+            sockaddr_in local{};socklen_t localLength=sizeof local;
+            if(::getsockname(socket->fd,reinterpret_cast<sockaddr*>(&local),&localLength)==0)port=ntohs(local.sin_port);
+        }
+        socket->boundPort=port;net::publishLanBroadcasts();
+    }
     NFS_RUNTIME_LOG(status?ANDROID_LOG_WARN:ANDROID_LOG_INFO,"NFSU2","Winsock: bind %08x %s%s%s",arg(0),net::describe(address).c_str(),status?" fallo: ":"",status?std::strerror(error):"");
     errno=error;ret(status?net::failErrno():0,3);
 }
@@ -362,7 +380,7 @@ void socketOption(){
         switch(name){
         case 0x0004:result=set(SOL_SOCKET,SO_REUSEADDR,integer());break;
         case 0x0008:result=set(SOL_SOCKET,SO_KEEPALIVE,integer());break;
-        case 0x0020:result=set(SOL_SOCKET,SO_BROADCAST,integer());break;
+        case 0x0020:{int enabled=integer()?1:0;result=set(SOL_SOCKET,SO_BROADCAST,enabled);if(!result){socket->broadcast=enabled!=0;net::publishLanBroadcasts();}break;}
         case 0x0100:result=set(SOL_SOCKET,SO_OOBINLINE,integer());break;
         case 0x1001:result=set(SOL_SOCKET,SO_SNDBUF,integer());break;
         case 0x1002:result=set(SOL_SOCKET,SO_RCVBUF,integer());break;
