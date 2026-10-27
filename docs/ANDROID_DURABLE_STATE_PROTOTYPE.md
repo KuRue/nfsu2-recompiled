@@ -133,3 +133,31 @@ the live-function list. That list is in `docs/data/stackprobe-live-functions-202
   `leave`, `rep stos`/`movs`, `cdq`/`idiv` and `setcc`.
 
 Next step: add these mnemonics to the emitter, starting with integer ones and then x87, and retest on the live set.
+
+### Emitter widened to the live set (2026-10-27)
+
+The emitter now accepts:
+- `movzx`, `movsx`, shifts and rotates, `leave`, `cdq`, `mul`, `div`, `idiv`, `xchg` and `setcc`;
+- 8-bit and 16-bit registers and memory operands for integer instructions;
+- the atomic `rep stos`/`movs` forms;
+- the common x87 arithmetic and compare instructions.
+
+Five new fixtures (`root_narrow`, `root_shift`, `root_divide`, `root_string`, `root_x87`) match Unicorn and restore at every
+checkpoint, both normally and under ASan/UBSan: 19 programs and 330 checkpoints in total.
+
+The pinned lifter builds the `idiv` dividend with a signed left shift, which UBSan flags. The emitter rewrites that expression
+into the unsigned equivalent. The production Android build still contains the original form, which should be fixed upstream in
+pcrecomp.
+
+Mnemonic coverage:
+
+| Scope | Functions fully supported | Instructions supported |
+|---|---|---|
+| Probe live set | 511 of 521 (was 316) | — |
+| Whole executable | 25,389 of 27,742 (was 46%) | 99.4% |
+
+The remaining live blockers are `int3` padding, `fisub`/`fisubr`/`fidiv`, `rdtsc`, `stosw` and `fucompp`.
+This is a mnemonic-level estimate; operand checks and call-target rules can still reject individual functions.
+
+Policy (user-confirmed 2026-10-27): career and profile save files are never rolled back by a save-state restore.
+The game state returns to the snapshot, but files written by the game's own career save keep their newest content.

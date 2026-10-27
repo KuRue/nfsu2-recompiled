@@ -181,3 +181,99 @@ begin root_fpu_integer
  ret
 end root_fpu_integer
 data_i64: .quad 9007199254740993
+/* Instruction groups found live at capture points on the phone (stack probe, 2026-10-27). */
+begin root_narrow
+ mov dword ptr[0x480200],0x80ff7f01
+ movzx eax,byte ptr[0x480201]
+ movsx ecx,byte ptr[0x480203]
+ movzx edx,word ptr[0x480202]
+ movsx ebx,word ptr[0x480202]
+ mov byte ptr[0x480204],al
+ mov word ptr[0x480206],cx
+ add al,cl
+ mov ah,dl
+ movsx esi,ah
+ cmp eax,0x1000
+ sete dl
+ setne dh
+ setl cl
+ seta ch
+ mov [0x480208],edx
+ mov [0x48020c],ecx
+ xor eax,eax
+ ret
+end root_narrow
+begin root_shift
+ push ebp
+ mov ebp,esp
+ sub esp,8
+ mov eax,0x81234567
+ mov ecx,5
+ shl eax,3
+ mov [ebp-4],eax
+ sar eax,cl
+ mov edx,eax
+ shr edx,7
+ rol edx,4
+ ror eax,cl
+ mov [ebp-8],edx
+ mov [0x480210],eax
+ mov ecx,[ebp-4]
+ mov [0x480214],ecx
+ mov eax,[ebp-8]
+ leave
+ test eax,eax
+ ret
+end root_shift
+begin root_divide
+ mov eax,-1000
+ cdq
+ mov ecx,7
+ idiv ecx
+ mov [0x480220],eax
+ mov [0x480224],edx
+ mov eax,1000001
+ xor edx,edx
+ div ecx
+ mul ecx
+ mov [0x480228],eax
+ mov [0x48022c],edx
+ xchg eax,edx
+ xor ecx,ecx
+ ret
+end root_divide
+begin root_string
+ mov edi,0x480300
+ mov eax,0x11223344
+ mov ecx,8
+ rep stosd
+ mov esi,0x480300
+ mov edi,0x480340
+ mov ecx,13
+ rep movsb
+ mov al,0x5a
+ stosb
+ movsd
+ mov ecx,0
+ rep stosb
+ xor eax,eax
+ ret
+end root_string
+begin root_x87
+ fld qword ptr[data_double]
+ fadd qword ptr[data_double_other]
+ fmul st(0),st(0)
+ fld dword ptr[data_vec+4]
+ fsub st(0),st(1)
+ fdivr qword ptr[data_double]
+ fst qword ptr[0x480400]
+ fabs
+ fcomp qword ptr[data_double]
+ fnstsw ax
+ mov [0x480408],eax
+ fimul dword ptr[data_mmx]
+ fdiv qword ptr[data_double_other]
+ fistp dword ptr[0x48040c]
+ xor eax,eax
+ ret
+end root_x87

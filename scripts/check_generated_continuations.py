@@ -111,7 +111,7 @@ def main():
                 raise RuntimeError('Pending/completed host-call snapshots were not exercised')
             print(f"{name}: x86 match and {baseline['steps']} fresh-process execution checkpoints passed", flush=True)
         # Fail closed rather than emit a partial implementation for unsupported code.
-        for encoding in [b'\xd9\xfe\xc3', b'\x0f\x5e\xc0\xc3', b'\xe8\x00\x10\x00\x00\xc3', b'\xff\x10\xc3', b'\x66\x89\xd8\xc3', b'\x64\x8b\x00\xc3']:
+        for encoding in [b'\xd9\xfe\xc3', b'\x0f\x5e\xc0\xc3', b'\xe8\x00\x10\x00\x00\xc3', b'\xff\x10\xc3', b'\x0f\xa2\xc3', b'\x0f\xb6\xc4\x0f\xa2\xc3', b'\x64\x8b\x00\xc3']:
             try:
                 generator.generate({0x401000: encoding}, pcrecomp)
             except ValueError:

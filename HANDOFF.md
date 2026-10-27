@@ -688,3 +688,9 @@ Next: integrate with the actual game (quiesce threads at a frame boundary, hook 
 ## 2026-10-26: real-game coverage and hybrid plan
 
 scripts/continuation_coverage.py: 46% of functions/88% of instructions already accepted by the experimental emitter; gaps are known instruction groups. Plan recorded in docs/ANDROID_DURABLE_STATE_PROTOTYPE.md: convert only functions live on stacks at capture points (per-frame Present, worker waits), keep the rest native. Next step needs phone: sample real guest stacks at those points. Phone (adb) not connected at this time.
+
+## 2026-10-27: emitter covers the phone's live functions
+- The stack probe ran on the phone. See the durable-state prototype doc for the results.
+- The emitter covers 511 of the 521 live functions and passes 19 programs and 330 checkpoints, including under the sanitizers.
+- Decided: career and profile files are never rolled back on restore.
+- Next: add `fisub`/`fidiv`/`fucompp`/`stosw`/`rdtsc`. Then run a real per-function `generate()` on the live set in batches of 128 or fewer with call stubs, and fix the pcrecomp `idiv` signed shift upstream.

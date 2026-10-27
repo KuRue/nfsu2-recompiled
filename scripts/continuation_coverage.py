@@ -6,7 +6,7 @@ sys.path.insert(0,'experimental/save_states')
 from capstone import Cs,CS_ARCH_X86,CS_MODE_32
 import importlib.util
 spec=importlib.util.spec_from_file_location('g','experimental/save_states/generate_continuations.py');g=importlib.util.module_from_spec(spec);spec.loader.exec_module(g)
-OK=g.INTEGER|g.EXTENDED|g.JCC|{'call','jmp','ret'}
+OK=g.INTEGER|g.EXTENDED|g.JCC|g.STRING|{'call','jmp','ret'}
 only=None
 if '--only' in sys.argv:
     k=sys.argv.index('--only');only={int(x,16) for x in open(sys.argv[k+1]) if x.strip()};del sys.argv[k:k+2]

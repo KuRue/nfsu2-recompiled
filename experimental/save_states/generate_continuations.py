@@ -9,8 +9,17 @@ from capstone import Cs, CS_ARCH_X86, CS_MODE_32
 from capstone.x86 import X86_OP_IMM, X86_OP_REG, X86_OP_MEM
 
 INTEGER = {'mov', 'lea', 'add', 'sub', 'xor', 'and', 'or', 'cmp', 'test', 'inc', 'dec',
-           'push', 'pop', 'adc', 'sbb', 'neg', 'not', 'nop', 'imul'}
+           'push', 'pop', 'adc', 'sbb', 'neg', 'not', 'nop', 'imul',
+           'movzx', 'movsx', 'shl', 'shr', 'sar', 'rol', 'ror', 'leave', 'cdq', 'mul', 'div', 'idiv', 'xchg',
+           'sete', 'setne', 'setl', 'setle', 'setg', 'setge', 'seta', 'setae', 'setb', 'setbe', 'sets', 'setns'}
+# Sub-32-bit integer operands are allowed for these; the lifter handles partial registers.
+NARROW = INTEGER - {'push', 'pop', 'leave', 'cdq'}
+# String operations are lifted as one atomic step, so a checkpoint never sees them half done.
+STRING = {'rep stosd', 'rep stosb', 'rep movsd', 'rep movsb', 'stosd', 'stosb', 'movsd', 'movsb'}
+X87 = {'fadd', 'fsub', 'fsubr', 'fmul', 'fdiv', 'fdivr', 'fsubp', 'fsubrp', 'fdivp', 'fdivrp', 'fcom', 'fcomp', 'fcompp',
+       'fst', 'fabs', 'fimul', 'fiadd', 'fist', 'fsqrt'}
 EXTENDED = {'fld', 'fld1', 'fldz', 'fstp', 'faddp', 'fmulp', 'fchs', 'fxch', 'fldcw', 'fnstcw', 'ftst', 'fnstsw', 'fild', 'fistp', 'movdqu', 'movups', 'movaps', 'addps', 'mulps', 'pxor', 'paddd', 'movq', 'ldmxcsr', 'stmxcsr'}
+EXTENDED |= X87
 JCC = {'je', 'jne', 'ja', 'jae', 'jb', 'jbe', 'jg', 'jge', 'jl', 'jle', 'js', 'jns', 'jo', 'jno', 'jp', 'jnp'}
 
 class Instruction:
@@ -52,14 +61,21 @@ def generate(functions, pcrecomp, imports=None):
             if i.address in owner:
                 raise ValueError('Overlapping functions')
             owner[i.address] = address
-            if i.mnemonic not in INTEGER | EXTENDED | JCC | {'call', 'jmp', 'ret'}:
+            if i.mnemonic not in INTEGER | EXTENDED | JCC | STRING | {'call', 'jmp', 'ret'}:
                 raise ValueError(f'Unsupported instruction: {i.mnemonic}')
             if i.addr_size != 4:
                 raise ValueError('Only 32-bit addressing is supported')
             for op in i.operands:
-                if i.mnemonic not in EXTENDED and op.type == X86_OP_REG and op.reg not in module.REG_NAMES_32:
-                    raise ValueError('Only 32-bit integer registers are supported')
-                if op.type == X86_OP_MEM and (op.mem.segment or (i.mnemonic not in EXTENDED and op.size != 4)):
+                wide = i.mnemonic in EXTENDED or i.mnemonic in STRING
+                if i.mnemonic in NARROW:
+                    names = module.REG_NAMES_32.keys() | module.REG_NAMES_16.keys() | module.REG_NAMES_8L.keys() | module.REG_NAMES_8H.keys()
+                else:
+                    names = module.REG_NAMES_32.keys()
+                if not wide and op.type == X86_OP_REG and op.reg not in names:
+                    raise ValueError('Only general integer registers are supported')
+                if op.type == X86_OP_MEM and i.mnemonic in STRING:
+                    continue  # Implicit es:[edi]/ds:[esi]; flat memory model.
+                if op.type == X86_OP_MEM and (op.mem.segment or (not wide and op.size not in ((1, 2, 4) if i.mnemonic in NARROW else (4,)))):
                     raise ValueError('Only unsegmented 32-bit memory operands are supported')
         decoded[address] = instructions
     def target(insn, lifter):
@@ -139,6 +155,9 @@ def generate(functions, pcrecomp, imports=None):
                         raise ValueError('Unexpected emitted control flow')
                     # The pinned lifter emits some raw floating loads/stores.
                     # Preserve x86 unaligned access in this experimental host backend.
+                    # The pinned lifter builds the idiv dividend with a signed left shift, which is
+                    # undefined in C++17. Build the same bits unsigned.
+                    line = line.replace('((int64_t)(int32_t)edx << 32)', '(int64_t)((uint64_t)edx << 32)')
                     line = line.replace('*(double*)ADDR(', '*(volatile proto_f64*)ADDR(')
                     line = line.replace('*(float*)ADDR(', '*(volatile proto_f32*)ADDR(')
                     line = line.replace('*(float*)&MEM32(', '*(volatile proto_f32*)&MEM32(')
