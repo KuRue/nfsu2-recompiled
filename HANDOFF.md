@@ -693,4 +693,4 @@ scripts/continuation_coverage.py: 46% of functions/88% of instructions already a
 - The stack probe ran on the phone. See the durable-state prototype doc for the results.
 - The emitter covers 511 of the 521 live functions and passes 19 programs and 330 checkpoints, including under the sanitizers.
 - Decided: career and profile files are never rolled back on restore.
-- Next: `rdtsc` (0x531df0, the last of 521), then hook converted frames into the app behind a developer switch (plan step 2).
+- Step 2 in progress: a `-Pnfs.resumable=ON` build records resumable frames and logs capture feasibility (`NFSResumable`). It needs a phone session; after that, implement resume labels and the real capture/restore.
