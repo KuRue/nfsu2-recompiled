@@ -589,7 +589,7 @@ public final class LauncherActivity extends Activity {
         String extra = gameRunning() ? "\n\nThe current live session will end." : "";
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setTitle("Run a benchmark")
-                .setMessage("Starts a fresh session. Start a circuit race (Quick Race works). The game's own AI drives your car after the countdown, and a panel shows live figures for 60 seconds. Then it returns here with a suggestion. Menus are not scored. Nothing changes until you tap Apply." + extra)
+                .setMessage("Starts a fresh session that skips the menus and goes straight into the same circuit race every time. The game's own AI drives, and a panel shows live figures for 60 seconds. Then it returns here with a suggestion. Your career profile is not loaded. Nothing changes until you tap Apply." + extra)
                 .setPositiveButton("Start", (dialog, which) -> { benchmarkSeconds = 60; resumeNextLaunch = false; play(); })
                 .setNegativeButton("Cancel", null).show();
     }

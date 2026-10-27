@@ -89,6 +89,7 @@ std::mutex benchmarkMutex;
 std::string benchmarkPath,benchmarkResolution{"75"};
 void (*benchmarkHandler)(const char*)=nullptr;
 void (*benchmarkStatsHandler)(const float*,unsigned)=nullptr;
+std::atomic<bool> autopilotDriving{false};
 BenchmarkRun benchmarkRun;
 std::string hex(uint32_t va) {
     std::ostringstream out; out << "0x" << std::hex << std::setw(8) << std::setfill('0') << va;
@@ -570,7 +571,8 @@ void finishGuestBenchmark(){
     bool steady=steadyPace.load();
     unsigned paced=steadyFrameRate(selected,steady?panel:0);
     double averageFps=benchmarkRun.averageFps(),lowFps=benchmarkRun.onePercentLowFps();
-    auto timing=benchmarkRun.samples().take(paced);
+    // Late frames of an uncapped run are counted against the panel refresh.
+    auto timing=benchmarkRun.samples().take(paced?paced:panel);
     std::string path,resolution;void (*handler)(const char*)=nullptr;
     {std::lock_guard<std::mutex> lock(benchmarkMutex);path=benchmarkPath;resolution=benchmarkResolution;handler=benchmarkHandler;}
     BenchmarkView view;
@@ -613,6 +615,7 @@ void maybeAutopilot(){
     uint32_t mode[2];std::memcpy(mode,base+player+0x22cu,8);
     if(mode[0]!=logged){logged=mode[0];NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","player %08x mode %u requested %u",player,mode[0],mode[1]);}
     if(mode[0]==2&&mode[1]==2){uint32_t pilot=4;std::memcpy(base+player+0x230u,&pilot,4);}
+    autopilotDriving.store(mode[0]==4,std::memory_order_relaxed);
 #endif
 }
 void d3dDispatch(){
@@ -692,11 +695,10 @@ void d3dDispatch(){
         double frameMs=std::chrono::duration<double,std::milli>(completed-previousFrame).count();
         intervals.add(frameMs);previousFrame=completed;
         static unsigned menuFrames=0;if(presentLimit&&presentLimit!=paceLimit)++menuFrames;
-        static bool benchmarkArmed=false;static const char* benchmarkShown=nullptr;
+        static bool benchmarkArmed=false;
         if(!benchmarkArmed&&benchmarkSeconds.load(std::memory_order_relaxed)){benchmarkArmed=true;benchmarkRun.arm(benchmarkSeconds.load(std::memory_order_relaxed));}
         if(benchmarkArmed&&!benchmarkRun.finished()){
-            const char* label=benchmarkRun.label();
-            if(label&&label!=benchmarkShown){benchmarkShown=label;processGuestWorker().note(label);}
+            if(autopilotDriving.load(std::memory_order_relaxed))benchmarkRun.begin(completed);
             bool finished=benchmarkRun.present(completed,frameMs,calls);
             // Four panel updates a second: fps, frame ms, average fps, 1% low fps, worst ms,
             // elapsed s, total s, then the recent intervals oldest first.
@@ -1433,6 +1435,14 @@ std::string connectGuestRuntime(const char* executable) {
             heaps->free(GuestHeaps::process,outputs);
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest resolution outputs, guard and stdcall stack passed");
         }
+#if defined(__ANDROID__)&&!defined(NFSU2_EXE_F4BB0D99)
+        // The retail game still honours the developer SkipFE flag (0x864FAC): with it set before
+        // the CRT entry, the game skips every menu and starts a two-lap circuit with no profile
+        // loaded, about 4 s after launch (phone, 2026-10-27). A benchmark run always uses it so
+        // each run is the same race; `debug.nfs.skipfe 1` does the same for development.
+        {char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.skipfe",value);
+            if(std::atoi(value)||benchmarkSeconds.load()){write32(0x864fac,1);NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","SkipFE: straight into a race");}}
+#endif
         // Restore a clean CPU state before executing the real CRT entry.
         fresh.load();
         NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Entering actual lifted CRT entry %08x",entry);

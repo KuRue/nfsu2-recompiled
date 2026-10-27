@@ -12,7 +12,17 @@ static BenchmarkView viewAt(const char* resolution,unsigned selected,unsigned pa
 }
 int main(){
     require(std::strcmp(adviseBenchmark(viewAt("75",60,60,17,0,10,0.4)).action,"inconclusive")==0,"short run");
-    require(std::strcmp(adviseBenchmark(viewAt("75",0,0,17,0,100,0.4)).action,"inconclusive")==0,"uncapped");
+    {
+        auto view=viewAt("75",0,0,17,0,100,0.4);view.refresh=0;
+        require(std::strcmp(adviseBenchmark(view).action,"inconclusive")==0,"uncapped with no known refresh");
+        view=viewAt("75",0,0,30,40,100,1);view.refresh=120;
+        auto advice=adviseBenchmark(view);
+        require(std::strcmp(advice.action,"lower-resolution")==0&&advice.frameRate==0,"uncapped below the panel steps resolution down");
+        view=viewAt("50",0,0,30,40,100,1);view.refresh=120;advice=adviseBenchmark(view);
+        require(std::strcmp(advice.action,"lower-frame-rate")==0&&advice.frameRate==90,"uncapped at the lowest resolution suggests a cap");
+        view=viewAt("75",0,0,8.5,0,100,0.3);view.refresh=120;advice=adviseBenchmark(view);
+        require(std::strcmp(advice.action,"raise-resolution")==0&&advice.frameRate==0,"uncapped at the panel rate has room");
+    }
     {
         auto advice=adviseBenchmark(viewAt("75",90,60,30,20,100,1));
         require(std::strcmp(advice.action,"lower-resolution")==0&&std::strcmp(advice.resolution,"60")==0&&advice.frameRate==90,"slow 75% steps to 60% and keeps the selected cap");
@@ -103,6 +113,15 @@ int main(){
         require(std::fabs(live.averageFps-1000.0*200/2080)<0.01,"average rate");
         require(std::fabs(live.lowFps-20)<0.01&&live.worstMs==50,"1% low is the slowest frames");
         require(std::fabs(run.onePercentLowFps()-20)<0.01,"report 1% low");
+    }
+    {
+        BenchmarkRun run;auto start=BenchmarkRun::Clock::time_point(seconds(5));
+        run.arm(60);
+        require(!run.present(start,16,20000),"a quiet race frame does not start recording");
+        run.begin(start+milliseconds(16));
+        require(run.live(start+milliseconds(16)).recording,"autopilot starts recording");
+        require(!run.present(start+milliseconds(32),16,20000),"recording a quiet race");
+        require(run.present(start+milliseconds(16)+seconds(60),16,20000),"window closes after begin");
     }
     std::puts("Frame benchmark passed");
 }

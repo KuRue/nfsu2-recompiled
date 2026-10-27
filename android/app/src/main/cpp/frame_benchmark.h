@@ -60,11 +60,13 @@ inline BenchmarkAdvice adviseBenchmark(const BenchmarkView& view){
         keep.action="inconclusive";keep.reason="Fewer than 30 busy frames. Start a race and leave the benchmark running.";
         return keep;
     }
-    if(!view.limit){
-        keep.action="inconclusive";keep.reason="Uncapped mode has no frame target. Choose a frame cap and run the benchmark again.";
+    // Uncapped runs are judged against the panel: it cannot show more frames than its refresh.
+    unsigned goal=view.limit?view.limit:view.refresh;
+    if(!goal){
+        keep.action="inconclusive";keep.reason="Uncapped mode with an unknown refresh rate has no frame target. Choose a frame cap and run the benchmark again.";
         return keep;
     }
-    double target=1000.0/view.limit;
+    double target=1000.0/goal;
     bool slow=view.p95>target*1.5||view.late*10>view.count;
     bool room=view.late==0&&view.p95<target*1.15&&view.jitter<=target*0.25;
     if(slow){
@@ -74,7 +76,7 @@ inline BenchmarkAdvice adviseBenchmark(const BenchmarkView& view){
             advice.frameRate=setting;advice.reason="The frame cap was missed. One step down in resolution is the next thing to try.";
             return advice;
         }
-        if(unsigned lower=benchmarkLowerFrameRate(setting)){
+        if(unsigned lower=benchmarkLowerFrameRate(setting?setting:goal)){
             BenchmarkAdvice advice;advice.action="lower-frame-rate";advice.resolution=resolution;
             advice.frameRate=lower;advice.reason="The frame cap was missed at this resolution. A lower cap is the next step.";
             return advice;
@@ -118,7 +120,7 @@ inline std::string formatBenchmarkReport(const BenchmarkView& view,const Benchma
 class BenchmarkRun {
 public:
     using Clock=std::chrono::steady_clock;
-    void arm(unsigned seconds){seconds_=seconds?seconds:1;phase_=Phase::Waiting;armedAt_={};started_={};busyStreak_=0;samples_=FrameMetrics<4096>{};recentCount_=recentNext_=0;totalMs_=0;totalFrames_=0;}
+    void arm(unsigned seconds){seconds_=seconds?seconds:1;phase_=Phase::Waiting;armedAt_={};started_={};busyStreak_=0;samples_=FrameMetrics<8192>{};recentCount_=recentNext_=0;totalMs_=0;totalFrames_=0;}
     bool present(Clock::time_point now,double intervalMs,unsigned calls){
         if(phase_==Phase::Idle||phase_==Phase::Finished)return false;
         if(phase_==Phase::Waiting){
@@ -156,20 +158,22 @@ public:
     }
     double averageFps() const {return totalFrames_&&totalMs_>0?1000.0*totalFrames_/totalMs_:0;}
     double onePercentLowFps() const {auto w=samples_.slowest((totalFrames_+99)/100);return w.average>0?1000.0/w.average:0;}
+    // The autopilot has taken the car: record from here. Busy frames stay a fallback.
+    void begin(Clock::time_point now){if(phase_==Phase::Waiting){phase_=Phase::Recording;started_=now;}}
     const char* label() const {
-        if(phase_==Phase::Waiting)return "Benchmark: drive. Recording starts after a few busy frames.";
+        if(phase_==Phase::Waiting)return "Benchmark: starting the race.";
         if(phase_==Phase::Recording)return "Benchmark: recording this stretch.";
         return nullptr;
     }
     bool finished() const {return phase_==Phase::Finished;}
-    FrameMetrics<4096>& samples(){return samples_;}
+    FrameMetrics<8192>& samples(){return samples_;}
 private:
     enum class Phase {Idle,Waiting,Recording,Finished};
     Phase phase_=Phase::Idle;
     unsigned seconds_=0;
     Clock::time_point armedAt_{},started_{};
     unsigned busyStreak_=0;
-    FrameMetrics<4096> samples_{};
+    FrameMetrics<8192> samples_{};
     std::array<float,kRecent> recent_{};unsigned recentCount_=0,recentNext_=0;
     double totalMs_=0;unsigned totalFrames_=0;
 };

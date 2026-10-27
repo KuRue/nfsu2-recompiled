@@ -348,7 +348,8 @@ public final class GameActivity extends NativeActivity {
             text.append(status >= 0 && status < names.length ? names[status] : "thermal " + status);
         }
         android.view.Display display = getWindowManager().getDefaultDisplay();
-        if (display != null) text.append(String.format(java.util.Locale.US, "  ·  %.0f Hz", display.getRefreshRate()));
+        // getRefreshRate() reports this app's frame-rate override; the mode is the panel itself.
+        if (display != null) text.append(String.format(java.util.Locale.US, "  ·  panel %.0f Hz", display.getMode().getRefreshRate()));
         text.append(benchmarkCap > 0 ? "  ·  cap " + benchmarkCap : "  ·  uncapped");
         return text.toString();
     }
@@ -394,7 +395,8 @@ public final class GameActivity extends NativeActivity {
         if (focused && foreground && statusWindow != null && !statusHidden && !statusWindow.isShowing()) {
             statusWindow.showAtLocation(getWindow().getDecorView(), Gravity.TOP | Gravity.START, 0, 0);
         }
-        if (focused && foreground && controlsWindow != null && !controlsWindow.isShowing()) {
+        // A benchmark drives itself; the touch controls would only cover the picture.
+        if (focused && foreground && controlsWindow != null && benchmarkOverlay == null && !controlsWindow.isShowing()) {
             controlsWindow.showAtLocation(getWindow().getDecorView(), Gravity.TOP | Gravity.START, 0, 0);
         }
     }
