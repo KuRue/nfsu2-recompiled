@@ -590,7 +590,28 @@ void direct3DCreate(){ret(createGuestD3D9(arg(0)),1);}
 void freeD3DGuest(uint32_t address){heaps->free(GuestHeaps::process,address);}
 void serviceGuestSound();
 void samplePhysicsForPhone();
+// Development hook for the benchmark: `adb shell setprop debug.nfs.autopilot 1` hands the
+// player's car to the game's own AI during a circuit race. The retail input handler
+// (0x603327, JOY_EVENT_AUTO_PILOT 0xB5) still sets the requested mode at player+0x230,
+// but no control is bound to that event. 0x8900AC is the player; +0x22C is its current
+// mode (2 car racing, 4 auto pilot). The property is read every 2 s.
+void maybeAutopilot(){
+#if defined(__ANDROID__)&&!defined(NFSU2_EXE_F4BB0D99)
+    static int wanted=0;static auto lastRead=std::chrono::steady_clock::time_point{};static uint32_t logged=~0u;
+    auto now=std::chrono::steady_clock::now();
+    if(now-lastRead>=std::chrono::seconds(2)){lastRead=now;char value[PROP_VALUE_MAX]{};
+        __system_property_get("debug.nfs.autopilot",value);wanted=std::atoi(value);}
+    if(!wanted||!memory||!memory->readable(0x8900acu,4))return;
+    auto* base=static_cast<uint8_t*>(memory->base());
+    uint32_t player;std::memcpy(&player,base+0x8900acu,4);
+    if(!player||!memory->readable(player+0x22cu,8))return;
+    uint32_t mode[2];std::memcpy(mode,base+player+0x22cu,8);
+    if(mode[0]!=logged){logged=mode[0];NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","player %08x mode %u requested %u",player,mode[0],mode[1]);}
+    if(mode[0]==2&&mode[1]==2){uint32_t pilot=4;std::memcpy(base+player+0x230u,&pilot,4);}
+#endif
+}
 void d3dDispatch(){
+    if(d3dToken==0x7e002110u)maybeAutopilot();
 #ifdef NFS_RESUMABLE
     // Before Present runs, so a rebuild re-runs this same call. A rebuild throw
     // skips the capture; the capture runs only when the rebuild test returns.
