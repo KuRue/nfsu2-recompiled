@@ -164,6 +164,7 @@ public final class GameActivity extends NativeActivity {
     private static native void nativeResolution(int width, int height);
     private static native void nativeFrameLimit(int framesPerSecond);
     private static native void nativeDisplayRefresh(int hertz);
+    private static native void nativeDisplayModes(int[] hertz);
     private static native void nativeFramePace(boolean steady);
     private static native void nativeBenchmark(int seconds, String reportPath, String resolution);
     private static native void nativeWidescreen(boolean enabled);
@@ -233,11 +234,19 @@ public final class GameActivity extends NativeActivity {
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         android.view.Display display=getWindowManager().getDefaultDisplay();
         android.view.Display.Mode current=display.getMode();float refresh=60;
-        for(android.view.Display.Mode mode:display.getSupportedModes())
-            if(mode.getPhysicalWidth()==current.getPhysicalWidth()&&mode.getPhysicalHeight()==current.getPhysicalHeight())
-                refresh=Math.max(refresh,mode.getRefreshRate());
-        android.view.WindowManager.LayoutParams windowParams=getWindow().getAttributes();
-        windowParams.preferredRefreshRate=Math.min(120,refresh);getWindow().setAttributes(windowParams);
+        int[] found=new int[8];int modeCount=0;
+        for(android.view.Display.Mode mode:display.getSupportedModes()){
+            if(mode.getPhysicalWidth()!=current.getPhysicalWidth()||mode.getPhysicalHeight()!=current.getPhysicalHeight())continue;
+            refresh=Math.max(refresh,mode.getRefreshRate());
+            int hz=Math.round(mode.getRefreshRate());
+            if(hz<30||hz>120)continue;
+            boolean seen=false;
+            for(int index=0;index<modeCount;index++)if(found[index]==hz)seen=true;
+            if(!seen&&modeCount<found.length)found[modeCount++]=hz;
+        }
+        int[] rates=new int[modeCount];
+        System.arraycopy(found,0,rates,0,modeCount);
+        nativeDisplayModes(rates);
         nativeDisplayRefresh(Math.round(Math.min(120f, refresh)));
         nativeFramePace(GameOptions.get(this, GameOptions.FRAME_PACE).equals("steady"));
         // Launcher options travel as extras; a direct start (adb, recents) falls back to the saved ones.
@@ -288,6 +297,18 @@ public final class GameActivity extends NativeActivity {
         controlsWindow = new PopupWindow(touchControls, ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT, false);
         controlsWindow.setClippingEnabled(false);
+    }
+    /** Called from the native thread. The paced cap chooses the rate. */
+    public void setPreferredRefresh(int hertz) {
+        runOnUiThread(() -> {
+            if (Build.VERSION.SDK_INT >= 35) getWindow().setFrameRateBoostOnTouchEnabled(false);
+            android.view.WindowManager.LayoutParams params = getWindow().getAttributes();
+            float rate = Math.max(0, hertz);
+            if (params.preferredRefreshRate == rate) return;
+            params.preferredRefreshRate = rate;
+            getWindow().setAttributes(params);
+            android.util.Log.i("NFSU2", "Display preference " + hertz + " Hz");
+        });
     }
     /** Called from the guest thread once the benchmark file has been written. */
     public void onBenchmarkFinished(String path) {

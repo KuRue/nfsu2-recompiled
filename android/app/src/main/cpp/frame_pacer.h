@@ -17,6 +17,25 @@ inline unsigned steadyFrameRate(unsigned limit,unsigned refreshHz){
     unsigned rate=refreshHz/interval;
     return rate?rate:1u;
 }
+// Slowest mode that shows this content rate for an equal number of refreshes.
+// Modes outside 30..120 Hz are ignored. Content 0 means uncapped and picks the
+// fastest remaining mode. 40 fps on a 60/120 Hz panel is 120, because 40 does
+// not divide 60. A rate with no even multiple uses the slowest mode that is
+// still at least that fast. No usable mode returns 0.
+inline unsigned displayRefreshForContent(unsigned contentFps,const unsigned* modes,unsigned count){
+    unsigned fastest=0,even=0,covering=0;
+    for(unsigned index=0;index<count;++index){
+        unsigned hz=modes?modes[index]:0;
+        if(hz<30||hz>120)continue;
+        if(hz>fastest)fastest=hz;
+        if(!contentFps||hz<contentFps)continue;
+        if(hz%contentFps==0&&(!even||hz<even))even=hz;
+        if(!covering||hz<covering)covering=hz;
+    }
+    if(!contentFps)return fastest;
+    if(even)return even;
+    return covering?covering:fastest;
+}
 
 // A frame that is late by less than one period is presented now, and the next
 // deadline stays on the original grid. Shifting the grid to "now" on every

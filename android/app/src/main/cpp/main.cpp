@@ -1,5 +1,8 @@
 #include <android_native_app_glue.h>
+#include <android/api-level.h>
 #include <android/log.h>
+#include <android/native_window.h>
+#include <dlfcn.h>
 #include <vulkan/vulkan.h>
 #include <algorithm>
 #include <vector>
@@ -25,6 +28,78 @@
 #include "nfs_widescreen.h"
 
 static android_app* benchmarkApp=nullptr;
+static std::atomic<unsigned> displayWindowEpoch{0};
+// The cap is a fixed source. The default compatibility lets the system keep a
+// multiple of it, which is how a 60 fps cap stays on a 120 Hz panel. Value 1
+// is FIXED_SOURCE, and the second 1 is CHANGE_FRAME_RATE_ALWAYS. This binary
+// is built for API 29, where those declarations are hidden, so the calls are
+// resolved at runtime. Uncapped passes the fastest mode instead of 0.
+static bool setWindowFrameRate(ANativeWindow* window,unsigned frameRate){
+    int api=android_get_device_api_level();
+    if(api<30)return true;
+    if(!window)return false;
+    using SetRate=int32_t(*)(ANativeWindow*,float,int8_t);
+    using SetRateStrategy=int32_t(*)(ANativeWindow*,float,int8_t,int8_t);
+    static SetRate plain=nullptr;
+    static SetRateStrategy strategy=nullptr;
+    static bool resolved=false;
+    if(!resolved){
+        resolved=true;
+        void* library=dlopen("libnativewindow.so",RTLD_NOW);
+        if(!library)library=dlopen("libandroid.so",RTLD_NOW);
+        if(library){
+            strategy=reinterpret_cast<SetRateStrategy>(dlsym(library,"ANativeWindow_setFrameRateWithChangeStrategy"));
+            plain=reinterpret_cast<SetRate>(dlsym(library,"ANativeWindow_setFrameRate"));
+        }
+    }
+    constexpr int8_t fixedSource=1,changeAlways=1;
+    int32_t result=-1;
+    if(api>=31&&strategy)result=strategy(window,float(frameRate),fixedSource,changeAlways);
+    else if(plain)result=plain(window,float(frameRate),fixedSource);
+    else return false;
+    return result==0;
+}
+static bool setJavaDisplayPreference(android_app* app,unsigned panelHz){
+    if(!app||!app->activity||!app->activity->vm||!app->activity->clazz)return false;
+    JNIEnv* env=nullptr;
+    if(app->activity->vm->AttachCurrentThread(&env,nullptr)!=JNI_OK||!env)return false;
+    jclass cls=env->GetObjectClass(app->activity->clazz);
+    jmethodID method=cls?env->GetMethodID(cls,"setPreferredRefresh","(I)V"):nullptr;
+    if(method)env->CallVoidMethod(app->activity->clazz,method,jint(panelHz));
+    bool failed=env->ExceptionCheck()||!method;
+    if(env->ExceptionCheck()){env->ExceptionDescribe();env->ExceptionClear();}
+    if(cls)env->DeleteLocalRef(cls);
+    app->activity->vm->DetachCurrentThread();
+    return !failed;
+}
+static void applyDisplaySchedule(android_app* app){
+    static unsigned appliedGeneration=0,javaGeneration=0,reportedGeneration=0,appliedEpoch=0;
+    static ANativeWindow* appliedWindow=nullptr;
+    unsigned content=0,panel=0,generation=0;
+    if(!guestDisplaySchedule(content,panel,generation))return;
+    ANativeWindow* window=app?app->window:nullptr;
+    unsigned epoch=displayWindowEpoch.load(std::memory_order_acquire);
+    if(generation==appliedGeneration&&window==appliedWindow&&epoch==appliedEpoch)return;
+    if(generation!=javaGeneration&&setJavaDisplayPreference(app,panel))javaGeneration=generation;
+    unsigned frameRate=content?content:panel;
+    bool windowOk=!window||setWindowFrameRate(window,frameRate);
+    if(!window||javaGeneration!=generation){
+        if(reportedGeneration!=generation){
+            reportedGeneration=generation;
+            __android_log_print(ANDROID_LOG_INFO,"NFSU2","Display schedule content %u Hz, panel preference %u Hz, waiting for the window",content,panel);
+        }
+        return;
+    }
+    if(!windowOk){
+        if(reportedGeneration!=generation)
+            __android_log_print(ANDROID_LOG_WARN,"NFSU2","Display schedule content %u Hz rejected by the window",content);
+        reportedGeneration=generation;appliedGeneration=generation;appliedWindow=window;appliedEpoch=epoch;
+        return;
+    }
+    if(reportedGeneration!=generation||appliedWindow!=window||appliedEpoch!=epoch)
+        __android_log_print(ANDROID_LOG_INFO,"NFSU2","Display schedule content %u Hz, panel preference %u Hz",content,panel);
+    reportedGeneration=generation;appliedGeneration=generation;appliedWindow=window;appliedEpoch=epoch;
+}
 static void deliverBenchmarkReport(const char* path){
     if(!benchmarkApp||!benchmarkApp->activity||!benchmarkApp->activity->vm)return;
     JNIEnv* env=nullptr;
@@ -288,6 +363,7 @@ static void onCommand(android_app* app, int32_t command) {
         setGuestPaused(true);gamepad.releaseAll(setPadKey);clearGuestInput();h.resumed = false; h.renderer.stop();acknowledgeD3D9Surface(false);setD3D9HostWindow(nullptr);
     }
     if (command == APP_CMD_TERM_WINDOW || command == APP_CMD_WINDOW_RESIZED || command == APP_CMD_INIT_WINDOW) {
+        displayWindowEpoch.fetch_add(1,std::memory_order_release);
         setGuestPaused(true);h.renderer.stop(); h.failed = false;
         acknowledgeD3D9Surface(false);setD3D9HostWindow(nullptr);
     }
@@ -370,6 +446,18 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeResolution(JNIEnv*,jclass,jint width,jint height){setGuestResolution(unsigned(width),unsigned(height));}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFrameLimit(JNIEnv*,jclass,jint cap){setGuestFrameLimit(unsigned(cap));}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeDisplayRefresh(JNIEnv*,jclass,jint hertz){setGuestDisplayRefresh(unsigned(hertz));}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeDisplayModes(JNIEnv* env,jclass,jintArray rates){
+    unsigned modes[8];unsigned count=0;
+    if(rates){
+        jsize available=env->GetArrayLength(rates);
+        jint values[8];
+        jsize read=available>8?8:available;
+        if(read)env->GetIntArrayRegion(rates,0,read,values);
+        for(jsize index=0;index<read&&count<8;++index)
+            if(values[index]>=30&&values[index]<=120)modes[count++]=unsigned(values[index]);
+    }
+    setGuestDisplayModes(modes,count);
+}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFramePace(JNIEnv*,jclass,jboolean steady){setGuestSteadyPace(steady==JNI_TRUE);}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeBenchmark(JNIEnv* env,jclass,jint seconds,jstring path,jstring resolution){
     const char* report=path?env->GetStringUTFChars(path,nullptr):nullptr;
@@ -454,6 +542,7 @@ void android_main(android_app* app) {
         const bool active = host.resumed && app->window && !host.failed;
         int id = ALooper_pollOnce(active ? (d3d9RequestsSurface()?16:0) : -1, nullptr, &events, reinterpret_cast<void**>(&source));
         if (id >= 0 && source) source->process(app, source);
+        applyDisplaySchedule(app);
         if(gamepadsRemoved.exchange(false)){gamepad.releaseAll(setPadKey);publishPad();}
         gamepad.setKeyEmulation(!guestGamepadInUse());if(gamepad.refresh(guestDrivingControls(),setPadKey))publishPad();
         if (app->destroyRequested) break;

@@ -31,6 +31,11 @@ void setGuestResolution(unsigned width,unsigned height);
 void setGuestFrameLimit(unsigned framesPerSecond);
 void setGuestDisplayRefresh(unsigned hertz);
 void setGuestSteadyPace(bool steady);
+// Refresh rates available at the current display size, 30..120 Hz.
+void setGuestDisplayModes(const unsigned* hertz,unsigned count);
+// Latest request for the display. False until a schedule exists, or while a
+// concurrent update makes the triple inconsistent.
+bool guestDisplaySchedule(unsigned& contentFps,unsigned& panelHz,unsigned& generation);
 // seconds 0 disables the run. resolution is the launcher key ("75", "720").
 // The handler is called on the guest thread after the report is written.
 void setGuestBenchmark(unsigned seconds,const std::string& reportPath,const std::string& resolution);

@@ -71,6 +71,10 @@ deadline stays on the original grid, so small hitches do not walk the phase
 against the display. A wait shorter than the configured slack (1.5ms on
 Android, none in the exact host test) is skipped for the same reason. Steady
 pace locks the cap to whole display refreshes: 90FPS on a 120Hz panel is 60.
+That paced rate is also the display request. The preferred refresh is the
+slowest mode that repeats it evenly, and Android 15 touch boost stays off.
+30 and 60FPS prefer 60Hz when that mode exists. 40FPS stays on 120Hz, because
+40 does not divide 60. Uncapped still prefers the fastest mode at or under 120.
 Its deterministic clock test covers 8000 fast/overloaded frames at 30/60/90/120
 FPS, pauses, uncapped mode, cap changes, the held grid, slack, and refresh
 quantization. The scheduler also avoids save/unlock/relock handovers when no

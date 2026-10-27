@@ -76,6 +76,12 @@ std::atomic<uint32_t> renderWidth{0},renderHeight{0};
 std::atomic<unsigned> frameLimit{0};
 std::atomic<unsigned> displayRefresh{0};
 std::atomic<bool> steadyPace{true};
+std::mutex displayModeMutex;
+std::array<unsigned,8> displayModes{};
+unsigned displayModeCount=0;
+std::atomic<unsigned> scheduledContent{0};
+std::atomic<unsigned> scheduledPanel{0};
+std::atomic<unsigned> scheduleGeneration{0};
 std::atomic<unsigned> benchmarkSeconds{0};
 std::mutex benchmarkMutex;
 std::string benchmarkPath,benchmarkResolution{"75"};
@@ -1401,10 +1407,20 @@ void publishFrameSchedule(){
     unsigned selected=frameLimit.load();
     unsigned refresh=steadyPace.load()?displayRefresh.load():0;
     unsigned paced=steadyFrameRate(selected,refresh);
+    unsigned modes[8]{};unsigned count=0;
+    {
+        std::lock_guard<std::mutex> lock(displayModeMutex);
+        count=displayModeCount;
+        for(unsigned index=0;index<count;++index)modes[index]=displayModes[index];
+    }
+    unsigned panel=displayRefreshForContent(paced,modes,count);
     // The game paces itself to 1/60 s. Match the rate we actually present
     // (uncapped: the 120 Hz display) so the simulation does not aim past it.
     nfs_widescreen_set_frame_rate(paced?paced:120);
-    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Android frame limit %u FPS, paced %u (refresh %u, steady %d)",selected,paced,displayRefresh.load(),int(steadyPace.load()));
+    scheduledContent.store(paced,std::memory_order_relaxed);
+    scheduledPanel.store(panel,std::memory_order_relaxed);
+    scheduleGeneration.fetch_add(1,std::memory_order_release);
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Android frame limit %u FPS, paced %u (refresh %u, steady %d), panel preference %u",selected,paced,displayRefresh.load(),int(steadyPace.load()),panel);
 }
 void setGuestFrameLimit(unsigned framesPerSecond){
     frameLimit=(framesPerSecond>=30&&framesPerSecond<=240)?framesPerSecond:0;
@@ -1414,7 +1430,26 @@ void setGuestDisplayRefresh(unsigned hertz){
     displayRefresh=hertz>=30&&hertz<=240?hertz:0;
     publishFrameSchedule();
 }
+void setGuestDisplayModes(const unsigned* hertz,unsigned count){
+    {
+        std::lock_guard<std::mutex> lock(displayModeMutex);
+        displayModeCount=0;
+        if(hertz)for(unsigned index=0;index<count&&displayModeCount<displayModes.size();++index){
+            unsigned hz=hertz[index];
+            if(hz>=30&&hz<=120)displayModes[displayModeCount++]=hz;
+        }
+    }
+    publishFrameSchedule();
+}
 void setGuestSteadyPace(bool steady){steadyPace=steady;publishFrameSchedule();}
+bool guestDisplaySchedule(unsigned& contentFps,unsigned& panelHz,unsigned& generation){
+    unsigned first=scheduleGeneration.load(std::memory_order_acquire);
+    contentFps=scheduledContent.load(std::memory_order_relaxed);
+    panelHz=scheduledPanel.load(std::memory_order_relaxed);
+    unsigned second=scheduleGeneration.load(std::memory_order_acquire);
+    generation=first;
+    return first!=0&&first==second;
+}
 void setGuestBenchmark(unsigned seconds,const std::string& reportPath,const std::string& resolution){
     std::lock_guard<std::mutex> lock(benchmarkMutex);
     benchmarkSeconds=seconds>=5&&seconds<=120?seconds:0;

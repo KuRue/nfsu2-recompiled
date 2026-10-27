@@ -54,6 +54,21 @@ int main(){
     require(steadyFrameRate(40,120)==40,"40 FPS on 120 Hz stays 40");
     require(steadyFrameRate(90,0)==90,"no refresh rate keeps the selected cap");
     {
+        const unsigned modes[]={24u,60u,120u,144u};
+        require(displayRefreshForContent(0,modes,4)==120,"uncapped uses the fastest mode at or under 120");
+        require(displayRefreshForContent(30,modes,4)==60,"30 FPS uses 60 Hz");
+        require(displayRefreshForContent(40,modes,4)==120,"40 FPS stays on 120 Hz");
+        require(displayRefreshForContent(60,modes,4)==60,"60 FPS uses 60 Hz");
+        require(displayRefreshForContent(90,modes,4)==120,"90 FPS has no even mode, so the panel stays at 120");
+        require(displayRefreshForContent(120,modes,4)==120,"120 FPS uses 120 Hz");
+        require(displayRefreshForContent(steadyFrameRate(90,120),modes,4)==60,"steady 90 on 120 Hz asks the panel for 60");
+        const unsigned only120[]={120u};
+        require(displayRefreshForContent(60,only120,1)==120,"a 120 Hz panel shows 60 FPS at 120");
+        const unsigned with30[]={30u,60u,120u};
+        require(displayRefreshForContent(30,with30,3)==30,"an exact 30 Hz mode is used");
+        require(displayRefreshForContent(60,nullptr,0)==0,"no modes leaves the choice to the system");
+    }
+    {
         FramePacer pacer;auto vblank=nanoseconds(1000000000ull/120);auto step=vblank*2;
         require(pacer.deadline(origin,90,120)==origin,"refresh lock origin");
         require(pacer.deadline(origin+step/3,90,120)==origin+step,"90 FPS on 120 Hz sleeps on a 60 FPS grid");
