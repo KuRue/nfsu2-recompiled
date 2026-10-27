@@ -48,9 +48,10 @@ public final class BenchmarkGraphView extends View {
         float left = labelWidth, right = getWidth() - 2 * density;
         float top = 4 * density, bottom = getHeight() - 13 * density;
         float peak = goalFps;
-        for (int i = 0; i < count; i++) peak = Math.max(peak, points[offset + i * FIELDS + 2]);
-        // A round ceiling (30, 60, 90, 120, 150...) so the scale does not jump every update.
-        float scale = Math.max(30, (float) Math.ceil(peak * 1.05f / 30) * 30);
+        // Scale to the average line and the cap, not the band: one very fast frame would
+        // otherwise squash the line. Round to 30s so the scale does not jump every update.
+        for (int i = 0; i < count; i++) peak = Math.max(peak, points[offset + i * FIELDS]);
+        float scale = Math.max(30, (float) Math.ceil(peak * 1.2f / 30) * 30);
         for (int step = 0; step <= scale; step += scale > 90 ? 30 : 15) {
             float y = bottom - step / scale * (bottom - top);
             canvas.drawLine(left, y, right, y, grid);
@@ -58,7 +59,9 @@ public final class BenchmarkGraphView extends View {
         }
         for (int second = 0; second <= seconds; second += 15) {
             float x = left + (right - left) * second / seconds;
-            canvas.drawText(String.format(Locale.US, "%d:%02d", second / 60, second % 60), x - 8 * density, getHeight() - 1 * density, axis);
+            axis.setTextAlign(second == 0 ? Paint.Align.LEFT : x > right - 12 * density ? Paint.Align.RIGHT : Paint.Align.CENTER);
+            canvas.drawText(String.format(Locale.US, "%d:%02d", second / 60, second % 60), second == 0 ? x : Math.min(x, right), getHeight() - 1 * density, axis);
+            axis.setTextAlign(Paint.Align.LEFT);
         }
         if (goalFps > 0) {
             float y = bottom - goalFps / scale * (bottom - top);
@@ -67,6 +70,8 @@ public final class BenchmarkGraphView extends View {
         if (count < 1) return;
         float slot = 0.25f;
         bandPath.reset(); linePath.reset();
+        canvas.save();
+        canvas.clipRect(left, top, right, bottom);
         for (int i = 0; i < count; i++) {
             float x = left + (right - left) * Math.min(1f, (i + 0.5f) * slot / seconds);
             float y = bottom - Math.min(points[offset + i * FIELDS + 2], scale) / scale * (bottom - top);
@@ -85,5 +90,6 @@ public final class BenchmarkGraphView extends View {
             if (i == 0) linePath.moveTo(x, y); else linePath.lineTo(x, y);
         }
         canvas.drawPath(linePath, line);
+        canvas.restore();
     }
 }

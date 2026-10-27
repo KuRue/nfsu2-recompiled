@@ -613,18 +613,28 @@ public final class LauncherActivity extends Activity {
         try { report = BenchmarkReport.parse(text); }
         catch (IllegalArgumentException error) { message("Benchmark", "The report was not usable."); return; }
         AlertDialog.Builder dialog = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Benchmark").setMessage(report.summary()).setNegativeButton(report.canApply() ? "Keep settings" : "OK", null);
-        if (report.timeline.length > 0) {
+                .setTitle("Benchmark").setNegativeButton(report.canApply() ? "Keep settings" : "OK", null);
+        if (report.timeline.length == 0) dialog.setMessage(report.summary());
+        else {
             float density = getResources().getDisplayMetrics().density;
             BenchmarkGraphView graph = new BenchmarkGraphView(this);
             int count = report.timeline.length / BenchmarkGraphView.FIELDS;
             graph.setTimeline(report.timeline, 0, count, count / 4f, report.limit > 0 ? report.limit : report.refresh);
             graph.setMinimumHeight(Math.round(130 * density));
-            android.widget.FrameLayout frame = new android.widget.FrameLayout(this);
-            int pad = Math.round(20 * density);
-            frame.setPadding(pad, Math.round(8 * density), pad, 0);
-            frame.addView(graph, new android.widget.FrameLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, Math.round(130 * density)));
-            dialog.setView(frame);
+            // Graph first, then the figures; the whole body scrolls on a short screen.
+            android.widget.LinearLayout body = new android.widget.LinearLayout(this);
+            body.setOrientation(android.widget.LinearLayout.VERTICAL);
+            int pad = Math.round(22 * density);
+            body.setPadding(pad, Math.round(8 * density), pad, 0);
+            body.addView(graph, new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, Math.round(130 * density)));
+            android.widget.TextView figures = new android.widget.TextView(this);
+            figures.setText(report.summary());
+            figures.setTextSize(14);
+            figures.setPadding(0, Math.round(12 * density), 0, 0);
+            body.addView(figures);
+            android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+            scroll.addView(body);
+            dialog.setView(scroll);
         }
         if (report.canApply()) dialog.setPositiveButton("Apply", (d, which) -> {
             GameOptions.set(this, GameOptions.RESOLUTION, report.nextResolution);
