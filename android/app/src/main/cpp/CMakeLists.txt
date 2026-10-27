@@ -107,6 +107,13 @@ if(SERVER_GEN_SOURCES)
     target_compile_definitions(nfsu2_android PRIVATE NFS_SERVER_DLL)
 endif()
 target_compile_features(nfsu2_android PRIVATE cxx_std_17)
+# Development-only call-stack recorder for save-state capture planning (see
+# docs/ANDROID_DURABLE_STATE_PROTOTYPE.md). Never enabled in normal builds.
+option(NFS_STACK_PROBE "Record live lifted call chains at Present/wait points" OFF)
+if(NFS_STACK_PROBE)
+    target_compile_definitions(nfs_guest PRIVATE NFS_STACK_PROBE)
+    target_compile_definitions(nfsu2_android PRIVATE NFS_STACK_PROBE)
+endif()
 target_compile_definitions(nfsu2_android PRIVATE VK_USE_PLATFORM_ANDROID_KHR)
 target_compile_options(nfsu2_android PRIVATE -O2 -fno-strict-aliasing -ffp-contract=off -Wall -Wextra -Werror -Wno-missing-field-initializers)
 target_link_options(nfsu2_android PRIVATE "-uANativeActivity_onCreate")
