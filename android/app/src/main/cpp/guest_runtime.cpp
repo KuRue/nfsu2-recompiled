@@ -579,7 +579,7 @@ void finishGuestBenchmark(){
     view.p50=timing.p50;view.p95=timing.p95;view.p99=timing.p99;view.maximum=timing.maximum;view.jitter=timing.jitter;
     view.late=timing.late;view.count=timing.count;view.limit=paced;view.selected=selected;view.refresh=panel;view.steady=steady;
     view.resolution=resolution.c_str();
-    view.averageFps=averageFps;view.lowFps=lowFps;
+    view.averageFps=averageFps;view.lowFps=lowFps;view.stalled=benchmarkRun.stalledSeconds();
     auto advice=adviseBenchmark(view);
     std::string report=formatBenchmarkReport(view,advice,formatBenchmarkTimeline(benchmarkRun));
 #ifdef __ANDROID__
@@ -708,13 +708,29 @@ void d3dDispatch(){
         static bool benchmarkArmed=false;
         if(!benchmarkArmed&&benchmarkSeconds.load(std::memory_order_relaxed)){benchmarkArmed=true;benchmarkRun.arm(benchmarkSeconds.load(std::memory_order_relaxed));}
         if(benchmarkArmed&&!benchmarkRun.finished()){
+#ifndef NFSU2_EXE_F4BB0D99
+            // Recording starts once the AI has the car and it is moving: the countdown is a
+            // lighter scene with the car standing still, and is not part of the sample.
+            {auto car=nfs_physics::readSnapshot([](uint32_t address,void* out,size_t size){
+                    if(!memory||!memory->readable(address,size))return false;
+                    std::memcpy(out,static_cast<const uint8_t*>(memory->base())+address,size);return true;});
+                float speed=car.valid?std::sqrt(nfs_physics::dot(car.velocity,car.velocity)):0.f;
+                if(autopilotDriving.load(std::memory_order_relaxed)&&speed>BenchmarkRun::kMovingSpeed)benchmarkRun.begin(completed);
+                if(car.valid)benchmarkRun.speed(completed,speed);
+                static auto slowLog=std::chrono::steady_clock::time_point{};
+                if(car.valid&&speed<1.f&&benchmarkRun.live(completed).recording&&completed-slowLog>std::chrono::milliseconds(500)){slowLog=completed;
+                    uint32_t player=0,mode=0;if(memory->readable(0x8900acu,4)){std::memcpy(&player,static_cast<uint8_t*>(memory->base())+0x8900acu,4);
+                        if(player&&memory->readable(player+0x22cu,4))std::memcpy(&mode,static_cast<uint8_t*>(memory->base())+player+0x22cu,4);}
+                    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","slow %.2f m/s at %.1f s, mode %u",speed,benchmarkRun.live(completed).elapsed,mode);}}
+#else
             if(autopilotDriving.load(std::memory_order_relaxed))benchmarkRun.begin(completed);
+#endif
             // Render-thread CPU per frame: D3D translation time, sampled one call in 64.
             static std::chrono::nanoseconds bridgeAtFrame{};
             double renderMs=double((bridgeTotal-bridgeAtFrame).count())/1e6;bridgeAtFrame=bridgeTotal;
             bool finished=benchmarkRun.present(completed,frameMs,calls,renderMs);
             // Four panel updates a second. Header: fps, frame ms, average fps, 1% low fps, worst ms,
-            // elapsed s, total s, calls, render ms, min fps, max fps; then the timeline, 5 floats a point.
+            // elapsed s, total s, calls, render ms, min fps, max fps, stalled s; then the timeline, 5 floats a point.
             static auto lastStats=std::chrono::steady_clock::time_point{};
             void (*stats)(const float*,unsigned)=nullptr;
             if(completed-lastStats>=std::chrono::milliseconds(250)){
@@ -724,7 +740,7 @@ void d3dDispatch(){
                 if(stats&&live.recording){
                     static std::vector<float> packed;packed.clear();
                     packed.insert(packed.end(),{float(live.fps),float(live.frameMs),float(live.averageFps),float(live.lowFps),float(live.worstMs),
-                        float(live.elapsed),float(live.total),float(live.calls),float(live.renderMs),float(live.minFps),float(live.maxFps)});
+                        float(live.elapsed),float(live.total),float(live.calls),float(live.renderMs),float(live.minFps),float(live.maxFps),float(benchmarkRun.stalledSeconds())});
                     for(unsigned i=0;i<benchmarkRun.timelineCount();++i){const auto& p=benchmarkRun.timeline()[i];
                         packed.insert(packed.end(),{p.fps,p.minFps,p.maxFps,p.renderMs,p.calls});}
                     stats(packed.data(),unsigned(packed.size()));

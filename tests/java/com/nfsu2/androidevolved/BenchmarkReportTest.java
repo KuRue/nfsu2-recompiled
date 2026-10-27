@@ -35,6 +35,8 @@ public final class BenchmarkReportTest {
         boolean badTimeline = false;
         try { BenchmarkReport.parse(text + "timeline 1:2:3\n"); } catch (IllegalArgumentException error) { badTimeline = true; }
         check(badTimeline);
+        BenchmarkReport stuck = BenchmarkReport.parse(text + "stalled 7.5\n");
+        check(stuck.stalled == 7.5 && stuck.summary().contains("stuck for 8 s") && report.stalled == 0);
         boolean rejected = false;
         try { BenchmarkReport.parse("not a report\n"); }
         catch (IllegalArgumentException error) { rejected = true; }

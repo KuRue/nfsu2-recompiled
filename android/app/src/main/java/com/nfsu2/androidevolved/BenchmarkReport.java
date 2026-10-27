@@ -8,7 +8,7 @@ public final class BenchmarkReport {
     public final int count, late, limit, selected, refresh, nextFps;
     public final double p50, p95, p99, maximum, jitter;
     /** Zero in reports written before these fields existed. */
-    public double averageFps, lowFps;
+    public double averageFps, lowFps, stalled;
     /** Quarter-second points, 5 floats each (fps, min, max, render ms, draw calls); empty in older reports. */
     public float[] timeline = new float[0];
     public final boolean steady;
@@ -30,6 +30,8 @@ public final class BenchmarkReport {
 
     public String summary() {
         StringBuilder text = new StringBuilder();
+        if (stalled > 3)
+            text.append(String.format(Locale.US, "The AI car was stuck for %.0f s, which lowers these figures. Run the benchmark again for a fair result.\n\n", stalled));
         if (averageFps > 0)
             text.append(String.format(Locale.US, "Average %.1f FPS, 1%% low %.1f FPS\n", averageFps, lowFps));
         if (timeline.length > 0)
@@ -89,6 +91,7 @@ public final class BenchmarkReport {
         if (values.containsKey("timeline")) report.timeline = timeline(values.get("timeline"));
         if (values.containsKey("average-fps")) report.averageFps = number(values, "average-fps");
         if (values.containsKey("low-fps")) report.lowFps = number(values, "low-fps");
+        if (values.containsKey("stalled")) report.stalled = number(values, "stalled");
         return report;
     }
 

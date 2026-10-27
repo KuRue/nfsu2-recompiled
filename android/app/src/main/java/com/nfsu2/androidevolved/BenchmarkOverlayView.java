@@ -14,7 +14,7 @@ import java.util.Locale;
 /** Live benchmark panel: headline rate, run statistics, the whole-run graph, and phone state. */
 public final class BenchmarkOverlayView extends LinearLayout {
     /** Header length of the array sent by deliverBenchmarkStats in main.cpp. */
-    static final int HEADER = 11;
+    static final int HEADER = 12;
     private final float density;
     private final Figures figures;
     private final BenchmarkGraphView graph;
@@ -98,7 +98,14 @@ public final class BenchmarkOverlayView extends LinearLayout {
             canvas.drawText(String.format(Locale.US, "min %.0f · max %.0f · worst %.0f ms · render %.1f ms · %.1fk calls",
                     minFps, maxFps, worst, render, calls / 1000f), 0, y, label);
             y += 12 * density;
-            canvas.drawText(phone + (targetFps > 0 ? "  ·  cap " + targetFps : "  ·  uncapped"), 0, y, label);
+            String state = phone + (targetFps > 0 ? "  ·  cap " + targetFps : "  ·  uncapped");
+            if (stats[11] > 3) {
+                // The AI is stuck: say so, since it drags the figures down.
+                int colour = label.getColor();
+                label.setColor(0xffff7b72);
+                canvas.drawText(String.format(Locale.US, "car stuck %.0f s · run again for a fair result", stats[11]), 0, y, label);
+                label.setColor(colour);
+            } else canvas.drawText(state, 0, y, label);
         }
     }
 }

@@ -17,6 +17,7 @@ inline constexpr unsigned kBenchmarkWaitSeconds=180;
 struct BenchmarkView {
     double p50=0,p95=0,p99=0,maximum=0,jitter=0;
     double averageFps=0,lowFps=0; // mean rate, and the rate of the slowest 1% of frames
+    double stalled=0;             // seconds the car was nearly stopped while recording
     unsigned late=0,count=0;
     unsigned limit=0;    // rate the samples were paced at; 0 is uncapped
     unsigned selected=0; // cap stored in the launcher; may be higher than limit
@@ -106,7 +107,7 @@ inline std::string formatBenchmarkReport(const BenchmarkView& view,const Benchma
     auto addU=[&](const char* key,unsigned value){std::snprintf(line,sizeof line,"%s %u\n",key,value);out+=line;};
     auto addD=[&](const char* key,double value){std::snprintf(line,sizeof line,"%s %.2f\n",key,value);out+=line;};
     addU("count",view.count);addD("p50",view.p50);addD("p95",view.p95);addD("p99",view.p99);addD("max",view.maximum);
-    addD("average-fps",view.averageFps);addD("low-fps",view.lowFps);
+    addD("average-fps",view.averageFps);addD("low-fps",view.lowFps);addD("stalled",view.stalled);
     addU("late",view.late);addD("jitter",view.jitter);addU("limit",view.limit);addU("selected",view.selected);
     addU("refresh",view.refresh);add("pace",view.steady?"steady":"exact");add("resolution",view.resolution);
     add("action",advice.action);add("next-resolution",advice.resolution);addU("next-fps",advice.frameRate);
@@ -129,8 +130,23 @@ public:
     struct Slot {float fps=0,minFps=0,maxFps=0,calls=0,renderMs=0;};
     void arm(unsigned seconds){
         seconds_=seconds?seconds:1;phase_=Phase::Waiting;armedAt_={};started_={};busyStreak_=0;samples_=FrameMetrics<8192>{};
-        totalMs_=0;totalFrames_=0;slotCount_=0;open_={};lastMs_=0;
+        totalMs_=0;totalFrames_=0;slotCount_=0;open_={};lastMs_=0;stalledMs_=0;lastSpeedAt_={};
     }
+    // Car speed in m/s while recording. Time below kStallSpeed counts as stalled: the AI
+    // stuck on a wall drags the figures down, so the report flags it. The course itself slows
+    // the car under 3 m/s for about 3.3 s every run (phone, 2026-10-27), so only a near stop
+    // counts. Recording starts once the car passes kMovingSpeed after the countdown.
+    static constexpr float kStallSpeed=1.f;
+    static constexpr float kMovingSpeed=3.f;
+    static constexpr double kStallLimitMs=3000;
+    void speed(Clock::time_point now,float metresPerSecond){
+        if(phase_!=Phase::Recording){lastSpeedAt_={};return;}
+        if(lastSpeedAt_!=Clock::time_point{}&&std::isfinite(metresPerSecond)&&metresPerSecond<kStallSpeed)
+            stalledMs_+=std::chrono::duration<double,std::milli>(now-lastSpeedAt_).count();
+        lastSpeedAt_=now;
+    }
+    double stalledSeconds() const {return stalledMs_/1000.0;}
+    bool stalled() const {return stalledMs_>kStallLimitMs;}
     // renderMs: CPU time the frame spent translating Direct3D calls (render thread).
     bool present(Clock::time_point now,double intervalMs,unsigned calls,double renderMs=0){
         if(phase_==Phase::Idle||phase_==Phase::Finished)return false;
@@ -197,6 +213,7 @@ private:
     double totalMs_=0;unsigned totalFrames_=0;
     std::array<Slot,kMaxSlots> slots_{};unsigned slotCount_=0,openIndex_=0;
     Open open_{};double lastMs_=0,lastRender_=0;unsigned lastCalls_=0;
+    double stalledMs_=0;Clock::time_point lastSpeedAt_{};
 };
 
 // Report line: one "fps:min:max:render-ms:calls" point per quarter second, comma separated.

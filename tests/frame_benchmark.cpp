@@ -57,6 +57,7 @@ int main(){
             "max 19.50\n"
             "average-fps 0.00\n"
             "low-fps 0.00\n"
+            "stalled 0.00\n"
             "late 0\n"
             "jitter 0.40\n"
             "limit 60\n"
@@ -126,6 +127,16 @@ int main(){
         require(run.live(start+milliseconds(16)).recording,"autopilot starts recording");
         require(!run.present(start+milliseconds(32),16,20000),"recording a quiet race");
         require(run.present(start+milliseconds(16)+seconds(60),16,20000),"window closes after begin");
+    }
+    {
+        BenchmarkRun run;auto start=BenchmarkRun::Clock::time_point(seconds(5));
+        run.arm(60);
+        run.speed(start,0);require(run.stalledSeconds()==0,"no stall before recording");
+        run.begin(start);
+        auto at=start;for(unsigned i=0;i<=40;++i){run.speed(at,i<20?30.f:0.5f);at+=milliseconds(100);}
+        require(std::fabs(run.stalledSeconds()-2.1)<0.01&&!run.stalled(),"21 slow samples 100 ms apart");
+        for(unsigned i=0;i<20;++i){at+=milliseconds(100);run.speed(at,0.5f);}
+        require(run.stalled(),"over three seconds is a stall");
     }
     std::puts("Frame benchmark passed");
 }
