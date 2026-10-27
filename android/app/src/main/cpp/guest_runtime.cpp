@@ -1571,6 +1571,7 @@ void setGuestBenchmark(unsigned seconds,const std::string& reportPath,const std:
     if(!benchmarkSeconds)benchmarkPath.clear();
 }
 void setGuestBenchmarkHandler(void (*handler)(const char*)){std::lock_guard<std::mutex> lock(benchmarkMutex);benchmarkHandler=handler;}
+void setGuestSkipIntro(bool skip){skipIntroMovies=skip;}
 bool guestBenchmarkActive(){return benchmarkSeconds.load()!=0;}
 void setGuestBenchmarkStatsHandler(void (*handler)(const float*,unsigned)){std::lock_guard<std::mutex> lock(benchmarkMutex);benchmarkStatsHandler=handler;}
 void setGuestKey(unsigned scan,bool down){if(scan>=256)return;std::lock_guard<std::mutex> lock(inputMutex);if(bool(inputKeys[scan])==down)return;inputKeys[scan]=down?0x80:0;recordInputKey(scan,down);enqueueGuestKey(scan,down);}

@@ -39,8 +39,18 @@ void longPath(){
     std::string result="C:\\nfsu2";if(relative!="."&&!relative.empty())result+="\\"+relative;std::replace(result.begin(),result.end(),'/','\\');
     if(arg(2)<=result.size()){ret(result.size()+1,3);return;}std::memcpy(ptr(arg(1),result.size()+1),result.c_str(),result.size()+1);ret(result.size(),3);
 }
+// The boot movies, swapped for the game's own one-frame blank.vp6 when "Intro movies" is Skip.
+// The tutorial and story movies are untouched.
+std::atomic<bool> skipIntroMovies{false};
+static std::filesystem::path skipIntroMovie(const std::filesystem::path& path){
+    if(!skipIntroMovies.load(std::memory_order_relaxed))return path;
+    auto name=path.filename().string();for(auto& c:name)c=char(std::tolower(static_cast<unsigned char>(c)));
+    if(name!="ealogo.vp6"&&name!="thx_logo.vp6"&&name!="psa.vp6"&&name!="fmvopening.vp6")return path;
+    auto blank=path.parent_path()/"blank.vp6";
+    return std::filesystem::exists(blank)?blank:path;
+}
 void createFile(){
-    auto path=gamePath(guestString(arg(0)));uint32_t access=arg(1),disposition=arg(4),flags=arg(5);
+    auto path=skipIntroMovie(gamePath(guestString(arg(0))));uint32_t access=arg(1),disposition=arg(4),flags=arg(5);
     if(flags&0x40000000u)throw GuestStop("Overlapped CreateFile requires asynchronous file service");
     int options=access&0x40000000u?(access&0x80000000u?O_RDWR:O_WRONLY):O_RDONLY;
     switch(disposition){case 1:options|=O_CREAT|O_EXCL;break;case 2:options|=O_CREAT|O_TRUNC;break;case 3:break;case 4:options|=O_CREAT;break;case 5:options|=O_TRUNC;break;default:lastError=87;ret(UINT32_MAX,7);return;}

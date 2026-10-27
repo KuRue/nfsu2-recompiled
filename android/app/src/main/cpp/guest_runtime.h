@@ -44,6 +44,7 @@ void setGuestBenchmark(unsigned seconds,const std::string& reportPath,const std:
 void setGuestBenchmarkHandler(void (*handler)(const char* reportPath));
 void setGuestBenchmarkStatsHandler(void (*handler)(const float*,unsigned));
 bool guestBenchmarkActive();
+void setGuestSkipIntro(bool skip);
 
 void setGuestForceFeedback(bool enabled);
 unsigned guestForceFeedbackLevel();

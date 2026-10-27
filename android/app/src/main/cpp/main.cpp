@@ -530,6 +530,7 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_nfsu2_androidevolved_GameActivity
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeOnlineServer(JNIEnv* env,jclass,jstring host){
     const char* text=env->GetStringUTFChars(host,nullptr);setGuestOnlineServer(text?text:"");env->ReleaseStringUTFChars(host,text);
 }
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeSkipIntro(JNIEnv*,jclass,jboolean skip){setGuestSkipIntro(skip==JNI_TRUE);}
 // A benchmark run moves the minimap far above the screen so the stats panel has the corner.
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeMinimapTop(JNIEnv*,jclass,jboolean top){
     nfs_widescreen_set_minimap_offset(guestBenchmarkActive()?-4000.0f:top==JNI_TRUE?-230.0f:0.0f);}

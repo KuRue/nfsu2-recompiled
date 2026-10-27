@@ -177,6 +177,7 @@ public final class GameActivity extends NativeActivity {
     private static native void nativeGamepadConnected(boolean connected);
     private static native void nativeGamepadDevices(int[] ids);
     private static native void nativeMinimapTop(boolean top);
+    private static native void nativeSkipIntro(boolean skip);
     private static native void nativeBackBuffers(int count);
     private static native void nativeCpuTextures(boolean enabled);
     private static native void nativeGpuDriver(String hooks, String temp, String directory, String library);
@@ -278,6 +279,7 @@ public final class GameActivity extends NativeActivity {
         String server = launch.getStringExtra("onlineServer");
         nativeOnlineServer(GameOptions.validServer(server) ? server : GameOptions.onlineServer(this));
         nativeMinimapTop(launch.getBooleanExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top")));
+        nativeSkipIntro(launch.getBooleanExtra("skipIntro", GameOptions.get(this, GameOptions.INTRO).equals("skip")));
         nativeBackBuffers(launch.getIntExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY))));
         phoneFeedback=new PhoneFeedback(this,Integer.parseInt(GameOptions.get(this,GameOptions.FEEDBACK)),
                 GameActivity::nativeFeedbackLevel,GameActivity::nativeStopFeedback);

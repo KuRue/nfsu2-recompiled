@@ -21,7 +21,7 @@ final class GameOptions {
     }
 
     static final String RESOLUTION = "resolution", FPS = "fps", FRAME_PACE = "frame_pace", WIDESCREEN = "widescreen", LATENCY = "latency",
-            FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", LOOK = "lighting_look", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", LANGUAGE = "language";
+            FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", LOOK = "lighting_look", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", INTRO = "intro", LANGUAGE = "language";
 
     static final Option[] ALL = {
             new Option(FEEDBACK_SOURCE, "Phone feedback source", "physics",
@@ -57,6 +57,9 @@ final class GameOptions {
             new Option(MINIMAP, "Minimap", "top",
                     new String[] {"top", "bottom"},
                     new String[] {"Top left", "Bottom left (original)"}),
+            new Option(INTRO, "Intro movies", "skip",
+                    new String[] {"skip", "play"},
+                    new String[] {"Skip · straight to the menu", "Play · EA, THX and opening movie"}),
             new Option(LATENCY, "CPU/GPU synchronization", "2",
                     new String[] {"2", "1"},
                     new String[] {"Performance · CPU and GPU in parallel", "Low latency · lower FPS"}),
