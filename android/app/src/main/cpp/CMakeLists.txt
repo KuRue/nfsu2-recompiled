@@ -46,7 +46,7 @@ endforeach()
 option(NFS_RESUMABLE "Record resumable frames in capture-point functions" OFF)
 if(NFS_RESUMABLE)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
-    set(RESUMABLE_LIST "${NFS_ROOT}/docs/data/stackprobe-live-functions-2026-10-27.txt")
+    set(RESUMABLE_LIST "${NFS_ROOT}/docs/data/resumable-functions.txt")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${ANDROID_GEN_SOURCES} "${RESUMABLE_LIST}" "${NFS_ROOT}/scripts/make_resumable.py")
     execute_process(COMMAND "${Python3_EXECUTABLE}" "${NFS_ROOT}/scripts/make_resumable.py" "${RESUMABLE_LIST}"
         "${CMAKE_CURRENT_BINARY_DIR}/resumable_guest" ${ANDROID_GEN_SOURCES}

@@ -231,3 +231,21 @@ At every Present and every wait, the runtime checks whether the thread's guest s
 
 It logs `NFSResumable` capturable counts and the top blocking functions every 10 s. Nothing is captured or restored yet; this
 measures how often a capture would be possible.
+
+### Phone measurement (2026-10-27)
+
+The `-Pnfs.resumable=ON` build ran on the phone through menus, the garage, a race and free roam for about 8 minutes. Over the
+session there were no crashes and no NFSU2 errors.
+
+| Capture point | Capturable | Checks |
+|---|---|---|
+| Present | 99.996% | 51,068 |
+| Sleep | 100% | 130,054 |
+| Event wait | 100% | 50,225 |
+| Mutex wait | 99.94% | 1,017,022 |
+| EnterCriticalSection | 127 of 130 | 130 |
+
+A capture that is not possible can wait for the next frame.
+
+The 14 blocking executable functions were added. `docs/data/resumable-functions.txt` (535 functions, 5,154 call sites) is now the
+build's list. One blocker, `0x1102f024`, is in a game DLL module and occurred twice; it is left for later.
