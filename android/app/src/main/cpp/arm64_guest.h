@@ -96,9 +96,25 @@ extern _Thread_local uint32_t nfs_frame_depth;
     if (_fd < NFS_FRAME_LIMIT) { nfs_frame_t* _fr = &nfs_frames[_fd]; _fr->function = g_cur_func; \
         _fr->site = (site_va); _fr->target = (target_va); _fr->fpu_cmp = _fpu_cmp; _fr->df = _df; } } while (0)
 #define NFS_FRAME_POP() ((void)--nfs_frame_depth)
-#define NFS_RCALL(site_va, target_va, func) do { NFS_FRAME_PUSH(site_va, target_va); RECOMP_CALL(func); NFS_FRAME_POP(); } while (0)
-#define NFS_RICALL(site_va, target) do { uint32_t _rt = (uint32_t)(target); \
-    NFS_FRAME_PUSH(site_va, _rt); RECOMP_ICALL(_rt); NFS_FRAME_POP(); } while (0)
-#define NFS_RITAIL(site_va, target) do { uint32_t _rt = (uint32_t)(target); \
-    NFS_FRAME_PUSH(site_va, _rt); RECOMP_ITAIL(_rt); NFS_FRAME_POP(); } while (0)
+// Resume (rebuilding a thread's native stack from recorded frames): each function's entry consumes
+// the next frame, restores its two C locals and jumps to the recorded call site, which re-issues the
+// call without pushing a return address (the guest stack already holds it). Registers and flags come
+// from the globals, as on any return. The top frame's call re-runs the host import normally.
+extern _Thread_local int nfs_resume_active;
+extern _Thread_local uint32_t nfs_resume_site, nfs_resume_target;
+int nfs_resume_enter(uint32_t va, int* fpu_cmp, int* df);
+void nfs_resume_invoke(uint32_t expected, recomp_func_t direct);
+__attribute__((noreturn)) void nfs_resume_fail(void);
+#define NFS_RESUME_ENTRY(va) if (__builtin_expect(nfs_resume_active, 0) && nfs_resume_enter((va), &_fpu_cmp, &_df))
+#define NFS_RESUME_CALL(expected, direct) do { uint32_t _caller = g_cur_func; RECOMP_FLAGS_OUT(); RECOMP_REGS_OUT(); \
+    nfs_resume_invoke((expected), (direct)); RECOMP_REGS_IN(); g_cur_func = _caller; } while (0)
+#define NFS_RCALL(site_va, target_va, func) do { NFS_FRAME_PUSH(site_va, target_va); \
+    if (__builtin_expect(nfs_resume_active, 0)) NFS_RESUME_CALL(target_va, func); else RECOMP_CALL(func); \
+    NFS_FRAME_POP(); } while (0)
+#define NFS_RICALL(site_va, target) do { int _rs = nfs_resume_active; \
+    uint32_t _rt = __builtin_expect(_rs, 0) ? nfs_resume_target : (uint32_t)(target); NFS_FRAME_PUSH(site_va, _rt); \
+    if (__builtin_expect(_rs, 0)) NFS_RESUME_CALL(_rt, 0); else RECOMP_ICALL(_rt); NFS_FRAME_POP(); } while (0)
+#define NFS_RITAIL(site_va, target) do { int _rs = nfs_resume_active; \
+    uint32_t _rt = __builtin_expect(_rs, 0) ? nfs_resume_target : (uint32_t)(target); NFS_FRAME_PUSH(site_va, _rt); \
+    if (__builtin_expect(_rs, 0)) NFS_RESUME_CALL(_rt, 0); else RECOMP_ITAIL(_rt); NFS_FRAME_POP(); } while (0)
 #endif

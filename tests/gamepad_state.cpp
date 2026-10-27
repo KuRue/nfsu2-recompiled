@@ -12,7 +12,7 @@ int main(){
     Pad pad;std::array<bool,256> keys{};auto send=[&](unsigned scan,bool down){keys[scan]=down;};
     pad.setKeyEmulation(false); // Game acquired its DirectInput joystick.
     pad.update(true,0,.7f,false,false,false,send);require(keys[0xc8]&&!keys[0xd0]);
-    pad.update(true,.8f,.7f,true,false,false,send);require(keys[0xc8]&&keys[0xd0]&&!keys[0x39]);
+    pad.update(true,.8f,.7f,true,false,false,send);require(keys[0xc8]&&keys[0xd0]&&keys[0x39]);
     pad.update(true,.8f,0,false,false,false,send);require(!keys[0xc8]&&keys[0xd0]);
     pad.update(false,.8f,.7f,false,false,false,send);require(!keys[0xc8]&&!keys[0xd0]);
     pad.update(true,0,0,false,true,true,send);require(keys[0xc8]&&keys[0xd0]);
@@ -31,5 +31,19 @@ int main(){
     pad.releaseAll(send);require(!keys[0x2e]&&!keys[0x1c]&&!keys[0x30]&&pad.padState().buttons==0);
     pad.setKeyEmulation(true);pad.button(GamepadState::Y,true,true,send);require(keys[0x1c]&&!keys[0x30]);
     pad.releaseAll(send);
-    std::cout<<"Controller checks passed: acquired joystick, independent triggers, menu isolation, button triggers, release and opt-out\n";
+    // With the joystick acquired, the game's defaults put shifting on Back/Start (seen on a Backbone):
+    // every driving button must use the explicit layout and none may reach the joystick.
+    pad.setKeyEmulation(false);
+    struct Expect{GamepadState::Button button;unsigned scan;};
+    for(auto e:{Expect{GamepadState::A,0x39},Expect{GamepadState::B,0x38},Expect{GamepadState::R1,0x2a},Expect{GamepadState::L1,0x1d},
+                Expect{GamepadState::Start,0x01},Expect{GamepadState::Select,0x32}}){
+        pad.button(e.button,true,true,send);
+        unsigned down=0;for(bool k:keys)down+=k;
+        require(keys[e.scan]&&down==1&&pad.padState().buttons==0);
+        pad.button(e.button,false,true,send);require(!keys[e.scan]);
+    }
+    pad.button(GamepadState::ThumbL,true,true,send);{unsigned down=0;for(bool k:keys)down+=k;require(down==0&&pad.padState().buttons==0);}
+    pad.refresh(false,send);require(pad.padState().buttons==1u<<8);  // menus still see the joystick buttons
+    pad.releaseAll(send);
+    std::cout<<"Controller checks passed: acquired joystick, independent triggers, menu isolation, button triggers, full driving layout, release and opt-out\n";
 }

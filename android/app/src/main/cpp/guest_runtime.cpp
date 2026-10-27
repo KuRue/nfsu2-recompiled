@@ -18,6 +18,9 @@
 #include <array>
 #include <vector>
 #include <map>
+#ifdef __ANDROID__
+#include <sys/system_properties.h>
+#endif
 #include <memory>
 #include <mutex>
 #include <fstream>
@@ -250,6 +253,49 @@ void captureCheck(const char* site){
     }
 }
 #define NFS_CAPTURE_CHECK(site) captureCheck(site)
+// Resume: the frames to rebuild (bottom first) and how many have been consumed.
+thread_local std::vector<ResumableFrame> resumeFrames;thread_local size_t resumeIndex=0;
+extern "C" {
+thread_local int nfs_resume_active=0;thread_local uint32_t nfs_resume_site=0,nfs_resume_target=0;
+[[noreturn]] void nfs_resume_fail(){
+    nfs_resume_active=0;
+    throw GuestStop("Resume failed at frame "+std::to_string(resumeIndex)+" of "+std::to_string(resumeFrames.size())+" in "+hex(g_cur_func));
+}
+int nfs_resume_enter(uint32_t va,int* fpuCompare,int* direction){
+    if(resumeIndex>=resumeFrames.size()||resumeFrames[resumeIndex].function!=va)nfs_resume_fail();
+    const ResumableFrame& f=resumeFrames[resumeIndex++];
+    *fpuCompare=f.fpuCompare;*direction=f.direction;nfs_resume_site=f.site;nfs_resume_target=f.target;
+    return 1;
+}
+void nfs_resume_invoke(uint32_t expected,recomp_func_t direct){
+    if(expected!=nfs_resume_target)nfs_resume_fail();
+    recomp_func_t fn=direct;
+    if(!fn){fn=recomp_lookup_manual(expected);if(!fn)fn=recomp_lookup(expected);if(!fn)fn=recomp_lookup_import(expected);}
+    if(!fn)nfs_resume_fail();
+    // The top frame's callee is the host import the thread was in: it runs again normally.
+    if(resumeIndex==resumeFrames.size())nfs_resume_active=0;
+    fn();
+}
+}
+// Development test of the resume path inside one process: at a Present, record the main thread's
+// frames and registers, unwind its whole native stack with an exception, and rebuild it in
+// callGuest from the frames. The import then runs as if nothing happened. Enabled with
+// `adb shell setprop debug.nfs.rebuild <seconds>`; nothing else is captured or written.
+struct RebuildRequest{State top;std::vector<ResumableFrame> frames;};
+uint64_t rebuildsStarted=0,rebuildsDone=0;
+void maybeRebuildStack(){
+    static int interval=-1;static auto last=std::chrono::steady_clock::now();
+    if(interval<0){char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.rebuild",value);interval=atoi(value);
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSResumable","stack rebuild test interval=%d s",interval);}
+    auto now=std::chrono::steady_clock::now();
+    if(interval<=0||now-last<std::chrono::seconds(interval))return;
+    uint32_t at;if(captureBlocker(at))return;
+    last=now;
+    RebuildRequest request;request.top.save();
+    request.frames.assign(nfs_frames+resumableBase,nfs_frames+nfs_frame_depth);
+    ++rebuildsStarted;
+    throw request;
+}
 #else
 #define NFS_CAPTURE_CHECK(site) ((void)0)
 #endif
@@ -427,6 +473,9 @@ void freeD3DGuest(uint32_t address){heaps->free(GuestHeaps::process,address);}
 void serviceGuestSound();
 void samplePhysicsForPhone();
 void d3dDispatch(){
+#ifdef NFS_RESUMABLE
+    if(d3dToken==0x7e002110u)maybeRebuildStack();  // before Present runs, so re-running it is exact
+#endif
     // The arguments are read in place on the guest stack (one bounds check)
     // instead of copying 128 bytes for each of the ~40k calls of a race frame.
     const uint32_t* args=static_cast<const uint32_t*>(ptr(g_esp+4,128));uint32_t count=0;uint32_t token=d3dToken;
@@ -686,7 +735,22 @@ uint32_t callGuest(uint32_t va, const uint32_t* args, size_t count, uint32_t cle
             ResumableScope(uint32_t va):entry(resumableEntry),base(resumableBase){resumableEntry=va;resumableBase=nfs_frame_depth;++resumableNesting;}
             ~ResumableScope(){resumableEntry=entry;resumableBase=base;--resumableNesting;}} resumableScope{va};
 #endif
-        fn(); g_esp+=cleanup;
+#ifdef NFS_RESUMABLE
+        for(;;){
+            try{fn();break;}
+            catch(RebuildRequest& request){
+                // Everything above this guest entry is gone; rebuild it from the recorded frames.
+                if(resumableNesting!=1)throw;
+                request.top.load();nfs_frame_depth=resumableBase;
+                resumeFrames=std::move(request.frames);resumeIndex=0;nfs_resume_active=1;
+                if(++rebuildsDone<=3||(rebuildsDone&63u)==0)
+                    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSResumable","stack rebuild #%llu: %zu frames",(unsigned long long)rebuildsDone,resumeFrames.size());
+            }
+        }
+#else
+        fn();
+#endif
+        g_esp+=cleanup;
         if (g_esp!=saved.esp&&!(threadStart&&g_esp+4u*uint32_t(count)==saved.esp)) throw GuestStop("Guest call stack imbalance at " + hex(va));
         uint32_t result=g_eax; saved.load(); return result;
     } catch (...) { saved.load(); throw; }

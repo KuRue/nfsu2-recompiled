@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rewrite the call sites of selected lifted functions so their frames are recorded (and later resumable).
+"""Rewrite the call sites of selected lifted functions so their frames are recorded and can be resumed.
 
 Usage: make_resumable.py FUNCTION_LIST OUTPUT_DIR SOURCE...
 FUNCTION_LIST holds one hex guest address per line. Sources without a selected function are
@@ -19,33 +19,64 @@ HEAD = re.compile(r'^void sub_([0-9A-F]{8})\(void\) \{$')
 CALL_FORMS = ('RECOMP_CALL', 'RECOMP_ICALL', 'RECOMP_ITAIL')
 
 
-def rewrite(lines, selected, stats):
-    out, current, last_jump = [], None, None
-    for number, line in enumerate(lines, 1):
-        head = HEAD.match(line)
-        if head:
-            current = int(head[1], 16) if int(head[1], 16) in selected else None
-            if current is not None:
-                stats['functions'].add(current)
-        elif line.startswith('}'):
-            current = None
+ENTER = re.compile(r'^(\s*)RECOMP_ENTER\(0x([0-9A-F]{8})u\);')
+
+
+def rewrite_function(body, address, number):
+    """Label every call site and add a resume dispatch after RECOMP_ENTER."""
+    out, sites, last_jump = [], [], None
+    for offset, line in enumerate(body):
         if jump := JUMP_SITE.search(line):
             last_jump = jump[1]
-        if current is None or not any(form in line for form in CALL_FORMS):
+        if not any(form in line for form in CALL_FORMS):
             out.append(line)
             continue
         if m := CALL.match(line):
-            out.append(f'{m[1]}NFS_RCALL(0x{m[5]}u, 0x{m[3]}u, {m[2]});{m[4]}')
+            site, text = m[5], f'{m[1]}R_{m[5]}: NFS_RCALL(0x{m[5]}u, 0x{m[3]}u, {m[2]});{m[4]}'
         elif m := ITAIL.match(line):
-            out.append(f'{m[1]}NFS_RITAIL(0x{m[4]}u, {m[2]}); RECOMP_RETURN();{m[3]}')
+            site, text = m[4], f'{m[1]}R_{m[4]}: NFS_RITAIL(0x{m[4]}u, {m[2]}); RECOMP_RETURN();{m[3]}'
         elif (m := SWITCH_TAIL.match(line)) and last_jump:
             # A switch-table jump whose target is not a case of this function: the table jump is the site.
-            out.append(f'{m[1]}default: NFS_RITAIL(0x{last_jump}u, {m[2]}); RECOMP_RETURN();')
+            site, text = last_jump, f'{m[1]}default: R_{last_jump}: NFS_RITAIL(0x{last_jump}u, {m[2]}); RECOMP_RETURN();'
         elif m := ICALL.match(line):
-            out.append(f'{m[1]}NFS_RICALL(0x{m[4]}u, {m[2]});{m[3]}')
+            site, text = m[4], f'{m[1]}R_{m[4]}: NFS_RICALL(0x{m[4]}u, {m[2]});{m[3]}'
         else:
-            raise SystemExit(f'Unrecognized call form in sub_{current:08X} (line {number}): {line.strip()}')
-        stats['sites'] += 1
+            raise SystemExit(f'Unrecognized call form in sub_{address:08X} (line {number + offset}): {line.strip()}')
+        if site in sites:
+            raise SystemExit(f'Call site 0x{site} appears twice in sub_{address:08X}')
+        sites.append(site)
+        out.append(text)
+    for index, line in enumerate(out):
+        if m := ENTER.match(line):
+            if int(m[2], 16) != address:
+                raise SystemExit(f'sub_{address:08X} enters as 0x{m[2]}')
+            cases = ' '.join(f'case 0x{site}u: goto R_{site};' for site in sites)
+            out.insert(index + 1, f'{m[1]}NFS_RESUME_ENTRY(0x{address:08X}u) {{ switch (nfs_resume_site) {{ {cases} default: nfs_resume_fail(); }} }}')
+            return out, len(sites)
+    raise SystemExit(f'sub_{address:08X} has no RECOMP_ENTER')
+
+
+def rewrite(lines, selected, stats):
+    out, current, body, start = [], None, [], 0
+    for number, line in enumerate(lines, 1):
+        head = HEAD.match(line)
+        if head and int(head[1], 16) in selected:
+            current, body, start = int(head[1], 16), [], number + 1
+            stats['functions'].add(current)
+            out.append(line)
+            continue
+        if current is not None:
+            if line.startswith('}'):
+                rewritten, count = rewrite_function(body, current, start)
+                out += rewritten
+                stats['sites'] += count
+                current = None
+            else:
+                body.append(line)
+                continue
+        out.append(line)
+    if current is not None:
+        raise SystemExit(f'sub_{current:08X} is not closed')
     return out
 
 
