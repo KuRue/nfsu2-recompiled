@@ -24,6 +24,22 @@
 #include "vulkan_driver.h"
 #include "nfs_widescreen.h"
 
+static android_app* benchmarkApp=nullptr;
+static void deliverBenchmarkReport(const char* path){
+    if(!benchmarkApp||!benchmarkApp->activity||!benchmarkApp->activity->vm)return;
+    JNIEnv* env=nullptr;
+    if(benchmarkApp->activity->vm->AttachCurrentThread(&env,nullptr)!=JNI_OK)return;
+    jclass cls=env->GetObjectClass(benchmarkApp->activity->clazz);
+    jmethodID method=env->GetMethodID(cls,"onBenchmarkFinished","(Ljava/lang/String;)V");
+    if(method){
+        jstring text=env->NewStringUTF(path?path:"");
+        env->CallVoidMethod(benchmarkApp->activity->clazz,method,text);
+        env->DeleteLocalRef(text);
+    }
+    if(env->ExceptionCheck()){env->ExceptionDescribe();env->ExceptionClear();}
+    env->DeleteLocalRef(cls);
+    benchmarkApp->activity->vm->DetachCurrentThread();
+}
 static void showStatus(android_app* app, const char* message) {
     JNIEnv* env = nullptr;
     if (app->activity->vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
@@ -353,6 +369,15 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
 }
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeResolution(JNIEnv*,jclass,jint width,jint height){setGuestResolution(unsigned(width),unsigned(height));}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFrameLimit(JNIEnv*,jclass,jint cap){setGuestFrameLimit(unsigned(cap));}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeDisplayRefresh(JNIEnv*,jclass,jint hertz){setGuestDisplayRefresh(unsigned(hertz));}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFramePace(JNIEnv*,jclass,jboolean steady){setGuestSteadyPace(steady==JNI_TRUE);}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeBenchmark(JNIEnv* env,jclass,jint seconds,jstring path,jstring resolution){
+    const char* report=path?env->GetStringUTFChars(path,nullptr):nullptr;
+    const char* scale=resolution?env->GetStringUTFChars(resolution,nullptr):nullptr;
+    setGuestBenchmark(unsigned(seconds),report?report:"",scale?scale:"");
+    if(report)env->ReleaseStringUTFChars(path,report);
+    if(scale)env->ReleaseStringUTFChars(resolution,scale);
+}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFeedbackSource(JNIEnv*,jclass,jboolean physics){setGuestFeedbackSource(physics);}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativePhoneFeedback(JNIEnv*,jclass,jboolean enabled){setGuestForceFeedback(enabled);}
 extern "C" JNIEXPORT jint JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFeedbackLevel(JNIEnv*,jclass){return guestForceFeedbackLevel();}
@@ -412,6 +437,8 @@ static void configurePipelineCache(android_app* app){
     __android_log_print(ANDROID_LOG_INFO,"NFSU2","DXVK persistent pipeline state cache: %s",directory.c_str());
 }
 void android_main(android_app* app) {
+    benchmarkApp=app;
+    setGuestBenchmarkHandler(deliverBenchmarkReport);
     configurePipelineCache(app);
     Host host; app->userData = &host; app->onAppCmd = onCommand;app->onInputEvent=onInput;
     try {
@@ -476,4 +503,5 @@ void android_main(android_app* app) {
     setGuestPaused(true);
     host.renderer.stop();
     acknowledgeD3D9Surface(false);setD3D9HostWindow(nullptr);
+    benchmarkApp=nullptr;
 }

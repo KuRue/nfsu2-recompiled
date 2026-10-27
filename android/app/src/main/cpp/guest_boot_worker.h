@@ -30,6 +30,7 @@ public:
         started_=true;
     }
     std::string status(){std::lock_guard<std::mutex> guard(mutex_);return status_;}
+    void note(const std::string& status){std::lock_guard<std::mutex> guard(mutex_);status_=status;}
 };
 
 // The paused machine and its worker context must outlive individual activities.

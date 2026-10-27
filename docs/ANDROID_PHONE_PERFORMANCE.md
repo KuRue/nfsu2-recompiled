@@ -8,8 +8,11 @@ race-like windows selected by call count, not a controlled replay or sustained
 thermal test. Current Android thermal status was0 (none); that does not establish
 thermal stability over a long race. Presets are unchanged pending measurements.
 
-The dev build now logs completed-presentation interval p50/p95/p99/max every120
-frames, plus count exceeding1.5 times the selected frame budget (25ms at60FPS).
+The dev build now logs completed-presentation interval p50/p95/p99/max and
+jitter (mean absolute deviation from the median) every120 frames, plus count
+exceeding1.5 times the paced frame budget (25ms at60FPS). When steady pace is
+on, 90FPS on a120Hz panel is paced at60.
+
 A bounded120-double array uses no per-frame allocation. Statistics include loading,
 pauses and scene transitions; separate those from active race samples when analyzing.
 These are CPU-side completed Present intervals, not GPU timestamps or proof of

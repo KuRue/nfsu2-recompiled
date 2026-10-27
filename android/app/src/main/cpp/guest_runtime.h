@@ -29,6 +29,12 @@ void typeGuestText(const std::vector<uint32_t>& characters);
 void setGuestLanguage(const char* language);
 void setGuestResolution(unsigned width,unsigned height);
 void setGuestFrameLimit(unsigned framesPerSecond);
+void setGuestDisplayRefresh(unsigned hertz);
+void setGuestSteadyPace(bool steady);
+// seconds 0 disables the run. resolution is the launcher key ("75", "720").
+// The handler is called on the guest thread after the report is written.
+void setGuestBenchmark(unsigned seconds,const std::string& reportPath,const std::string& resolution);
+void setGuestBenchmarkHandler(void (*handler)(const char* reportPath));
 
 void setGuestForceFeedback(bool enabled);
 unsigned guestForceFeedbackLevel();

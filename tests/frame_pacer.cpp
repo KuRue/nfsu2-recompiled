@@ -23,5 +23,40 @@ int main(){
         require(pacer.deadline(time+milliseconds(2),limit)==time+milliseconds(2),"enabling a cap starts a fresh schedule");
         require(pacer.deadline(time+milliseconds(3),limit==30?60:30)==time+milliseconds(3),"changing caps starts a fresh schedule");
     }
-    std::puts("Frame pacing passed: 30/60/90/120, 8000 fast/slow frames, pause, uncapped and cap changes");
+    {
+        FramePacer pacer;auto period=nanoseconds(1000000000ull/60);
+        require(pacer.deadline(origin,60)==origin,"grid origin");
+        auto late=origin+period+milliseconds(1);
+        require(pacer.deadline(late,60)==late,"a slightly late frame does not sleep");
+        auto early=origin+period*2-milliseconds(5);
+        require(pacer.deadline(early,60)==origin+period*2,"the next deadline stays on the original grid");
+    }
+    {
+        FramePacer pacer;auto period=nanoseconds(1000000000ull/60);
+        require(pacer.deadline(origin,60)==origin,"resync origin");
+        auto veryLate=origin+period*2+milliseconds(7);
+        require(pacer.deadline(veryLate,60)==veryLate,"a frame a full period late does not sleep");
+        require(pacer.deadline(veryLate+period/3,60)==veryLate+period,"resync does not burst the following frame");
+    }
+    {
+        FramePacer pacer;auto period=nanoseconds(1000000000ull/60);
+        require(pacer.deadline(origin,60)==origin,"slack origin");
+        auto almost=origin+period-milliseconds(1);
+        require(pacer.deadline(almost,60,0,milliseconds(2))==almost,"a wait under the slack is skipped");
+        require(pacer.deadline(origin+period*2-milliseconds(5),60)==origin+period*2,"skipped slack still keeps the grid");
+        FramePacer early;require(early.deadline(origin,60)==origin,"long-wait origin");
+        require(early.deadline(origin+period/3,60,0,milliseconds(2))==origin+period,"a long wait is not skipped");
+    }
+    require(steadyFrameRate(90,120)==60,"90 FPS on 120 Hz paces at 60");
+    require(steadyFrameRate(60,120)==60,"60 FPS on 120 Hz stays 60");
+    require(steadyFrameRate(120,120)==120,"120 FPS on 120 Hz stays 120");
+    require(steadyFrameRate(30,120)==30,"30 FPS on 120 Hz stays 30");
+    require(steadyFrameRate(40,120)==40,"40 FPS on 120 Hz stays 40");
+    require(steadyFrameRate(90,0)==90,"no refresh rate keeps the selected cap");
+    {
+        FramePacer pacer;auto vblank=nanoseconds(1000000000ull/120);auto step=vblank*2;
+        require(pacer.deadline(origin,90,120)==origin,"refresh lock origin");
+        require(pacer.deadline(origin+step/3,90,120)==origin+step,"90 FPS on 120 Hz sleeps on a 60 FPS grid");
+    }
+    std::puts("Frame pacing passed: grid lock, slack, refresh quantize, 30/60/90/120");
 }

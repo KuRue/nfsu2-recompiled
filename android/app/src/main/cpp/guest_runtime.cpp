@@ -9,6 +9,8 @@
 #include "runtime_log.h"
 #include "frame_pacer.h"
 #include "frame_metrics.h"
+#include "frame_benchmark.h"
+#include "guest_boot_worker.h"
 #include "force_feedback.h"
 #include "physics_probe.h"
 #include "physics_haptics.h"
@@ -21,6 +23,9 @@
 #include <map>
 #ifdef __ANDROID__
 #include <sys/system_properties.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
 #endif
 #include <memory>
 #include <mutex>
@@ -69,6 +74,13 @@ namespace {
 std::atomic<uint32_t> displayWidth{1280},displayHeight{720};
 std::atomic<uint32_t> renderWidth{0},renderHeight{0};
 std::atomic<unsigned> frameLimit{0};
+std::atomic<unsigned> displayRefresh{0};
+std::atomic<bool> steadyPace{true};
+std::atomic<unsigned> benchmarkSeconds{0};
+std::mutex benchmarkMutex;
+std::string benchmarkPath,benchmarkResolution{"75"};
+void (*benchmarkHandler)(const char*)=nullptr;
+BenchmarkRun benchmarkRun;
 std::string hex(uint32_t va) {
     std::ostringstream out; out << "0x" << std::hex << std::setw(8) << std::setfill('0') << va;
     return out.str();
@@ -515,6 +527,46 @@ void getProcessHeap() { ret(GuestHeaps::process,0); }
 void getProcAddress();
 #if defined(__ANDROID__) || defined(NFS_D3D9_BACKEND)
 uint32_t d3dToken{};
+#ifdef __ANDROID__
+bool writeBenchmarkFile(const std::string& path,const std::string& body){
+    if(path.empty())return false;
+    std::string temporary=path+".tmp";
+    int fd=::open(temporary.c_str(),O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC,0644);
+    if(fd<0)return false;
+    const char* data=body.data();size_t left=body.size();
+    while(left){
+        ssize_t wrote=::write(fd,data,left);
+        if(wrote<0){if(errno==EINTR)continue;::close(fd);::unlink(temporary.c_str());return false;}
+        data+=wrote;left-=size_t(wrote);
+    }
+    bool synced=::fsync(fd)==0;::close(fd);
+    if(!synced||::rename(temporary.c_str(),path.c_str())!=0){::unlink(temporary.c_str());return false;}
+    return true;
+}
+#endif
+void finishGuestBenchmark(){
+    unsigned selected=frameLimit.load();
+    unsigned panel=displayRefresh.load();
+    bool steady=steadyPace.load();
+    unsigned paced=steadyFrameRate(selected,steady?panel:0);
+    auto timing=benchmarkRun.samples().take(paced);
+    std::string path,resolution;void (*handler)(const char*)=nullptr;
+    {std::lock_guard<std::mutex> lock(benchmarkMutex);path=benchmarkPath;resolution=benchmarkResolution;handler=benchmarkHandler;}
+    BenchmarkView view;
+    view.p50=timing.p50;view.p95=timing.p95;view.p99=timing.p99;view.maximum=timing.maximum;view.jitter=timing.jitter;
+    view.late=timing.late;view.count=timing.count;view.limit=paced;view.selected=selected;view.refresh=panel;view.steady=steady;
+    view.resolution=resolution.c_str();
+    auto advice=adviseBenchmark(view);
+    std::string report=formatBenchmarkReport(view,advice);
+#ifdef __ANDROID__
+    bool wrote=writeBenchmarkFile(path,report);
+#else
+    bool wrote=false;(void)report;
+#endif
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Benchmark %s action=%s samples=%u paced=%u",wrote?path.c_str():"not written",advice.action,timing.count,paced);
+    if(handler)handler(wrote?path.c_str():"");
+    requestGuestRuntimeStop();
+}
 void direct3DCreate(){ret(createGuestD3D9(arg(0)),1);}
 void freeD3DGuest(uint32_t address){heaps->free(GuestHeaps::process,address);}
 void serviceGuestSound();
@@ -544,7 +596,12 @@ void d3dDispatch(){
         samplePhysicsForPhone();
         static FramePacer pacer;
         auto now=std::chrono::steady_clock::now();
-        auto deadline=pacer.deadline(now,frameLimit.load(std::memory_order_relaxed));
+        unsigned selectedLimit=frameLimit.load(std::memory_order_relaxed);
+        unsigned panel=displayRefresh.load(std::memory_order_relaxed);
+        bool steady=steadyPace.load(std::memory_order_relaxed);
+        // Skip a wait under 1.5 ms. Android's sleep often wakes late, and missing
+        // the slot then costs a whole refresh. The pacer still keeps its grid.
+        auto deadline=pacer.deadline(now,selectedLimit,steady?panel:0,std::chrono::microseconds(1500));
         // The renderer has returned; guest audio/streaming workers can use the
         // machine while this thread waits. Late frames incur no extra delay.
         renderThread=true;
@@ -553,14 +610,24 @@ void d3dDispatch(){
         static FrameMetrics intervals;
         static auto previousFrame=std::chrono::steady_clock::now();
         auto completed=std::chrono::steady_clock::now();
-        intervals.add(std::chrono::duration<double,std::milli>(completed-previousFrame).count());previousFrame=completed;
+        double frameMs=std::chrono::duration<double,std::milli>(completed-previousFrame).count();
+        intervals.add(frameMs);previousFrame=completed;
+        static uint64_t callsAtPresent=0;uint64_t callsThisFrame=bridgeCalls-callsAtPresent;callsAtPresent=bridgeCalls;
+        static bool benchmarkArmed=false;static const char* benchmarkShown=nullptr;
+        if(!benchmarkArmed&&benchmarkSeconds.load(std::memory_order_relaxed)){benchmarkArmed=true;benchmarkRun.arm(benchmarkSeconds.load(std::memory_order_relaxed));}
+        if(benchmarkArmed&&!benchmarkRun.finished()){
+            const char* label=benchmarkRun.label();
+            if(label&&label!=benchmarkShown){benchmarkShown=label;processGuestWorker().note(label);}
+            unsigned calls=callsThisFrame>0xffffffffull?0xffffffffu:unsigned(callsThisFrame);
+            if(benchmarkRun.present(completed,frameMs,calls))finishGuestBenchmark();
+        }
         static unsigned frames=0;static auto since=std::chrono::steady_clock::now();
         if(++frames==120){serviceGuestSound();auto now=std::chrono::steady_clock::now();double seconds=std::chrono::duration<double>(now-since).count();
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest D3D9 presentation %.1f FPS over %.2f seconds; bridge ~%.2f ms/frame (present %.2f), %.0f calls/frame",
                 frames/seconds,seconds,double(bridgeTime.count())/1e6/frames,double(presentTime.count())/1e6/frames,double(bridgeCalls)/frames);
-            auto timing=intervals.take(frameLimit.load(std::memory_order_relaxed));
-            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Frame intervals ms p50=%.2f p95=%.2f p99=%.2f max=%.2f late=%u/%u (over 1.5x target)",
-                timing.p50,timing.p95,timing.p99,timing.maximum,timing.late,timing.count);
+            auto timing=intervals.take(steadyFrameRate(selectedLimit,steady?panel:0));
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Frame intervals ms p50=%.2f p95=%.2f p99=%.2f max=%.2f jitter=%.2f late=%u/%u (over 1.5x paced target)",
+                timing.p50,timing.p95,timing.p99,timing.maximum,timing.jitter,timing.late,timing.count);
             std::array<unsigned,5> top{};
             for(unsigned slot=0;slot<4096u;++slot)for(unsigned rank=0;rank<top.size();++rank)
                 if(methodTime[slot]>methodTime[top[rank]]){std::copy_backward(top.begin()+rank,top.end()-1,top.end());top[rank]=slot;break;}
@@ -1330,12 +1397,32 @@ void setGuestResolution(unsigned width,unsigned height){
 #endif
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Selected render resolution %ux%u",width,height);
 }
+void publishFrameSchedule(){
+    unsigned selected=frameLimit.load();
+    unsigned refresh=steadyPace.load()?displayRefresh.load():0;
+    unsigned paced=steadyFrameRate(selected,refresh);
+    // The game paces itself to 1/60 s. Match the rate we actually present
+    // (uncapped: the 120 Hz display) so the simulation does not aim past it.
+    nfs_widescreen_set_frame_rate(paced?paced:120);
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Android frame limit %u FPS, paced %u (refresh %u, steady %d)",selected,paced,displayRefresh.load(),int(steadyPace.load()));
+}
 void setGuestFrameLimit(unsigned framesPerSecond){
     frameLimit=(framesPerSecond>=30&&framesPerSecond<=240)?framesPerSecond:0;
-    // The game paces itself to 1/60 s; let it run at the cap (uncapped: the 120 Hz display).
-    nfs_widescreen_set_frame_rate(frameLimit.load()?frameLimit.load():120);
-    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Android frame limit %u FPS (0 means uncapped)",frameLimit.load());
+    publishFrameSchedule();
 }
+void setGuestDisplayRefresh(unsigned hertz){
+    displayRefresh=hertz>=30&&hertz<=240?hertz:0;
+    publishFrameSchedule();
+}
+void setGuestSteadyPace(bool steady){steadyPace=steady;publishFrameSchedule();}
+void setGuestBenchmark(unsigned seconds,const std::string& reportPath,const std::string& resolution){
+    std::lock_guard<std::mutex> lock(benchmarkMutex);
+    benchmarkSeconds=seconds>=5&&seconds<=120?seconds:0;
+    benchmarkPath=reportPath;
+    if(!resolution.empty())benchmarkResolution=resolution;
+    if(!benchmarkSeconds)benchmarkPath.clear();
+}
+void setGuestBenchmarkHandler(void (*handler)(const char*)){std::lock_guard<std::mutex> lock(benchmarkMutex);benchmarkHandler=handler;}
 void setGuestKey(unsigned scan,bool down){if(scan>=256)return;std::lock_guard<std::mutex> lock(inputMutex);if(bool(inputKeys[scan])==down)return;inputKeys[scan]=down?0x80:0;recordInputKey(scan,down);enqueueGuestKey(scan,down);}
 void clearGuestInput(){std::lock_guard<std::mutex> lock(inputMutex);for(unsigned scan=0;scan<256;++scan)if(inputKeys[scan]){recordInputKey(scan,false);enqueueGuestKey(scan,false);}inputKeys.fill(0);inputMouseButtons.fill(0);inputMouseX=inputMouseY=inputMouseZ=0;}
 void setGuestPointer(float x,float y,int phase){

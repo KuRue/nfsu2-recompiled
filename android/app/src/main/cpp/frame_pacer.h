@@ -2,19 +2,52 @@
 #include <chrono>
 #include <algorithm>
 
-// Missed deadlines are discarded. Replaying an old schedule produces bursts
-// of uncapped frames followed by a full-period stall on slower devices.
+// How many display refreshes fit under the cap. 0 means the cap is not locked
+// to a refresh rate, and the period is the truncated 1e9/limit nanoseconds.
+inline unsigned steadyFrameInterval(unsigned limit,unsigned refreshHz){
+    if(!limit||refreshHz<30||refreshHz>240)return 0;
+    unsigned interval=(refreshHz+limit-1)/limit;
+    return interval<1?1u:interval;
+}
+// Highest rate at or under the cap that lands on whole refreshes.
+// 90 on a 120 Hz panel is 60, because 90 does not divide 120.
+inline unsigned steadyFrameRate(unsigned limit,unsigned refreshHz){
+    unsigned interval=steadyFrameInterval(limit,refreshHz);
+    if(!interval)return limit;
+    unsigned rate=refreshHz/interval;
+    return rate?rate:1u;
+}
+
+// A frame that is late by less than one period is presented now, and the next
+// deadline stays on the original grid. Shifting the grid to "now" on every
+// late frame is what walks the picture against the display.
+// A frame a full period late, or later, starts a new grid. Replaying the old
+// one would burst uncapped frames and then stall for a full period.
+// slack skips a wait that is too short to trust: sleeping past the slot costs
+// a whole refresh. The grid still advances from the scheduled point.
 class FramePacer {
 public:
     using Clock=std::chrono::steady_clock;
-    Clock::time_point deadline(Clock::time_point now,unsigned limit){
-        if(!limit){limit_=0;next_={};return now;}
-        if(limit!=limit_){limit_=limit;next_=now;}
-        auto target=std::max(now,next_);
-        next_=target+std::chrono::nanoseconds(std::max(1ull,1000000000ull/limit));
-        return target;
+    Clock::time_point deadline(Clock::time_point now,unsigned limit,unsigned refreshHz=0,
+            Clock::duration slack=Clock::duration::zero()){
+        if(!limit){limit_=0;refresh_=0;next_={};return now;}
+        unsigned refresh=refreshHz>=30&&refreshHz<=240?refreshHz:0;
+        if(limit!=limit_||refresh!=refresh_){limit_=limit;refresh_=refresh;next_=now+period();return now;}
+        auto step=period();
+        if(slack<Clock::duration::zero())slack=Clock::duration::zero();
+        if(slack>step/2)slack=step/2;
+        auto scheduled=next_;
+        if(now+slack<scheduled){next_=scheduled+step;return scheduled;}
+        if(now<scheduled+step){next_=scheduled+step;return now;}
+        next_=now+step;return now;
     }
 private:
-    unsigned limit_=0;
+    Clock::duration period() const {
+        unsigned interval=steadyFrameInterval(limit_,refresh_);
+        if(!interval)return std::chrono::nanoseconds(std::max(1ull,1000000000ull/std::max(1u,limit_)));
+        auto vblank=std::chrono::nanoseconds(std::max(1ull,1000000000ull/refresh_));
+        return vblank*interval;
+    }
+    unsigned limit_=0,refresh_=0;
     Clock::time_point next_{};
 };

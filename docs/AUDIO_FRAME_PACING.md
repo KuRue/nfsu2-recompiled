@@ -64,10 +64,16 @@ probe. Hardware voice counts remain zero because the adapter mixes in software.
 A startup regression calls the guest COM methods, checks the 96-byte output
 and stack ABI, then releases its temporary device.
 
-FramePacer drops missed deadlines rather than accumulating lateness and
-periodically adding another full frame of sleep. Its deterministic clock test
-covers 8000 fast/overloaded frames at 30/60/90/120 FPS, pauses, uncapped mode and
-cap changes. The scheduler also avoids save/unlock/relock handovers when no
+FramePacer drops a deadline that is a full period late, or later, rather than
+accumulating lateness and periodically adding another full frame of sleep.
+A frame late by less than one period is presented immediately and the next
+deadline stays on the original grid, so small hitches do not walk the phase
+against the display. A wait shorter than the configured slack (1.5ms on
+Android, none in the exact host test) is skipped for the same reason. Steady
+pace locks the cap to whole display refreshes: 90FPS on a 120Hz panel is 60.
+Its deterministic clock test covers 8000 fast/overloaded frames at 30/60/90/120
+FPS, pauses, uncapped mode, cap changes, the held grid, slack, and refresh
+quantization. The scheduler also avoids save/unlock/relock handovers when no
 other guest thread has queued for the machine; queued work is still checked
 on the existing 500-microsecond scheduling interval. Native COM/import stubs
 skip the lifted-function hash table, with a startup guard against overlapping

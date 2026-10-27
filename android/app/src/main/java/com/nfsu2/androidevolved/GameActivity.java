@@ -163,6 +163,9 @@ public final class GameActivity extends NativeActivity {
     private static native void nativeVisualOptions(boolean packs, int filtering, int sharpness, int look, int reflections);
     private static native void nativeResolution(int width, int height);
     private static native void nativeFrameLimit(int framesPerSecond);
+    private static native void nativeDisplayRefresh(int hertz);
+    private static native void nativeFramePace(boolean steady);
+    private static native void nativeBenchmark(int seconds, String reportPath, String resolution);
     private static native void nativeWidescreen(boolean enabled);
     private static native void nativeOnlineServer(String host);
     private static native void nativeGamepadConnected(boolean connected);
@@ -235,6 +238,8 @@ public final class GameActivity extends NativeActivity {
                 refresh=Math.max(refresh,mode.getRefreshRate());
         android.view.WindowManager.LayoutParams windowParams=getWindow().getAttributes();
         windowParams.preferredRefreshRate=Math.min(120,refresh);getWindow().setAttributes(windowParams);
+        nativeDisplayRefresh(Math.round(Math.min(120f, refresh)));
+        nativeFramePace(GameOptions.get(this, GameOptions.FRAME_PACE).equals("steady"));
         // Launcher options travel as extras; a direct start (adb, recents) falls back to the saved ones.
         Intent launch = getIntent();
         DisplayMetrics metrics = new DisplayMetrics(); getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
@@ -244,6 +249,10 @@ public final class GameActivity extends NativeActivity {
         String language = launch.getStringExtra("language");
         nativeLanguage(language != null ? language : GameOptions.language(this));
         nativeFrameLimit(launch.getIntExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS))));
+        int benchmarkSeconds = launch.getIntExtra("benchmarkSeconds", 0);
+        if (benchmarkSeconds > 0) nativeBenchmark(benchmarkSeconds,
+                new java.io.File(getFilesDir(), "benchmark-report.txt").getAbsolutePath(),
+                GameOptions.get(this, GameOptions.RESOLUTION));
         nativeWidescreen(launch.getBooleanExtra("widescreen", GameOptions.get(this, GameOptions.WIDESCREEN).equals("on")));
         String server = launch.getStringExtra("onlineServer");
         nativeOnlineServer(GameOptions.validServer(server) ? server : GameOptions.onlineServer(this));
@@ -279,6 +288,16 @@ public final class GameActivity extends NativeActivity {
         controlsWindow = new PopupWindow(touchControls, ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT, false);
         controlsWindow.setClippingEnabled(false);
+    }
+    /** Called from the guest thread once the benchmark file has been written. */
+    public void onBenchmarkFinished(String path) {
+        android.util.Log.i("NFSU2", "Benchmark report " + path);
+        runOnUiThread(() -> {
+            try { stopService(new Intent(this, KeepAliveService.class)); }
+            catch (RuntimeException ignored) {}
+            finish();
+            android.os.Process.killProcess(android.os.Process.myPid());
+        });
     }
     public void setStatus(String message) {
         runOnUiThread(() -> {

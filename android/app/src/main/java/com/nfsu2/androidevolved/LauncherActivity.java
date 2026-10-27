@@ -40,6 +40,7 @@ import java.util.concurrent.Executors;
  */
 public final class LauncherActivity extends Activity {
     private static final int REQUEST_DRIVER_ZIP = 45, REQUEST_DRIVER_PROBE = 46, REQUEST_SAVE_ZIP = 47;
+    private int benchmarkSeconds;
     // NFSU2 green.
     private static final int ACCENT = 0xFF8EE03A;
     /** {label, guest language name, LANGUAGES/<file>.bin}. */
@@ -106,6 +107,7 @@ public final class LauncherActivity extends Activity {
         resumed = true;
         refresh();
         main.removeCallbacks(sessionRefresh);main.postDelayed(sessionRefresh,2000);
+        showPendingBenchmark();
         String crash = Diagnostics.unreportedCrash(this);
         if (crash != null) {
             Diagnostics.acknowledgeCrashes(this);
@@ -299,6 +301,8 @@ public final class LauncherActivity extends Activity {
                 for (GameOptions.Option option : GameOptions.ALL)
                     if (!isControlOption(option))
                         optionsList.addView(optionCycleRow(option));
+                optionsList.addView(optionRow("Run a benchmark", "20 seconds of a race", this::confirmBenchmark));
+                optionsList.addView(optionRow("Upscaling and frame generation", "Not on this GPU", this::explainUpscaling));
                 optionsList.addView(optionRow("Test driver", "GPU and Vulkan features", () -> probeDriver(false)));
                 optionsList.addView(optionRow("Reset graphics cache", "Rebuild shaders", () -> GraphicsCache.prompt(this)));
                 break;
@@ -458,6 +462,7 @@ public final class LauncherActivity extends Activity {
             // probe checks may still run the game (issue #1107), so offer it.
             boolean wantedToPlay = playAfterProbe && !failed;
             playAfterProbe = false;
+            if (!wantedToPlay) benchmarkSeconds = 0;
             String text = failed ? "Could not use the driver: " + gpu.optString("probeError", "Vulkan initialization failed.")
                     : "GPU: " + gpu.optString("gpu") + "\nVulkan: " + gpu.optString("vulkan")
                       + "\nDriver: " + gpu.optString("driverName", "—") + " " + gpu.optString("driverInfo", "")
@@ -467,11 +472,13 @@ public final class LauncherActivity extends Activity {
                       + "\n" + (gpu.optBoolean("compatible") ? "Compatible with the game."
                               : "Missing features: " + gpu.optJSONArray("missing"));
             new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle("Vulkan driver test").setMessage(text).setPositiveButton("OK", null)
-                    .setNeutralButton("Use system driver", (dialog, which) -> { GpuDrivers.select(this, ""); refreshOptions(); })
+                    .setTitle("Vulkan driver test").setMessage(text)
+                    .setPositiveButton("OK", (dialog, which) -> { if (wantedToPlay) benchmarkSeconds = 0; })
+                    .setNeutralButton("Use system driver", (dialog, which) -> { benchmarkSeconds = 0; GpuDrivers.select(this, ""); refreshOptions(); })
                     .setNegativeButton(wantedToPlay ? "Play anyway" : null, wantedToPlay ? (dialog, which) -> launch() : null)
+                    .setOnCancelListener(dialog -> { if (wantedToPlay) benchmarkSeconds = 0; })
                     .show();
-        } catch (Exception error) { message("Vulkan driver test", "Invalid diagnostic report: " + error.getMessage()); }
+        } catch (Exception error) { benchmarkSeconds = 0; message("Vulkan driver test", "Invalid diagnostic report: " + error.getMessage()); }
     }
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -578,6 +585,43 @@ public final class LauncherActivity extends Activity {
         else launch();
     }
 
+    private void confirmBenchmark() {
+        String extra = gameRunning() ? "\n\nThe current live session will end." : "";
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Run a benchmark")
+                .setMessage("Starts a fresh session. Get into a race. After three busy frames it records 20 seconds, then returns here with a suggestion. Menus are not scored. Nothing changes until you tap Apply." + extra)
+                .setPositiveButton("Start", (dialog, which) -> { benchmarkSeconds = 20; resumeNextLaunch = false; play(); })
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void explainUpscaling() {
+        message("Upscaling and frame generation",
+                "Neural upscaling and frame generation are not offered on this phone.\n\n"
+                + "Qualcomm's Adreno Neural Fusion super resolution and 2× frame generation run on Snapdragon 8 Elite Gen 6 and newer. This phone's Adreno 830 is older than that. Those passes also need depth, motion vectors, and camera jitter. This 2004 game, through the Vulkan translation, does not produce that motion data. AMD FSR 4 and Arm's neural upscalers target other GPUs.\n\n"
+                + "A color-only spatial upscaler could run here, but it would replace the display's own scale with a full-screen pass that has not been seen on this phone. That is not wired in.\n\n"
+                + "What does change the picture: internal resolution, sharpening, texture filtering, reflections, and the frame cap. Steady pace locks the cap to an even fraction of the panel (90 FPS becomes 60 on a 120 Hz screen). The benchmark suggests the next resolution or frame cap.");
+    }
+
+    private void showPendingBenchmark() {
+        File file = new File(getFilesDir(), "benchmark-report.txt");
+        if (!file.isFile()) return;
+        String text;
+        try { text = new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8); }
+        catch (java.io.IOException error) { file.delete(); message("Benchmark", "Could not read the report."); return; }
+        file.delete();
+        BenchmarkReport report;
+        try { report = BenchmarkReport.parse(text); }
+        catch (IllegalArgumentException error) { message("Benchmark", "The report was not usable."); return; }
+        AlertDialog.Builder dialog = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Benchmark").setMessage(report.summary()).setNegativeButton(report.canApply() ? "Keep settings" : "OK", null);
+        if (report.canApply()) dialog.setPositiveButton("Apply", (d, which) -> {
+            GameOptions.set(this, GameOptions.RESOLUTION, report.nextResolution);
+            GameOptions.set(this, GameOptions.FPS, Integer.toString(report.nextFps));
+            refresh();
+        });
+        dialog.show();
+    }
+
     private void launch() {
         if(resumeNextLaunch){
             if(!gameRunning()){
@@ -602,7 +646,10 @@ public final class LauncherActivity extends Activity {
         int[] size = GameOptions.renderSize(this, Math.max(metrics.widthPixels, metrics.heightPixels),
                 Math.min(metrics.widthPixels, metrics.heightPixels));
         String[] loader = GpuDrivers.loaderArguments(this);
+        int seconds = benchmarkSeconds;
+        benchmarkSeconds = 0;
         startActivity(new Intent(this, GameActivity.class)
+                .putExtra("benchmarkSeconds", seconds)
                 .putExtra("language", GameOptions.language(this))
                 .putExtra("renderWidth", size[0]).putExtra("renderHeight", size[1])
                 .putExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS)))

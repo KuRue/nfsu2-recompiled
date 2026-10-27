@@ -20,7 +20,7 @@ final class GameOptions {
         }
     }
 
-    static final String RESOLUTION = "resolution", FPS = "fps", WIDESCREEN = "widescreen", LATENCY = "latency",
+    static final String RESOLUTION = "resolution", FPS = "fps", FRAME_PACE = "frame_pace", WIDESCREEN = "widescreen", LATENCY = "latency",
             FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", LOOK = "lighting_look", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", LANGUAGE = "language";
 
     static final Option[] ALL = {
@@ -41,12 +41,16 @@ final class GameOptions {
             new Option(REFLECTIONS, "Reflections", "0",
                     new String[] {"0", "1"}, new String[] {"Original resolution", "On · 2× mirror and car resolution"}),
             new Option(RESOLUTION, "Internal resolution", "75",
-                    new String[] {"100", "75", "50", "720"},
-                    new String[] {"Native · highest quality", "75% · balanced", "50% · best performance",
+                    new String[] {"100", "85", "75", "60", "50", "720"},
+                    new String[] {"Native · highest quality", "85%", "75% · balanced", "60%", "50% · best performance",
                             "1280×720 · 16:9"}),
             new Option(FPS, "Frame rate limit", "120",
-                    new String[] {"30", "60", "90", "120", "0"},
-                    new String[] {"30 FPS · save battery", "60 FPS", "90 FPS", "120 FPS", "Uncapped"}),
+                    new String[] {"30", "40", "60", "90", "120", "0"},
+                    new String[] {"30 FPS · save battery", "40 FPS · even on 120 Hz", "60 FPS",
+                            "90 FPS · steady pace uses 60 on 120 Hz", "120 FPS", "Uncapped"}),
+            new Option(FRAME_PACE, "Frame pace", "steady",
+                    new String[] {"steady", "exact"},
+                    new String[] {"Steady · even slices of the display", "Exact · selected cap, may jitter"}),
             new Option(WIDESCREEN, "Widescreen", "on",
                     new String[] {"on", "off"},
                     new String[] {"Corrected HUD and camera", "Original 4:3, stretched"}),
