@@ -249,3 +249,26 @@ A capture that is not possible can wait for the next frame.
 
 The 14 blocking executable functions were added. `docs/data/resumable-functions.txt` (535 functions, 5,154 call sites) is now the
 build's list. One blocker, `0x1102f024`, is in a game DLL module and occurred twice; it is left for later.
+
+### In-process stack rebuild (2026-10-27)
+
+The same resumable build, with `debug.nfs.rebuild=3`, tore down the main thread's native stack at Present and rebuilt it from the
+recorded frames. The log prints rebuilds 1–3 and every 64th. Rebuild `#64` was 189.3 s after `#1`, which is a 3.005 s average, so
+none of those 64 were skipped. Each one rebuilt 4 frames. The process (`com.nfsu2.androidevolved.dev:game`, pid 17575) then kept
+presenting for another 78 s. There was no "Resume failed", no tombstone, and no process restart. The controller layout was not
+part of this session.
+
+Final 10-second sample, about 4.5 minutes after the first Present:
+
+| Capture point | Capturable | Checks | Blockers |
+|---|---|---|---|
+| Present | 100% | 26,869 | none |
+| Sleep | 100% | 51,733 | none |
+| Event wait | 100% | 28,519 | none |
+| Mutex wait | 99.959% | 610,426 | `0x481fd0` 213, `0x46ae00` 27, `0x463c80` 6, DLL `0x1102f024` 5 |
+| EnterCriticalSection | 95 of 98 | 98 | `0x57d8c0` 3 |
+
+The four executable addresses are catalog entries (51, 283, 385 and 54 bytes) and are not in the resumable list yet. Their counts
+stopped rising, so each was a short burst rather than a stuck thread. Present stayed fully capturable, which is why the rebuild
+could fire on time. Evidence: `build/verification/rebuild-2026-10-27.log`. The property was cleared and the dev process stopped
+after the session, so a later launch does not keep rebuilding.

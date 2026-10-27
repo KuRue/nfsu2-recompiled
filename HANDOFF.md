@@ -694,3 +694,6 @@ scripts/continuation_coverage.py: 46% of functions/88% of instructions already a
 - The emitter covers 511 of the 521 live functions and passes 19 programs and 330 checkpoints, including under the sanitizers.
 - Decided: career and profile files are never rolled back on restore.
 - Step 2 in progress: a `-Pnfs.resumable=ON` build records resumable frames and logs capture feasibility (`NFSResumable`). It needs a phone session; after that, implement resume labels and the real capture/restore.
+
+## 2026-10-27: in-process main-thread rebuild passed
+Phone session on the resumable dev build with `debug.nfs.rebuild=3`. Main thread rebuilt at Present 64 times in 189.3 s (3.005 s average, no skipped interval), 4 frames each, same game pid, then kept presenting 78 s more. No Resume failed, tombstone, or restart. Present 26,869/26,869 capturable. Background misses were short: EnterCriticalSection `0x57d8c0` (3) and mutex waits `0x481fd0` (213), `0x46ae00` (27), `0x463c80` (6), plus DLL `0x1102f024` (5). Those four executable functions are not in the resumable list yet. Controller layout was not played. Stress property cleared and the dev process stopped afterward. Details in docs/ANDROID_DURABLE_STATE_PROTOTYPE.md. Next: add the four functions, then quiesce every thread at one frame and write a capture. Restore still waits. Career files stay out of the snapshot.
