@@ -48,7 +48,6 @@ public final class GameActivity extends NativeActivity {
     private PopupWindow controlsWindow;
     private RacingControlsView touchControls;
     private boolean statusHidden;
-    private Runnable statusHideTask;
     private static native void nativeKey(int scan, boolean down);
     private static native boolean nativeDrivingControls();
     private static native boolean nativeGamepadUsed();
@@ -323,11 +322,10 @@ public final class GameActivity extends NativeActivity {
     }
     public void setStatus(String message) {
         runOnUiThread(() -> {
-            if (statusHideTask != null) status.removeCallbacks(statusHideTask);
             if (message.contains("Starting game")) {
-                status.setText("NFSU2 Android Evolved\n" + message);
-                statusHideTask = () -> {statusHidden=true;if(statusWindow.isShowing())statusWindow.dismiss();};
-                status.postDelayed(statusHideTask, 8000);
+                // The game draws its own screens from here; keep the diagnostic box off them.
+                statusHidden=true;
+                if(statusWindow.isShowing())statusWindow.dismiss();
             } else {
                 statusHidden=false;
                 status.setText("NFSU2 Android Evolved\n" + message);
