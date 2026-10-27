@@ -70,6 +70,16 @@ def main():
             cpu.reg_write(X.UC_X86_REG_EFLAGS, 0x202)
             cpu.reg_write(X.UC_X86_REG_FPCW, 0x27f)
             cpu.reg_write(X.UC_X86_REG_MXCSR, 0x1f80)
+            # 32-bit Unicorn takes fs from a descriptor; keep the table outside the compared image.
+            fs_base = 0x480600
+            def descriptor(segment_base):
+                return (0xffff | (segment_base & 0xffffff) << 16 | 0x93 << 40 | 0xf << 48 | 0xc << 52 | (segment_base >> 24) << 56).to_bytes(8, 'little')
+            cpu.mem_map(0x10000, 0x1000)
+            cpu.mem_write(0x10008, descriptor(fs_base) + descriptor(0))
+            cpu.reg_write(X.UC_X86_REG_GDTR, (0, 0x10000, 0x17, 0))
+            for segment in (X.UC_X86_REG_SS, X.UC_X86_REG_DS, X.UC_X86_REG_ES):
+                cpu.reg_write(segment, 0x10)  # Flat, so the rest of the fixture is unaffected.
+            cpu.reg_write(X.UC_X86_REG_FS, 0x8)
             def host_call(cpu, pc, size, user):
                 if pc not in imports:
                     return
@@ -111,7 +121,7 @@ def main():
                 raise RuntimeError('Pending/completed host-call snapshots were not exercised')
             print(f"{name}: x86 match and {baseline['steps']} fresh-process execution checkpoints passed", flush=True)
         # Fail closed rather than emit a partial implementation for unsupported code.
-        for encoding in [b'\xd9\xfe\xc3', b'\x0f\x5e\xc0\xc3', b'\xe8\x00\x10\x00\x00\xc3', b'\xff\x10\xc3', b'\x0f\xa2\xc3', b'\x0f\xb6\xc4\x0f\xa2\xc3', b'\x64\x8b\x00\xc3']:
+        for encoding in [b'\xd9\xfe\xc3', b'\x0f\x5e\xc0\xc3', b'\xe8\x00\x10\x00\x00\xc3', b'\xff\x18\xc3', b'\x0f\xa2\xc3', b'\x0f\xb6\xc4\x0f\xa2\xc3', b'\x65\x8b\x00\xc3', b'\x64\x8a\x00\xc3']:
             try:
                 generator.generate({0x401000: encoding}, pcrecomp)
             except ValueError:

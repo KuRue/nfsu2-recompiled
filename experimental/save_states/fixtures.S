@@ -294,3 +294,63 @@ begin root_x87_integer
  xor eax,eax
  ret
 end root_x87_integer
+/* Virtual calls, switch tables and the compiler's exception-handler chain, as seen in live game functions. */
+begin root_virtual
+ push esi
+ mov esi,offset data_vtable
+ mov ecx,7
+ call dword ptr[esi+4]
+ mov ecx,eax
+ call dword ptr[data_vtable]
+ mov edx,offset method_double
+ call edx
+ pop esi
+ ret
+end root_virtual
+begin method_double
+ lea eax,[ecx+ecx]
+ ret
+end method_double
+begin method_square
+ imul eax,ecx,1
+ imul eax,ecx
+ ret
+end method_square
+begin root_switch
+ xor ebx,ebx
+ xor ecx,ecx
+next_case:
+ jmp dword ptr[data_cases+ecx*4]
+case_a:
+ add ebx,3
+ jmp case_done
+case_b:
+ imul ebx,ebx,5
+ jmp case_done
+case_c:
+ sub ebx,1
+case_done:
+ inc ecx
+ cmp ecx,3
+ jb next_case
+ mov eax,ebx
+ ret
+end root_switch
+begin root_seh
+ push ebp
+ mov ebp,esp
+ push -1
+ mov eax,dword ptr fs:[0]
+ push eax
+ mov dword ptr fs:[0],esp
+ mov dword ptr[0x480430],0x1234
+ mov ecx,dword ptr[esp]
+ mov dword ptr fs:[0],ecx
+ mov eax,dword ptr fs:[0]
+ mov esp,ebp
+ pop ebp
+ ret
+end root_seh
+.p2align 2
+data_vtable: .long method_square, method_double
+data_cases: .long case_a, case_b, case_c

@@ -6,7 +6,7 @@ import importlib.util
 import re
 import sys
 from capstone import Cs, CS_ARCH_X86, CS_MODE_32
-from capstone.x86 import X86_OP_IMM, X86_OP_REG, X86_OP_MEM
+from capstone.x86 import X86_OP_IMM, X86_OP_REG, X86_OP_MEM, X86_REG_FS, X86_REG_ES
 
 INTEGER = {'mov', 'lea', 'add', 'sub', 'xor', 'and', 'or', 'cmp', 'test', 'inc', 'dec',
            'push', 'pop', 'adc', 'sbb', 'neg', 'not', 'nop', 'imul',
@@ -63,6 +63,8 @@ def generate(functions, pcrecomp, imports=None):
             owner[i.address] = address
             if i.mnemonic not in INTEGER | EXTENDED | JCC | STRING | {'call', 'jmp', 'ret'}:
                 raise ValueError(f'Unsupported instruction: {i.mnemonic}')
+            if i.mnemonic in ('call', 'jmp') and i.opcode[0] == 0xff and (i.modrm >> 3) & 7 in (3, 5):
+                raise ValueError('Far control flow is unsupported')  # Capstone reports it as a plain call/jmp.
             if i.addr_size != 4:
                 raise ValueError('Only 32-bit addressing is supported')
             for op in i.operands:
@@ -75,6 +77,9 @@ def generate(functions, pcrecomp, imports=None):
                     raise ValueError('Only general integer registers are supported')
                 if op.type == X86_OP_MEM and i.mnemonic in STRING:
                     continue  # Implicit es:[edi]/ds:[esi]; flat memory model.
+                # fs: is the thread block (structured exception chain); the host recreates its base per thread.
+                if op.type == X86_OP_MEM and op.mem.segment == X86_REG_FS and i.mnemonic == 'mov' and op.size == 4:
+                    continue
                 if op.type == X86_OP_MEM and (op.mem.segment or (not wide and op.size not in ((1, 2, 4) if i.mnemonic in NARROW else (4,)))):
                     raise ValueError('Only unsegmented 32-bit memory operands are supported')
         decoded[address] = instructions
@@ -84,7 +89,9 @@ def generate(functions, pcrecomp, imports=None):
             return f'0x{op.imm & 0xffffffff:08x}u'
         if op.type == X86_OP_REG:
             return lifter._fmt_read(op)
-        raise ValueError('Memory-indirect control flow is not implemented')
+        if op.type == X86_OP_MEM and op.size == 4:
+            return lifter._fmt_mem_read(op.mem, 4)  # Virtual calls and switch tables.
+        raise ValueError('Unsupported indirect control-flow operand')
     lines = ['// Generated ONLY from synthetic test input; no production code.',
              'inline uint32_t generated_owner(uint32_t pc){switch(pc){']
     for pc, function in sorted(owner.items()):
@@ -135,6 +142,11 @@ def generate(functions, pcrecomp, imports=None):
                 immediate = i.get_branch_target()
                 if immediate in lifter._labels:
                     lines.append(f'next=0x{immediate:x}u;')
+                elif immediate is None:
+                    # A computed jump is either a switch-table branch inside this function or a tail call.
+                    lines += [f'target={target(i,lifter)};',
+                              'if(generated_entry(target)){frame.function=target;next=target;}',
+                              f'else{{require(generated_owner(target)==0x{function:x}u,"Indirect jump outside function");next=target;}}']
                 else:
                     if immediate is not None and immediate not in decoded:
                         raise ValueError('Jump outside known functions')

@@ -161,3 +161,31 @@ This is a mnemonic-level estimate; operand checks and call-target rules can stil
 
 Policy (user-confirmed 2026-10-27): career and profile save files are never rolled back by a save-state restore.
 The game state returns to the snapshot, but files written by the game's own career save keep their newest content.
+
+### Real per-function generation (2026-10-27)
+
+`scripts/check_live_generation.py ADDRESS_FILE` runs the emitter itself on each live function rather than counting mnemonics. Calls
+to other functions are declared as host services. Tail-jump targets are converted alongside, because a tail jump replaces the frame.
+That adds 83 functions reached only by tail jumps.
+
+Progression on the 521 live functions:
+
+| Stage | Functions that generate |
+|---|---|
+| Mnemonic-only estimate | 517 |
+| First real run | 237 |
+| Memory-indirect calls and jumps (vtables, switch tables), with run-time target checks | 455 |
+| `fs:[0]` accesses for the compiler's exception chain | 455 |
+| With the tail-jump closure | 503 |
+
+New fixtures `root_virtual`, `root_switch` and `root_seh` bring the proof to 23 programs and 396 checkpoints, all matching Unicorn,
+also under ASan/UBSan. The reference emulator now installs a flat descriptor table plus an `fs` descriptor. Far calls, which
+Capstone reports as plain `call`, are rejected by their encoding.
+
+Remaining 18:
+- 8 share code with another catalog entry (overlapping ranges);
+- 6 fall through their catalog end;
+- 3 contain `int3`;
+- 1 uses `rdtsc`.
+
+The first 14 need the catalog's chunk boundaries merged. `int3` padding and `rdtsc` need small dedicated handling.

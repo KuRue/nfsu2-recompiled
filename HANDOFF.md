@@ -693,4 +693,4 @@ scripts/continuation_coverage.py: 46% of functions/88% of instructions already a
 - The stack probe ran on the phone. See the durable-state prototype doc for the results.
 - The emitter covers 511 of the 521 live functions and passes 19 programs and 330 checkpoints, including under the sanitizers.
 - Decided: career and profile files are never rolled back on restore.
-- Next: handle `rdtsc` as a host service and treat `int3` as padding. Then run a real per-function `generate()` on the live set in batches of 128 or fewer with call stubs, and fix the pcrecomp `idiv` signed shift upstream.
+- Next: merge overlapping and fall-through catalog chunks (14 functions), handle `int3` and `rdtsc`, then hook converted frames into the app behind a developer switch (plan step 2).

@@ -18,7 +18,7 @@ constexpr uint32_t base=0x400000,size=0x100000;
 int main(int argc,char** argv){
     try{
         require(argc>=4,"mode/build/root required");std::string mode=argv[1],build=argv[2];auto root=uint32_t(std::stoul(argv[3]));
-        GuestMemory memory;memory.commit(base,size);g_mem_base=reinterpret_cast<ptrdiff_t>(memory.base());
+        GuestMemory memory;memory.commit(base,size);g_mem_base=reinterpret_cast<ptrdiff_t>(memory.base());g_fs_base=0x480600u;  // Per-thread block; the host recreates it on restore.
         State state;state.build=build;state.game=std::string(64,'5');state.flags=0x202;
         state.registers[4]=0x4f0000;state.frames.push_back({root,root,{0x202,0,FK_EFLAGS,0}});
         std::memcpy(memory.address(0x401000,sizeof fixture_bytes),fixture_bytes,sizeof fixture_bytes);
