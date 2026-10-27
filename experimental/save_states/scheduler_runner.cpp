@@ -65,7 +65,7 @@ void selftest(const std::string& build,GuestMemory& memory){
         if(kind==2){m.recursion=1;}
         if(kind==3){m.abandoned=1;m.owner=1;m.recursion=1;}
         if(kind==4){auto& t=invalid.threads[1];t.status=Waiting;t.wait=2;t.deadline=infinite;t.cpu.host={1,5,2,infinite,0};}
-        if(kind==5){m.owner=1;m.recursion=1;invalid.threads[0].status=Finished;invalid.threads[0].cpu.frames={{0,0,{}}};invalid.threads[0].cpu.host={};}
+        if(kind==5){m.owner=1;m.recursion=1;invalid.threads[0].status=Finished;invalid.threads[0].cpu.frames.assign(1,{});invalid.threads[0].cpu.host={};}
         rejected([&]{encodeProcess(invalid);});
     }
     auto poll=p;poll.threads[0].cpu.host={1,2,1,0,0};request(poll,poll.threads[0]);
