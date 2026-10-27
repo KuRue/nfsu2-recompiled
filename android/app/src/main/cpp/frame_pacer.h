@@ -9,6 +9,15 @@ inline unsigned steadyFrameInterval(unsigned limit,unsigned refreshHz){
     unsigned interval=(refreshHz+limit-1)/limit;
     return interval<1?1u:interval;
 }
+// Nanoseconds the pacer waits between presents. 0 when there is no cap.
+// The division matches FramePacer: a 120 Hz vblank is 8333333 ns, so 90 FPS
+// on that panel is two vblanks, 16666666 ns.
+inline unsigned long long framePeriodNanos(unsigned limit,unsigned refreshHz){
+    if(!limit)return 0;
+    unsigned interval=steadyFrameInterval(limit,refreshHz);
+    if(!interval)return std::max(1ull,1000000000ull/std::max(1u,limit));
+    return std::max(1ull,1000000000ull/refreshHz)*interval;
+}
 // Highest rate at or under the cap that lands on whole refreshes.
 // 90 on a 120 Hz panel is 60, because 90 does not divide 120.
 inline unsigned steadyFrameRate(unsigned limit,unsigned refreshHz){

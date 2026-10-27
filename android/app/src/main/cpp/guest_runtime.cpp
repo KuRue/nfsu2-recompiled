@@ -8,6 +8,7 @@
 #include "capture_format.h"
 #include "runtime_log.h"
 #include "frame_pacer.h"
+#include "performance_hint.h"
 #include "frame_metrics.h"
 #include "frame_benchmark.h"
 #include "guest_boot_worker.h"
@@ -423,11 +424,22 @@ void publishPark(const char* label){
 #ifdef NFS_RESUMABLE
 void maybeWriteCapture();
 #endif
+struct HintStash { uint64_t busy=0; unsigned limit=0,refresh=0; bool pending=false; };
+HintStash hintStash;
+void flushGuestPerformanceHint(){
+    if(!hintStash.pending)return;
+    hintStash.pending=false;
+    reportGuestPerformanceHint(hintStash.busy,hintStash.limit,hintStash.refresh);
+}
+// Armed only for the frame-cap wait. Runs after the machine lock drops so the
+// hint's system call is not holding the guest thread's turn.
+thread_local void (*beforeGuestWait)()=nullptr;
 void yieldGuestMachine(unsigned milliseconds=0,std::chrono::steady_clock::time_point deadline={},const char* parkLabel=nullptr) {
     if(!machineLease||!machineLease->owns_lock())throw GuestStop("Guest scheduler ownership missing");
     {auto& trace=currentTrace();trace.func=g_cur_func;trace.esp=g_esp;}
     publishPark(parkLabel);
     State saved;saved.save();machineLease->unlock();
+    if(beforeGuestWait){auto fn=beforeGuestWait;beforeGuestWait=nullptr;try{fn();}catch(...){}}
     if(deadline!=std::chrono::steady_clock::time_point{})std::this_thread::sleep_until(deadline);
     else if(milliseconds)std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));else std::this_thread::yield();
     machineLease->lock();saved.load();
@@ -611,8 +623,23 @@ void d3dDispatch(){
         // The renderer has returned; guest audio/streaming workers can use the
         // machine while this thread waits. Late frames incur no extra delay.
         renderThread=true;
-        if(deadline>now)yieldGuestMachine(0,deadline);
-        else if(machine.hasWaiters()){auto before=std::chrono::steady_clock::now();yieldGuestMachine();++renderYields;renderWait+=std::chrono::steady_clock::now()-before;}
+        static std::chrono::steady_clock::time_point hintWorkStart{};
+        static bool hintWorkOpen=false;
+        if(hintWorkOpen){
+            auto busyNs=std::chrono::duration_cast<std::chrono::nanoseconds>(now-hintWorkStart).count();
+            hintStash.busy=busyNs>0?uint64_t(busyNs):0;
+            hintStash.limit=selectedLimit;
+            hintStash.refresh=steady?panel:0;
+            hintStash.pending=true;
+        }
+        if(deadline>now){beforeGuestWait=flushGuestPerformanceHint;yieldGuestMachine(0,deadline);}
+        else{
+            if(machine.hasWaiters()){auto before=std::chrono::steady_clock::now();yieldGuestMachine();++renderYields;renderWait+=std::chrono::steady_clock::now()-before;}
+            flushGuestPerformanceHint();
+        }
+        beforeGuestWait=nullptr;
+        hintWorkStart=std::chrono::steady_clock::now();
+        hintWorkOpen=true;
         static FrameMetrics intervals;
         static auto previousFrame=std::chrono::steady_clock::now();
         auto completed=std::chrono::steady_clock::now();
