@@ -301,7 +301,7 @@ public final class LauncherActivity extends Activity {
                 for (GameOptions.Option option : GameOptions.ALL)
                     if (!isControlOption(option))
                         optionsList.addView(optionCycleRow(option));
-                optionsList.addView(optionRow("Run a benchmark", "20 seconds of a race", this::confirmBenchmark));
+                optionsList.addView(optionRow("Run a benchmark", "60 seconds of a race, driven by the game's AI", this::confirmBenchmark));
                 optionsList.addView(optionRow("Upscaling and frame generation", "Not on this GPU", this::explainUpscaling));
                 optionsList.addView(optionRow("Test driver", "GPU and Vulkan features", () -> probeDriver(false)));
                 optionsList.addView(optionRow("Reset graphics cache", "Rebuild shaders", () -> GraphicsCache.prompt(this)));
@@ -589,8 +589,8 @@ public final class LauncherActivity extends Activity {
         String extra = gameRunning() ? "\n\nThe current live session will end." : "";
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setTitle("Run a benchmark")
-                .setMessage("Starts a fresh session. Get into a race. After three busy frames it records 20 seconds, then returns here with a suggestion. Menus are not scored. Nothing changes until you tap Apply." + extra)
-                .setPositiveButton("Start", (dialog, which) -> { benchmarkSeconds = 20; resumeNextLaunch = false; play(); })
+                .setMessage("Starts a fresh session. Start a circuit race (Quick Race works). The game's own AI drives your car after the countdown, and a panel shows live figures for 60 seconds. Then it returns here with a suggestion. Menus are not scored. Nothing changes until you tap Apply." + extra)
+                .setPositiveButton("Start", (dialog, which) -> { benchmarkSeconds = 60; resumeNextLaunch = false; play(); })
                 .setNegativeButton("Cancel", null).show();
     }
 

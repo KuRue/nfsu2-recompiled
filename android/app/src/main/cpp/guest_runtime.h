@@ -42,6 +42,7 @@ bool guestLanBroadcasts();
 // The handler is called on the guest thread after the report is written.
 void setGuestBenchmark(unsigned seconds,const std::string& reportPath,const std::string& resolution);
 void setGuestBenchmarkHandler(void (*handler)(const char* reportPath));
+void setGuestBenchmarkStatsHandler(void (*handler)(const float*,unsigned));
 
 void setGuestForceFeedback(bool enabled);
 unsigned guestForceFeedbackLevel();

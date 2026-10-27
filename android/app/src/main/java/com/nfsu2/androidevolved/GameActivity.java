@@ -45,6 +45,11 @@ public final class GameActivity extends NativeActivity {
     private PhoneFeedback phoneFeedback;
     private TextView status;
     private PopupWindow statusWindow;
+    private PopupWindow benchmarkWindow;
+    private BenchmarkOverlayView benchmarkOverlay;
+    private int benchmarkCap;
+    private long benchmarkPhoneRead;
+    private String benchmarkPhone = "";
     private PopupWindow controlsWindow;
     private RacingControlsView touchControls;
     private boolean statusHidden;
@@ -259,6 +264,13 @@ public final class GameActivity extends NativeActivity {
         nativeLanguage(language != null ? language : GameOptions.language(this));
         nativeFrameLimit(launch.getIntExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS))));
         int benchmarkSeconds = launch.getIntExtra("benchmarkSeconds", 0);
+        if (benchmarkSeconds > 0) {
+            benchmarkCap = launch.getIntExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS)));
+            benchmarkOverlay = new BenchmarkOverlayView(this);
+            benchmarkWindow = new PopupWindow(benchmarkOverlay, ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, false);
+            benchmarkWindow.setTouchable(false);
+        }
         if (benchmarkSeconds > 0) nativeBenchmark(benchmarkSeconds,
                 new java.io.File(getFilesDir(), "benchmark-report.txt").getAbsolutePath(),
                 GameOptions.get(this, GameOptions.RESOLUTION));
@@ -309,6 +321,36 @@ public final class GameActivity extends NativeActivity {
             getWindow().setAttributes(params);
             android.util.Log.i("NFSU2", "Display preference " + hertz + " Hz");
         });
+    }
+    /** Called from the render thread four times a second while the benchmark records. */
+    public void onBenchmarkStats(float[] values) {
+        runOnUiThread(() -> {
+            if (benchmarkOverlay == null) return;
+            long now = android.os.SystemClock.uptimeMillis();
+            if (now - benchmarkPhoneRead >= 1000) { benchmarkPhoneRead = now; benchmarkPhone = phoneState(); }
+            benchmarkOverlay.update(values, benchmarkPhone, benchmarkCap);
+            if (!benchmarkWindow.isShowing() && hasWindowFocus())
+                benchmarkWindow.showAtLocation(getWindow().getDecorView(), Gravity.TOP | Gravity.START,
+                        Math.round(16 * getResources().getDisplayMetrics().density), Math.round(16 * getResources().getDisplayMetrics().density));
+        });
+    }
+    /** Battery temperature, thermal state and panel refresh rate, for the benchmark panel. */
+    private String phoneState() {
+        StringBuilder text = new StringBuilder();
+        Intent battery = registerReceiver(null, new android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        int tenths = battery != null ? battery.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, Integer.MIN_VALUE) : Integer.MIN_VALUE;
+        if (tenths != Integer.MIN_VALUE) text.append(String.format(java.util.Locale.US, "%.1f °C", tenths / 10f));
+        android.os.PowerManager power = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+        if (power != null) {
+            String[] names = {"cool", "light", "moderate", "severe", "critical", "emergency", "shutdown"};
+            int status = power.getCurrentThermalStatus();
+            if (text.length() > 0) text.append("  ·  ");
+            text.append(status >= 0 && status < names.length ? names[status] : "thermal " + status);
+        }
+        android.view.Display display = getWindowManager().getDefaultDisplay();
+        if (display != null) text.append(String.format(java.util.Locale.US, "  ·  %.0f Hz", display.getRefreshRate()));
+        text.append(benchmarkCap > 0 ? "  ·  cap " + benchmarkCap : "  ·  uncapped");
+        return text.toString();
     }
     /** Called from the guest thread once the benchmark file has been written. */
     public void onBenchmarkFinished(String path) {
@@ -395,6 +437,7 @@ public final class GameActivity extends NativeActivity {
         updateTiltSensor();
         if(inputManager!=null)inputManager.unregisterInputDeviceListener(gamepadListener);
         if (statusWindow != null) statusWindow.dismiss();
+        if (benchmarkWindow != null) benchmarkWindow.dismiss();
         if (touchControls != null) {touchControls.removeCallbacks(updateControlMode);touchControls.releaseAll();}
         if (controlsWindow != null) controlsWindow.dismiss();
         super.onPause();

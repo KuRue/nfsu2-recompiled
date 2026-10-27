@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <array>
+#include <algorithm>
 #include <string>
 
 // A race-like frame on the October 2026 phone log had more than 30,000 D3D
@@ -14,6 +16,7 @@ inline constexpr unsigned kBenchmarkWaitSeconds=180;
 
 struct BenchmarkView {
     double p50=0,p95=0,p99=0,maximum=0,jitter=0;
+    double averageFps=0,lowFps=0; // mean rate, and the rate of the slowest 1% of frames
     unsigned late=0,count=0;
     unsigned limit=0;    // rate the samples were paced at; 0 is uncapped
     unsigned selected=0; // cap stored in the launcher; may be higher than limit
@@ -101,6 +104,7 @@ inline std::string formatBenchmarkReport(const BenchmarkView& view,const Benchma
     auto addU=[&](const char* key,unsigned value){std::snprintf(line,sizeof line,"%s %u\n",key,value);out+=line;};
     auto addD=[&](const char* key,double value){std::snprintf(line,sizeof line,"%s %.2f\n",key,value);out+=line;};
     addU("count",view.count);addD("p50",view.p50);addD("p95",view.p95);addD("p99",view.p99);addD("max",view.maximum);
+    addD("average-fps",view.averageFps);addD("low-fps",view.lowFps);
     addU("late",view.late);addD("jitter",view.jitter);addU("limit",view.limit);addU("selected",view.selected);
     addU("refresh",view.refresh);add("pace",view.steady?"steady":"exact");add("resolution",view.resolution);
     add("action",advice.action);add("next-resolution",advice.resolution);addU("next-fps",advice.frameRate);
@@ -114,7 +118,7 @@ inline std::string formatBenchmarkReport(const BenchmarkView& view,const Benchma
 class BenchmarkRun {
 public:
     using Clock=std::chrono::steady_clock;
-    void arm(unsigned seconds){seconds_=seconds?seconds:1;phase_=Phase::Waiting;armedAt_={};started_={};busyStreak_=0;samples_=FrameMetrics<4096>{};}
+    void arm(unsigned seconds){seconds_=seconds?seconds:1;phase_=Phase::Waiting;armedAt_={};started_={};busyStreak_=0;samples_=FrameMetrics<4096>{};recentCount_=recentNext_=0;totalMs_=0;totalFrames_=0;}
     bool present(Clock::time_point now,double intervalMs,unsigned calls){
         if(phase_==Phase::Idle||phase_==Phase::Finished)return false;
         if(phase_==Phase::Waiting){
@@ -125,10 +129,33 @@ public:
             if(++busyStreak_<kBenchmarkBusyStreak)return false;
             phase_=Phase::Recording;started_=now;return false;
         }
-        if(std::isfinite(intervalMs)&&intervalMs>0)samples_.add(intervalMs);
+        if(std::isfinite(intervalMs)&&intervalMs>0){
+            samples_.add(intervalMs);recent_[recentNext_]=float(intervalMs);recentNext_=(recentNext_+1)%kRecent;
+            recentCount_=std::min(recentCount_+1,kRecent);totalMs_+=intervalMs;++totalFrames_;
+        }
         if(now-started_>=std::chrono::seconds(seconds_)){phase_=Phase::Finished;return true;}
         return false;
     }
+    // Live figures for the on-screen panel. Graph holds the newest intervals, oldest first.
+    static constexpr unsigned kRecent=120;
+    struct Live {bool recording=false;double fps=0,frameMs=0,averageFps=0,lowFps=0,worstMs=0;double elapsed=0;unsigned total=0;unsigned graphCount=0;std::array<float,kRecent> graph{};};
+    Live live(Clock::time_point now) const {
+        Live out;out.recording=phase_==Phase::Recording;out.total=seconds_;
+        if(!out.recording)return out;
+        out.elapsed=std::chrono::duration<double>(now-started_).count();
+        out.graphCount=recentCount_;
+        for(unsigned i=0;i<recentCount_;++i)out.graph[i]=recent_[(recentNext_+kRecent-recentCount_+i)%kRecent];
+        if(recentCount_){
+            unsigned n=std::min(recentCount_,30u);double sum=0;for(unsigned i=recentCount_-n;i<recentCount_;++i)sum+=out.graph[i];
+            out.frameMs=sum/n;out.fps=out.frameMs>0?1000.0/out.frameMs:0;
+        }
+        if(totalFrames_&&totalMs_>0)out.averageFps=1000.0*totalFrames_/totalMs_;
+        auto worst=samples_.slowest((totalFrames_+99)/100);
+        out.worstMs=worst.maximum;out.lowFps=worst.average>0?1000.0/worst.average:0;
+        return out;
+    }
+    double averageFps() const {return totalFrames_&&totalMs_>0?1000.0*totalFrames_/totalMs_:0;}
+    double onePercentLowFps() const {auto w=samples_.slowest((totalFrames_+99)/100);return w.average>0?1000.0/w.average:0;}
     const char* label() const {
         if(phase_==Phase::Waiting)return "Benchmark: drive. Recording starts after a few busy frames.";
         if(phase_==Phase::Recording)return "Benchmark: recording this stretch.";
@@ -143,4 +170,6 @@ private:
     Clock::time_point armedAt_{},started_{};
     unsigned busyStreak_=0;
     FrameMetrics<4096> samples_{};
+    std::array<float,kRecent> recent_{};unsigned recentCount_=0,recentNext_=0;
+    double totalMs_=0;unsigned totalFrames_=0;
 };

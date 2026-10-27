@@ -7,6 +7,8 @@ import java.util.Locale;
 public final class BenchmarkReport {
     public final int count, late, limit, selected, refresh, nextFps;
     public final double p50, p95, p99, maximum, jitter;
+    /** Zero in reports written before these fields existed. */
+    public double averageFps, lowFps;
     public final boolean steady;
     public final String resolution, action, nextResolution, reason;
 
@@ -26,6 +28,8 @@ public final class BenchmarkReport {
 
     public String summary() {
         StringBuilder text = new StringBuilder();
+        if (averageFps > 0)
+            text.append(String.format(Locale.US, "Average %.1f FPS, 1%% low %.1f FPS\n", averageFps, lowFps));
         text.append("Busy frames: ").append(count).append('\n');
         text.append(String.format(Locale.US, "Interval p50 / p95 / p99 / max: %.2f / %.2f / %.2f / %.2f ms\n", p50, p95, p99, maximum));
         text.append(String.format(Locale.US, "Jitter: %.2f ms\n", jitter));
@@ -72,11 +76,14 @@ public final class BenchmarkReport {
             throw new IllegalArgumentException("unknown frame cap");
         String pace = required(values, "pace");
         if (!pace.equals("steady") && !pace.equals("exact")) throw new IllegalArgumentException("unknown pace");
-        return new BenchmarkReport(integer(values, "count"), integer(values, "late"), integer(values, "limit"),
+        BenchmarkReport report = new BenchmarkReport(integer(values, "count"), integer(values, "late"), integer(values, "limit"),
                 integer(values, "selected"), integer(values, "refresh"), nextFps,
                 number(values, "p50"), number(values, "p95"), number(values, "p99"), number(values, "max"),
                 number(values, "jitter"), pace.equals("steady"), resolution, action, nextResolution,
                 required(values, "reason"));
+        if (values.containsKey("average-fps")) report.averageFps = number(values, "average-fps");
+        if (values.containsKey("low-fps")) report.lowFps = number(values, "low-fps");
+        return report;
     }
 
     private static boolean knownResolution(String value) {

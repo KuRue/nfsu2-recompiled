@@ -1,3 +1,4 @@
+#include <cmath>
 #include "../android/app/src/main/cpp/frame_benchmark.h"
 #include <cstdio>
 #include <cstdlib>
@@ -44,6 +45,8 @@ int main(){
             "p95 17.20\n"
             "p99 18.00\n"
             "max 19.50\n"
+            "average-fps 0.00\n"
+            "low-fps 0.00\n"
             "late 0\n"
             "jitter 0.40\n"
             "limit 60\n"
@@ -86,6 +89,20 @@ int main(){
         require(!run.present(start+seconds(179),5,100),"still waiting");
         require(run.present(start+seconds(180),5,100),"give up when no busy frame arrives");
         require(run.samples().take(60).count==0,"a timeout has no samples");
+    }
+    {
+        BenchmarkRun run;auto start=BenchmarkRun::Clock::time_point(seconds(5));
+        run.arm(60);
+        require(!run.live(start).recording,"no panel before recording");
+        for(unsigned i=0;i<kBenchmarkBusyStreak;++i)run.present(start,16,40000);
+        // 198 frames at 10 ms and 2 at 50 ms: the 1% low is the two slow frames.
+        auto at=start;for(unsigned i=0;i<200;++i){at+=milliseconds(10);run.present(at,i<198?10:50,40000);}
+        auto live=run.live(at);
+        require(live.recording&&live.total==60&&live.graphCount==BenchmarkRun::kRecent,"panel fills its graph");
+        require(live.graph[BenchmarkRun::kRecent-1]==50&&live.graph[0]==10,"graph is oldest first");
+        require(std::fabs(live.averageFps-1000.0*200/2080)<0.01,"average rate");
+        require(std::fabs(live.lowFps-20)<0.01&&live.worstMs==50,"1% low is the slowest frames");
+        require(std::fabs(run.onePercentLowFps()-20)<0.01,"report 1% low");
     }
     std::puts("Frame benchmark passed");
 }

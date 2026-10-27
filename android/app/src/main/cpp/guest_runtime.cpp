@@ -88,6 +88,7 @@ std::atomic<unsigned> benchmarkSeconds{0};
 std::mutex benchmarkMutex;
 std::string benchmarkPath,benchmarkResolution{"75"};
 void (*benchmarkHandler)(const char*)=nullptr;
+void (*benchmarkStatsHandler)(const float*,unsigned)=nullptr;
 BenchmarkRun benchmarkRun;
 std::string hex(uint32_t va) {
     std::ostringstream out; out << "0x" << std::hex << std::setw(8) << std::setfill('0') << va;
@@ -568,6 +569,7 @@ void finishGuestBenchmark(){
     unsigned panel=displayRefresh.load();
     bool steady=steadyPace.load();
     unsigned paced=steadyFrameRate(selected,steady?panel:0);
+    double averageFps=benchmarkRun.averageFps(),lowFps=benchmarkRun.onePercentLowFps();
     auto timing=benchmarkRun.samples().take(paced);
     std::string path,resolution;void (*handler)(const char*)=nullptr;
     {std::lock_guard<std::mutex> lock(benchmarkMutex);path=benchmarkPath;resolution=benchmarkResolution;handler=benchmarkHandler;}
@@ -575,6 +577,7 @@ void finishGuestBenchmark(){
     view.p50=timing.p50;view.p95=timing.p95;view.p99=timing.p99;view.maximum=timing.maximum;view.jitter=timing.jitter;
     view.late=timing.late;view.count=timing.count;view.limit=paced;view.selected=selected;view.refresh=panel;view.steady=steady;
     view.resolution=resolution.c_str();
+    view.averageFps=averageFps;view.lowFps=lowFps;
     auto advice=adviseBenchmark(view);
     std::string report=formatBenchmarkReport(view,advice);
 #ifdef __ANDROID__
@@ -601,6 +604,8 @@ void maybeAutopilot(){
     auto now=std::chrono::steady_clock::now();
     if(now-lastRead>=std::chrono::seconds(2)){lastRead=now;char value[PROP_VALUE_MAX]{};
         __system_property_get("debug.nfs.autopilot",value);wanted=std::atoi(value);}
+    // A benchmark run always drives itself.
+    if(benchmarkSeconds.load(std::memory_order_relaxed))wanted=1;
     if(!wanted||!memory||!memory->readable(0x8900acu,4))return;
     auto* base=static_cast<uint8_t*>(memory->base());
     uint32_t player;std::memcpy(&player,base+0x8900acu,4);
@@ -692,7 +697,24 @@ void d3dDispatch(){
         if(benchmarkArmed&&!benchmarkRun.finished()){
             const char* label=benchmarkRun.label();
             if(label&&label!=benchmarkShown){benchmarkShown=label;processGuestWorker().note(label);}
-            if(benchmarkRun.present(completed,frameMs,calls))finishGuestBenchmark();
+            bool finished=benchmarkRun.present(completed,frameMs,calls);
+            // Four panel updates a second: fps, frame ms, average fps, 1% low fps, worst ms,
+            // elapsed s, total s, then the recent intervals oldest first.
+            static auto lastStats=std::chrono::steady_clock::time_point{};
+            void (*stats)(const float*,unsigned)=nullptr;
+            if(completed-lastStats>=std::chrono::milliseconds(250)){
+                lastStats=completed;
+                {std::lock_guard<std::mutex> lock(benchmarkMutex);stats=benchmarkStatsHandler;}
+                auto live=benchmarkRun.live(completed);
+                if(stats&&live.recording){
+                    std::array<float,7+BenchmarkRun::kRecent> packed{};
+                    packed[0]=float(live.fps);packed[1]=float(live.frameMs);packed[2]=float(live.averageFps);packed[3]=float(live.lowFps);
+                    packed[4]=float(live.worstMs);packed[5]=float(live.elapsed);packed[6]=float(live.total);
+                    for(unsigned i=0;i<live.graphCount;++i)packed[7+i]=live.graph[i];
+                    stats(packed.data(),7+live.graphCount);
+                }
+            }
+            if(finished)finishGuestBenchmark();
         }
         static unsigned frames=0;static auto since=std::chrono::steady_clock::now();
         if(++frames==120){serviceGuestSound();auto now=std::chrono::steady_clock::now();double seconds=std::chrono::duration<double>(now-since).count();
@@ -1528,6 +1550,7 @@ void setGuestBenchmark(unsigned seconds,const std::string& reportPath,const std:
     if(!benchmarkSeconds)benchmarkPath.clear();
 }
 void setGuestBenchmarkHandler(void (*handler)(const char*)){std::lock_guard<std::mutex> lock(benchmarkMutex);benchmarkHandler=handler;}
+void setGuestBenchmarkStatsHandler(void (*handler)(const float*,unsigned)){std::lock_guard<std::mutex> lock(benchmarkMutex);benchmarkStatsHandler=handler;}
 void setGuestKey(unsigned scan,bool down){if(scan>=256)return;std::lock_guard<std::mutex> lock(inputMutex);if(bool(inputKeys[scan])==down)return;inputKeys[scan]=down?0x80:0;recordInputKey(scan,down);enqueueGuestKey(scan,down);}
 void clearGuestInput(){std::lock_guard<std::mutex> lock(inputMutex);for(unsigned scan=0;scan<256;++scan)if(inputKeys[scan]){recordInputKey(scan,false);enqueueGuestKey(scan,false);}inputKeys.fill(0);inputMouseButtons.fill(0);inputMouseX=inputMouseY=inputMouseZ=0;}
 void setGuestPointer(float x,float y,int phase){

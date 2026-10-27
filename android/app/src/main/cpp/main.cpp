@@ -142,6 +142,21 @@ static void deliverBenchmarkReport(const char* path){
     env->DeleteLocalRef(cls);
     benchmarkApp->activity->vm->DetachCurrentThread();
 }
+// Live benchmark panel. Called from the render thread four times a second.
+static void deliverBenchmarkStats(const float* values,unsigned count){
+    if(!benchmarkApp||!benchmarkApp->activity||!benchmarkApp->activity->vm)return;
+    JNIEnv* env=nullptr;
+    if(benchmarkApp->activity->vm->AttachCurrentThread(&env,nullptr)!=JNI_OK)return;
+    jclass cls=env->GetObjectClass(benchmarkApp->activity->clazz);
+    jmethodID method=env->GetMethodID(cls,"onBenchmarkStats","([F)V");
+    if(method){
+        jfloatArray array=env->NewFloatArray(jsize(count));
+        if(array){env->SetFloatArrayRegion(array,0,jsize(count),values);env->CallVoidMethod(benchmarkApp->activity->clazz,method,array);env->DeleteLocalRef(array);}
+    }
+    if(env->ExceptionCheck()){env->ExceptionDescribe();env->ExceptionClear();}
+    env->DeleteLocalRef(cls);
+    benchmarkApp->activity->vm->DetachCurrentThread();
+}
 static void showStatus(android_app* app, const char* message) {
     JNIEnv* env = nullptr;
     if (app->activity->vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
@@ -557,6 +572,7 @@ static void configurePipelineCache(android_app* app){
 void android_main(android_app* app) {
     benchmarkApp=app;
     setGuestBenchmarkHandler(deliverBenchmarkReport);
+    setGuestBenchmarkStatsHandler(deliverBenchmarkStats);
     configurePipelineCache(app);
     Host host; app->userData = &host; app->onAppCmd = onCommand;app->onInputEvent=onInput;
     try {
