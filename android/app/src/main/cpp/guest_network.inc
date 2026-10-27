@@ -47,6 +47,9 @@ uint32_t wsaError(int error){
 // Runs f with the guest machine released (blocking host calls: DNS, poll).
 template<class F> auto released(F f){
     if(!machineLease||!machineLease->owns_lock())throw GuestStop("Guest scheduler ownership missing");
+    // Publish before the lock drops. The WaitScope label is still set here;
+    // publishing after unlock would let a capture observe a stale park.
+    publishPark(nullptr);
     State saved;saved.save();machineLease->unlock();
     auto result=f();int error=errno;
     machineLease->lock();saved.load();errno=error;

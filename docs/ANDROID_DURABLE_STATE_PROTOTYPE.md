@@ -268,7 +268,35 @@ Final 10-second sample, about 4.5 minutes after the first Present:
 | Mutex wait | 99.959% | 610,426 | `0x481fd0` 213, `0x46ae00` 27, `0x463c80` 6, DLL `0x1102f024` 5 |
 | EnterCriticalSection | 95 of 98 | 98 | `0x57d8c0` 3 |
 
-The four executable addresses are catalog entries (51, 283, 385 and 54 bytes) and are not in the resumable list yet. Their counts
-stopped rising, so each was a short burst rather than a stuck thread. Present stayed fully capturable, which is why the rebuild
-could fire on time. Evidence: `build/verification/rebuild-2026-10-27.log`. The property was cleared and the dev process stopped
-after the session, so a later launch does not keep rebuilding.
+The four executable addresses are catalog entries (51, 283, 385 and 54 bytes). During that session they were not in the resumable
+list yet. Their counts stopped rising, so each was a short burst rather than a stuck thread. Present stayed fully capturable,
+which is why the rebuild could fire on time. Evidence: `build/verification/rebuild-2026-10-27.log`. The property was cleared and
+the dev process stopped after the session, so a later launch does not keep rebuilding.
+
+### Capture file (2026-10-27)
+
+Those four addresses are now in `docs/data/resumable-functions.txt` (539 addresses). `make_resumable.py` accepts their call forms:
+4 functions, 20 call sites. DLL `0x1102f024` is not an executable function and stays off the list. A capture waits for the next
+clean frame instead of recording that call.
+
+At Present the presenting thread holds the machine lock, so every other live thread is already blocked in a yield or in
+`released()`. The capture still requires an explicit park, published before the lock is dropped:
+
+- a thread inside guest code must be at a resumable Sleep, event, mutex, thread, multiple-object, critical-section, message, or socket wait;
+- the timer idle loop and the pre-start suspend loop are outside guest code, so they park as `TimerIdle` or `Suspended` with no frames;
+- a time-slice yield inside a guest function is not a capture point.
+
+`SleepEx` and `GetMessage` now use the same wait label as the other waits. The network path publishes its park inside `released()`
+before unlocking. `debug.nfs.rebuild` is unchanged. If both properties are set, the rebuild test throws first and the capture runs
+only when that test returns.
+
+`adb shell setprop debug.nfs.capture 1` writes one file, then stops until the property is set back to 0. The file is
+`<game root>/captures/capture-<unix seconds>.nfs` (on the phone, `/sdcard/nfsu2/captures/`). Magic `NFSCAP1`, schema 1. It stores
+the build id, the SPEED2.EXE SHA-256, each thread's registers and resumable frames, logical events, mutexes and timers, committed
+guest memory, and protection exceptions. `careerRollback` is 0 and a decoder rejects anything else. The omitted mask must keep
+graphics, audio, heap metadata, and file contents. Open-file, sound, and D3D counts are inventory only; they do not make those
+objects restorable. Career and profile files are not opened. This file is not a restore.
+
+Host check: `tests/capture_quiesce.cpp`, run by `scripts/check_phone_source.py`. The runtime translation unit compiles with the
+NDK both with and without `NFS_RESUMABLE`. A phone file does not exist until a resumable build is installed and the property is
+set during play.

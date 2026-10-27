@@ -61,7 +61,7 @@ void* guestThreadEntry(void* context){
     std::unique_lock<MachineMutex> lease(machine);machineLease=&lease;guestThreadId=thread.id;
     State fresh;fresh.esp=thread.stack+(4u<<20)-64;fresh.fs=thread.tib;fresh.load();
     try {
-        while(thread.suspended){checkGuestProgress();yieldGuestMachine(1);}
+        while(thread.suspended){checkGuestProgress();yieldGuestMachine(1,{},"Suspended");}
         if(thread.timer){
             runGuestTimers();
             thread.exitCode=0;
@@ -171,7 +171,7 @@ void runGuestTimers(){
     while(!stopRequested){
         checkGuestProgress();std::shared_ptr<GuestTimer> next;
         for(const auto& entry:timerHandles)if(!entry.second->cancelled&&(!next||entry.second->due<next->due))next=entry.second;
-        if(!next||std::chrono::steady_clock::now()<next->due){yieldGuestMachine(1);continue;}
+        if(!next||std::chrono::steady_clock::now()<next->due){yieldGuestMachine(1,{},"TimerIdle");continue;}
         next->running=true;runningTimerId=next->id;
         try{callGuest(next->callback,{next->id,0,next->parameter,0,0});}
         catch(...){next->running=false;runningTimerId=0;throw;}

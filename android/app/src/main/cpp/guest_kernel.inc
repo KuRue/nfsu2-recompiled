@@ -172,6 +172,7 @@ void sleepShim() {
 }
 void sleepEx(){
     uint32_t ms=arg(0);if(!ms){checkGuestProgress();ret(0,2);return;}
+    WaitScope scope("Sleep",ms);
     while(ms){checkGuestProgress();auto chunk=std::min(ms,50u);yieldGuestMachine(chunk);if(ms!=UINT32_MAX)ms-=chunk;}
     ret(0,2);
 }

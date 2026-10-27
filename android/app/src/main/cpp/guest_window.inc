@@ -135,6 +135,7 @@ void peekMessage(){
 }
 void getMessage(){
     if(!arg(0)||(arg(1)&&arg(1)!=UINT32_MAX&&!windows.count(arg(1)))){lastError=1400;ret(UINT32_MAX,4);return;}
+    WaitScope scope("GetMessage",arg(1));
     while(!takeWindowMessage(arg(0),arg(1),arg(2),arg(3),true)){checkGuestProgress();yieldGuestMachine(1);}
     ret(read32(arg(0)+4)==0x12?0:1,4);
 }

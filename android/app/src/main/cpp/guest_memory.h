@@ -47,6 +47,24 @@ public:
         return accessible(va,bytes,false);
     }
     bool writable(uint32_t va,uint64_t bytes)const{return accessible(va,bytes,true);}
+    // Host mapping can be copied. Only PAGE_NOACCESS is installed as PROT_NONE;
+    // execute-only is guest metadata and stays readable on ARM64.
+    bool hostReadable(uint32_t va,uint64_t bytes)const{
+        if(!bytes||uint64_t(va)>=size||bytes>size-va)return false;
+        auto region=committed_.upper_bound(va);if(region==committed_.begin())return false;
+        --region;if(uint64_t(va)+bytes>region->second)return false;
+        for(uint64_t page=uint64_t(va)/page_*page_;page<uint64_t(va)+bytes;page+=page_){
+            auto found=protection_.find(page);if(found!=protection_.end()&&found->second==1)return false;
+        }return true;
+    }
+    uint64_t pageSize()const{return page_;}
+    template<class Visit> void visitCommitted(Visit visit)const{
+        for(const auto& region:committed_)visit(uint32_t(region.first),region.second-region.first);
+    }
+    // Default read/write (4) is omitted; every other page is an exception.
+    template<class Visit> void visitProtections(Visit visit)const{
+        for(const auto& page:protection_)if(page.second!=4)visit(uint32_t(page.first),page.second);
+    }
     // x86 execute permissions are guest metadata. ARM64 never executes these bytes.
     bool protect(uint32_t va,uint64_t bytes,uint32_t flags,uint32_t& previous){
         if(!bytes||uint64_t(va)>=size||bytes>size-va)return false;
