@@ -608,13 +608,23 @@ void maybeAutopilot(){
         __system_property_get("debug.nfs.autopilot",value);wanted=std::atoi(value);}
     // A benchmark run always drives itself.
     if(benchmarkSeconds.load(std::memory_order_relaxed))wanted=1;
-    if(!wanted||!memory||!memory->readable(0x8900acu,4))return;
+    static int dumpWanted=0;if(now-lastRead<std::chrono::milliseconds(50)){char v[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.dumprace",v);dumpWanted=std::atoi(v);}
+    if((!wanted&&!dumpWanted)||!memory||!memory->readable(0x8900acu,4))return;
     auto* base=static_cast<uint8_t*>(memory->base());
     uint32_t player;std::memcpy(&player,base+0x8900acu,4);
     if(!player||!memory->readable(player+0x22cu,8))return;
     uint32_t mode[2];std::memcpy(mode,base+player+0x22cu,8);
     if(mode[0]!=logged){logged=mode[0];NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","player %08x mode %u requested %u",player,mode[0],mode[1]);}
-    if(mode[0]==2&&mode[1]==2){uint32_t pilot=4;std::memcpy(base+player+0x230u,&pilot,4);}
+    // Development: `debug.nfs.dumprace 1` logs the race setup and SkipFE settings when a race
+    // starts, to compare a menu Quick Race with the SkipFE one.
+    static bool dumped=false;if(mode[0]!=2)dumped=false;
+    if(mode[0]==2&&!dumped){dumped=true;char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.dumprace",value);
+        if(std::atoi(value))for(auto range:{std::pair<uint32_t,uint32_t>{0x89e7a0u,0x89e840u},{0x864fa8u,0x865100u},{0x7faa18u,0x7faa80u},{0x8650b0u,0x8650b4u}}){
+            for(uint32_t at=range.first;at<range.second;at+=32){char line[160];int used=0;
+                for(uint32_t i=0;i<32&&at+i<range.second;i+=4){uint32_t word=0;if(memory->readable(at+i,4))std::memcpy(&word,base+at+i,4);
+                    used+=std::snprintf(line+used,sizeof line-used," %08x",word);}
+                NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSRaceDump","%08x:%s",at,line);}}}
+    if(wanted&&mode[0]==2&&mode[1]==2){uint32_t pilot=4;std::memcpy(base+player+0x230u,&pilot,4);}
     autopilotDriving.store(mode[0]==4,std::memory_order_relaxed);
 #endif
 }
@@ -1445,7 +1455,12 @@ std::string connectGuestRuntime(const char* executable) {
         // loaded, about 4 s after launch (phone, 2026-10-27). A benchmark run always uses it so
         // each run is the same race; `debug.nfs.skipfe 1` does the same for development.
         {char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.skipfe",value);
-            if(std::atoi(value)||benchmarkSeconds.load()){write32(0x864fac,1);NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","SkipFE: straight into a race");}}
+            if(std::atoi(value)||benchmarkSeconds.load()){
+                // 0x864FB0 is the SkipFE opponent count (copied to race setup 0x89E7C4, which a
+                // menu Quick Race with three opponents also sets to 3). Three AI racers keep the
+                // scene representative of a real race.
+                write32(0x864fac,1);write32(0x864fb0,3);
+                NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","SkipFE: straight into a race with 3 opponents");}}
         // Development: `debug.nfs.poke "ADDR=VALUE,..."` (hex address, decimal value) writes
         // 32-bit values before the entry, for trying the SkipFE race settings.
         {char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.poke",value);
