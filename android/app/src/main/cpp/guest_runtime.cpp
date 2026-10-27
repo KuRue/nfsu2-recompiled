@@ -184,8 +184,29 @@ GuestThreadTrace& currentTrace(){
     return *threadTrace;
 }
 void forgetThreadTrace(){std::lock_guard<std::mutex> lock(threadTracesMutex);threadTraces.erase(guestThreadId);threadTrace.reset();}
+#ifdef NFS_STACK_PROBE
+extern "C" { thread_local uint32_t nfs_shadow[512]; thread_local uint32_t nfs_shadow_depth=0; }
+// Logs each distinct live lifted-frame chain once per capture-point kind (0xffffffff marks a
+// host callback boundary: frames below it can never be captured as continuations).
+void stackProbe(const char* site){
+    static std::mutex lock;static std::set<std::vector<uint32_t>> seen;static uint64_t hits=0;
+    std::vector<uint32_t> chain;uint32_t depth=nfs_shadow_depth;
+    for(uint32_t i=0;i<std::min(depth,512u);++i)chain.push_back(nfs_shadow[i]);
+    chain.push_back(g_cur_func);if(depth>512u)chain.push_back(0xeeeeeeeeu);
+    std::vector<uint32_t> key(chain);for(const char* c=site;*c;++c)key.push_back(uint8_t(*c));
+    std::lock_guard<std::mutex> guard(lock);
+    if((++hits&4095u)==0)NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSStackProbe","hits=%llu unique=%zu",(unsigned long long)hits,seen.size());
+    if(!seen.insert(key).second)return;
+    std::string text;for(auto v:chain){char b[12];snprintf(b,sizeof b," %08x",v);text+=b;}
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSStackProbe","%s depth=%u:%s",site,depth,text.c_str());
+}
+#define NFS_PROBE(site) stackProbe(site)
+#define NFS_SHADOW_MARK() do{uint32_t d=nfs_shadow_depth++;if(d<512u)nfs_shadow[d]=g_cur_func;if(d+1<512u)nfs_shadow[d+1]=0xffffffffu;++nfs_shadow_depth;}while(0)
+#else
+#define NFS_PROBE(site) ((void)0)
+#endif
 struct WaitScope {
-    WaitScope(const char* what,uint32_t handle){auto& trace=currentTrace();trace.wait=what;trace.handle=handle;}
+    WaitScope(const char* what,uint32_t handle){NFS_PROBE(what);auto& trace=currentTrace();trace.wait=what;trace.handle=handle;}
     ~WaitScope(){currentTrace().wait=nullptr;}
 };
 std::atomic<int64_t> lastPresentMs{0};
@@ -372,7 +393,7 @@ void d3dDispatch(){
     static std::array<std::chrono::nanoseconds,4096> methodTime{};
     if(timed){auto spent=std::chrono::steady_clock::now()-bridgeStart;bridgeTime+=token==0x7e002110u?spent:spent*64;presentTime+=token==0x7e002110u?spent:std::chrono::nanoseconds{};
         methodTime[((token-0x7e000000u)/16u)&4095u]+=token==0x7e002110u?spent:spent*64;}
-    if(token==0x7e002110u){nfs_widescreen_apply_frame_rate();lastPresentMs=steadyMs();startStallWatch();}
+    if(token==0x7e002110u){NFS_PROBE("Present");nfs_widescreen_apply_frame_rate();lastPresentMs=steadyMs();startStallWatch();}
     if(token==0x7e002110u&&result==0){
         samplePhysicsForPhone();
         static FramePacer pacer;
@@ -608,6 +629,10 @@ uint32_t callGuest(uint32_t va, const uint32_t* args, size_t count, uint32_t cle
         if (!fn) throw GuestStop("No guest function at " + hex(va));
         for (size_t i=count;i--;) { g_esp-=4; write32(g_esp,args[i]); }
         g_esp-=4; write32(g_esp,RECOMP_RETADDR);
+#ifdef NFS_STACK_PROBE
+        uint32_t shadowDepth=nfs_shadow_depth;NFS_SHADOW_MARK();
+        struct Restore{uint32_t d;~Restore(){nfs_shadow_depth=d;}} restoreShadow{shadowDepth};
+#endif
         fn(); g_esp+=cleanup;
         if (g_esp!=saved.esp&&!(threadStart&&g_esp+4u*uint32_t(count)==saved.esp)) throw GuestStop("Guest call stack imbalance at " + hex(va));
         uint32_t result=g_eax; saved.load(); return result;

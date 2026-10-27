@@ -114,3 +114,22 @@ everything they call that returns before capture can stay ordinary native C. Pla
 5. Restore into a fresh process; career/profile save files are never rolled back.
 
 Step 2 needs the phone connected; steps 1-3 decide whether the approach is affordable.
+
+### Stack probe on the phone (2026-10-27)
+
+A build made with `-Pnfs.stackProbe=ON` recorded every lifted call chain that was live at Present and at every
+wait (WaitForSingleObject, Sleep and EnterCriticalSection). It ran on the phone through menus and a race:
+about 893,000 probe hits and 510 unique chains. `scripts/analyze_stack_probe.py LOG --live-out FILE` turns the log into
+the live-function list. That list is in `docs/data/stackprobe-live-functions-2026-10-27.txt`.
+
+- Present has just 4 distinct chains, depth 7 to 9 and 11 functions, so the per-frame capture point is narrow.
+- Mutex waits account for 474 chains and 466 functions, mostly CRT and file locks. Captures should be deferred
+  while one of those is held, not converted.
+- Every chain starts at the thread-entry host callback. No chain contains a second host callback, so no guest
+  code is live under a host callback at these points.
+- All 521 live functions are catalog functions. Running `continuation_coverage.py --only` on them shows 316
+  fully supported (61%) and 97.6% of their instructions supported.
+- The main blockers are `movzx` (65), x87 (`fmul` 52, `fcomp` 45, `fadd` 29), `shl` (48), `movsx` (38), `sar`,
+  `leave`, `rep stos`/`movs`, `cdq`/`idiv` and `setcc`.
+
+Next step: add these mnemonics to the emitter, starting with integer ones and then x87, and retest on the live set.

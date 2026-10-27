@@ -34,3 +34,51 @@ static inline void nfs_guest_cpuid(uint32_t leaf) {
 }
 #undef CPUID
 #define CPUID(a,b,c,d) do { RECOMP_REGS_OUT(); nfs_guest_cpuid((a)); RECOMP_REGS_IN(); } while (0)
+
+#ifdef NFS_STACK_PROBE
+// Development-only: a per-thread shadow of lifted callers, so capture-point probes in the
+// host can see which lifted frames are live (those would need continuation form).
+extern _Thread_local uint32_t nfs_shadow[512];
+extern _Thread_local uint32_t nfs_shadow_depth;
+#define NFS_SHADOW_PUSH(v) do{uint32_t _d=nfs_shadow_depth++;if(_d<512u)nfs_shadow[_d]=(v);}while(0)
+#define NFS_SHADOW_POP() (--nfs_shadow_depth)
+#undef RECOMP_CALL
+#define RECOMP_CALL(func) do { \
+    uint32_t _caller = g_cur_func; \
+    PUSH32(esp, RECOMP_RETADDR); \
+    RECOMP_FLAGS_OUT(); RECOMP_REGS_OUT(); \
+    NFS_SHADOW_PUSH(_caller); func(); NFS_SHADOW_POP(); \
+    RECOMP_REGS_IN(); g_cur_func = _caller; \
+} while(0)
+#undef RECOMP_ICALL
+#define RECOMP_ICALL(target_va) do { \
+    uint32_t _va = (uint32_t)(target_va); \
+    g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va; \
+    g_icall_from[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = g_cur_func; \
+    g_icall_trace_idx++; g_icall_count++; \
+    recomp_func_t _fn = recomp_lookup_manual(_va); \
+    if (!_fn) _fn = recomp_lookup(_va); \
+    if (!_fn) _fn = recomp_lookup_import(_va); \
+    if (_fn) { uint32_t _caller = g_cur_func; PUSH32(esp, RECOMP_RETADDR); \
+        RECOMP_FLAGS_OUT(); RECOMP_REGS_OUT(); \
+        NFS_SHADOW_PUSH(_caller); _fn(); NFS_SHADOW_POP(); \
+        RECOMP_REGS_IN(); g_cur_func = _caller; } \
+    else { RECOMP_MISS("ICALL", _va); eax = 0; } \
+} while(0)
+#undef RECOMP_ITAIL
+// A tail jump still leaves the jumping function's native C frame live: mark it (bit 31 clear,
+// VA tagged by the 0x80000000 flag) so the probe counts it.
+#define RECOMP_ITAIL(target_va) do { \
+    uint32_t _va = (uint32_t)(target_va); \
+    g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va; \
+    g_icall_from[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = g_cur_func; \
+    g_icall_trace_idx++; g_icall_count++; \
+    recomp_func_t _fn = recomp_lookup_manual(_va); \
+    if (!_fn) _fn = recomp_lookup(_va); \
+    if (!_fn) _fn = recomp_lookup_import(_va); \
+    if (_fn) { RECOMP_FLAGS_OUT(); RECOMP_REGS_OUT(); \
+        NFS_SHADOW_PUSH(g_cur_func|0x80000000u); _fn(); NFS_SHADOW_POP(); RECOMP_REGS_IN(); } \
+    else if (_va == RECOMP_RETADDR) { } \
+    else { RECOMP_MISS("ITAIL", _va); } \
+} while(0)
+#endif
