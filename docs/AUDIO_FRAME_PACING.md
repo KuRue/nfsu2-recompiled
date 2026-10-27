@@ -90,6 +90,13 @@ The Wi-Fi multicast lock is held only while a datagram socket has broadcast
 enabled or is bound to the LAN discovery port, 9999, and it is released while
 the activity is paused. The EA Nation server name does not hold it, so solo
 play leaves Wi-Fi power save alone. That lock has not been measured on a phone.
+A quiet frontend presents at 30 FPS. On the October 26 phone log the idle
+menu was about 611 D3D calls and still ran at the cap, and the cheap 3D
+frontend stayed under 2,800, while loading was about 9,000 and the lightest
+race window about 24,000. Eight frames under 8,000 calls select 30; one
+busier frame restores the cap. The game's own frame step follows that rate,
+so menu motion does not run slow. The panel request is unchanged. Uncapped
+racing stays uncapped. This pace has not been measured on a phone.
 
 Run the standalone tests from a Visual Studio developer prompt:
 

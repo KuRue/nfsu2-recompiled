@@ -599,9 +599,12 @@ void d3dDispatch(){
     // The arguments are read in place on the guest stack (one bounds check)
     // instead of copying 128 bytes for each of the ~40k calls of a race frame.
     const uint32_t* args=static_cast<const uint32_t*>(ptr(g_esp+4,128));uint32_t count=0;uint32_t token=d3dToken;
-    static uint64_t bridgeCalls=0;static std::chrono::nanoseconds bridgeTime{},presentTime{};
+    static uint64_t bridgeCalls=0,d3dCalls=0;static std::chrono::nanoseconds bridgeTime{},presentTime{};
+    ++d3dCalls;
     // Time one call in 64 (and every Present) so the statistic does not cost
     // two clock reads on each of the ~40k calls in a race frame.
+    // bridgeCalls is cleared with the 120-frame log. d3dCalls is not, so a
+    // per-frame delta stays valid after that log.
     bool timed=(++bridgeCalls&63u)==0||token==0x7e002110u;
     std::chrono::steady_clock::time_point bridgeStart;if(timed)bridgeStart=std::chrono::steady_clock::now();uint32_t result;
     try{result=dispatchGuestD3D9(token,args,&count);}catch(...){
@@ -618,9 +621,25 @@ void d3dDispatch(){
         unsigned selectedLimit=frameLimit.load(std::memory_order_relaxed);
         unsigned panel=displayRefresh.load(std::memory_order_relaxed);
         bool steady=steadyPace.load(std::memory_order_relaxed);
+        static uint64_t callsAtPresent=0;uint64_t callsThisFrame=d3dCalls-callsAtPresent;callsAtPresent=d3dCalls;
+        unsigned calls=callsThisFrame>0xffffffffull?0xffffffffu:unsigned(callsThisFrame);
+        unsigned paceLimit=selectedLimit?steadyFrameRate(selectedLimit,steady?panel:0):0;
+        static unsigned quietFrames=0;
+        unsigned presentLimit=menuPresentLimit(paceLimit,calls,quietFrames);
+        static int menuLogged=-1;
+        int menuNow=(presentLimit&&presentLimit!=paceLimit)?int(presentLimit):0;
+        if(menuNow!=menuLogged){
+            if(menuNow)NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Menu pace %d FPS",menuNow);
+            else if(menuLogged!=-1)NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Menu pace off");
+            menuLogged=menuNow;
+        }
+        // The game steps by the same period it is presented at. The panel
+        // request stays on the user's cap; 30 divides both 60 and 120.
+        nfs_widescreen_set_frame_rate(presentLimit?presentLimit:120);
+        nfs_widescreen_apply_frame_rate();
         // Skip a wait under 1.5 ms. Android's sleep often wakes late, and missing
         // the slot then costs a whole refresh. The pacer still keeps its grid.
-        auto deadline=pacer.deadline(now,selectedLimit,steady?panel:0,std::chrono::microseconds(1500));
+        auto deadline=pacer.deadline(now,presentLimit,steady?panel:0,std::chrono::microseconds(1500));
         // The renderer has returned; guest audio/streaming workers can use the
         // machine while this thread waits. Late frames incur no extra delay.
         renderThread=true;
@@ -629,7 +648,7 @@ void d3dDispatch(){
         if(hintWorkOpen){
             auto busyNs=std::chrono::duration_cast<std::chrono::nanoseconds>(now-hintWorkStart).count();
             hintStash.busy=busyNs>0?uint64_t(busyNs):0;
-            hintStash.limit=selectedLimit;
+            hintStash.limit=presentLimit;
             hintStash.refresh=steady?panel:0;
             hintStash.pending=true;
         }
@@ -646,13 +665,12 @@ void d3dDispatch(){
         auto completed=std::chrono::steady_clock::now();
         double frameMs=std::chrono::duration<double,std::milli>(completed-previousFrame).count();
         intervals.add(frameMs);previousFrame=completed;
-        static uint64_t callsAtPresent=0;uint64_t callsThisFrame=bridgeCalls-callsAtPresent;callsAtPresent=bridgeCalls;
+        static unsigned menuFrames=0;if(presentLimit&&presentLimit!=paceLimit)++menuFrames;
         static bool benchmarkArmed=false;static const char* benchmarkShown=nullptr;
         if(!benchmarkArmed&&benchmarkSeconds.load(std::memory_order_relaxed)){benchmarkArmed=true;benchmarkRun.arm(benchmarkSeconds.load(std::memory_order_relaxed));}
         if(benchmarkArmed&&!benchmarkRun.finished()){
             const char* label=benchmarkRun.label();
             if(label&&label!=benchmarkShown){benchmarkShown=label;processGuestWorker().note(label);}
-            unsigned calls=callsThisFrame>0xffffffffull?0xffffffffu:unsigned(callsThisFrame);
             if(benchmarkRun.present(completed,frameMs,calls))finishGuestBenchmark();
         }
         static unsigned frames=0;static auto since=std::chrono::steady_clock::now();
@@ -660,8 +678,9 @@ void d3dDispatch(){
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest D3D9 presentation %.1f FPS over %.2f seconds; bridge ~%.2f ms/frame (present %.2f), %.0f calls/frame",
                 frames/seconds,seconds,double(bridgeTime.count())/1e6/frames,double(presentTime.count())/1e6/frames,double(bridgeCalls)/frames);
             auto timing=intervals.take(steadyFrameRate(selectedLimit,steady?panel:0));
-            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Frame intervals ms p50=%.2f p95=%.2f p99=%.2f max=%.2f jitter=%.2f late=%u/%u (over 1.5x paced target)",
-                timing.p50,timing.p95,timing.p99,timing.maximum,timing.jitter,timing.late,timing.count);
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Frame intervals ms p50=%.2f p95=%.2f p99=%.2f max=%.2f jitter=%.2f late=%u/%u (over 1.5x paced target) menu=%u",
+                timing.p50,timing.p95,timing.p99,timing.maximum,timing.jitter,timing.late,timing.count,menuFrames);
+            menuFrames=0;
             std::array<unsigned,5> top{};
             for(unsigned slot=0;slot<4096u;++slot)for(unsigned rank=0;rank<top.size();++rank)
                 if(methodTime[slot]>methodTime[top[rank]]){std::copy_backward(top.begin()+rank,top.end()-1,top.end());top[rank]=slot;break;}

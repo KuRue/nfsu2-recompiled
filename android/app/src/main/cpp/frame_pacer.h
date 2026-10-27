@@ -45,6 +45,21 @@ inline unsigned displayRefreshForContent(unsigned contentFps,const unsigned* mod
     if(even)return even;
     return covering?covering:fastest;
 }
+// October 26 phone log: the idle frontend sat near 611 D3D calls and still
+// presented at the cap. The cheap 3D frontend stayed under 2,800. Loading
+// was about 9,000 and the lightest race window about 24,000. 8,000 is between
+// those. Eight quiet frames avoid a one-frame dip; one busier frame restores
+// the cap on the next present. 30 FPS is the floor, including while uncapped.
+inline constexpr unsigned kMenuQuietCalls=8000;
+inline constexpr unsigned kMenuQuietFrames=8;
+inline constexpr unsigned kMenuFloorFps=30;
+inline unsigned menuPresentLimit(unsigned paceLimit,unsigned calls,unsigned& quietFrames){
+    unsigned cap=paceLimit?paceLimit:120u;
+    if(calls>=kMenuQuietCalls||cap<=kMenuFloorFps){quietFrames=0;return paceLimit;}
+    if(quietFrames<kMenuQuietFrames)++quietFrames;
+    if(quietFrames<kMenuQuietFrames)return paceLimit;
+    return kMenuFloorFps;
+}
 
 // A frame that is late by less than one period is presented now, and the next
 // deadline stays on the original grid. Shifting the grid to "now" on every

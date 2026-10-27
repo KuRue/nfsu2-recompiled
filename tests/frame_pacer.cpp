@@ -73,5 +73,25 @@ int main(){
         require(pacer.deadline(origin,90,120)==origin,"refresh lock origin");
         require(pacer.deadline(origin+step/3,90,120)==origin+step,"90 FPS on 120 Hz sleeps on a 60 FPS grid");
     }
-    std::puts("Frame pacing passed: grid lock, slack, refresh quantize, 30/60/90/120");
+    {
+        unsigned quiet=0;
+        for(unsigned frame=1;frame<kMenuQuietFrames;++frame)
+            require(menuPresentLimit(60,611,quiet)==60,"a short quiet streak keeps the race cap");
+        require(quiet==kMenuQuietFrames-1,"the streak stops one frame short");
+        require(menuPresentLimit(60,611,quiet)==30,"eight quiet frontend frames use 30 FPS");
+        require(menuPresentLimit(60,2700,quiet)==30,"the cheap 3D frontend stays at 30");
+        require(menuPresentLimit(60,8000,quiet)==60,"8,000 calls is not a menu");
+        require(quiet==0,"a busier frame clears the streak");
+        require(menuPresentLimit(60,23916,quiet)==60,"a light race frame keeps the cap");
+        require(menuPresentLimit(30,100,quiet)==30,"a 30 FPS cap has no lower menu pace");
+        quiet=0;
+        for(unsigned frame=0;frame<kMenuQuietFrames;++frame)menuPresentLimit(0,611,quiet);
+        require(menuPresentLimit(0,611,quiet)==30,"uncapped menus settle at 30");
+        require(menuPresentLimit(0,23916,quiet)==0,"uncapped racing stays uncapped");
+        quiet=0;
+        for(unsigned frame=0;frame<kMenuQuietFrames;++frame)menuPresentLimit(40,500,quiet);
+        require(menuPresentLimit(40,500,quiet)==30,"40 FPS menus use 30");
+        require(menuPresentLimit(90,9000,quiet)==90,"loading stays on the selected cap");
+    }
+    std::puts("Frame pacing passed: grid lock, slack, refresh quantize, 30/60/90/120, menu pace");
 }
