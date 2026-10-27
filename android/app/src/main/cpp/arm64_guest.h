@@ -82,3 +82,23 @@ extern _Thread_local uint32_t nfs_shadow_depth;
     else { RECOMP_MISS("ITAIL", _va); } \
 } while(0)
 #endif
+
+#ifdef NFS_RESUMABLE
+// Development switch (durable save states): the call sites of the functions that can be live at a
+// capture point (scripts/make_resumable.py) record one frame each, so the host can tell whether a
+// thread's whole guest stack consists of resumable frames. Registers and flags already pass
+// through the globals at every call; only these two C locals would be lost with the native frame.
+typedef struct { uint32_t function, site, target; int32_t fpu_cmp, df; } nfs_frame_t;
+#define NFS_FRAME_LIMIT 256u
+extern _Thread_local nfs_frame_t nfs_frames[NFS_FRAME_LIMIT];
+extern _Thread_local uint32_t nfs_frame_depth;
+#define NFS_FRAME_PUSH(site_va, target_va) do { uint32_t _fd = nfs_frame_depth++; \
+    if (_fd < NFS_FRAME_LIMIT) { nfs_frame_t* _fr = &nfs_frames[_fd]; _fr->function = g_cur_func; \
+        _fr->site = (site_va); _fr->target = (target_va); _fr->fpu_cmp = _fpu_cmp; _fr->df = _df; } } while (0)
+#define NFS_FRAME_POP() ((void)--nfs_frame_depth)
+#define NFS_RCALL(site_va, target_va, func) do { NFS_FRAME_PUSH(site_va, target_va); RECOMP_CALL(func); NFS_FRAME_POP(); } while (0)
+#define NFS_RICALL(site_va, target) do { uint32_t _rt = (uint32_t)(target); \
+    NFS_FRAME_PUSH(site_va, _rt); RECOMP_ICALL(_rt); NFS_FRAME_POP(); } while (0)
+#define NFS_RITAIL(site_va, target) do { uint32_t _rt = (uint32_t)(target); \
+    NFS_FRAME_PUSH(site_va, _rt); RECOMP_ITAIL(_rt); NFS_FRAME_POP(); } while (0)
+#endif

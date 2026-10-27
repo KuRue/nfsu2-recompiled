@@ -204,3 +204,30 @@ Results:
 
 The only live function left is `0x531df0` (`rdtsc`). It needs a host-provided time value, which is also what step 2's runtime
 integration needs.
+
+## Step 2: resumable call sites in the real build (2026-10-27)
+
+The production lifted C can already be resumed at every call site:
+- With `RECOMP_LOCAL_REGS`, all guest registers are written to the globals before a call and read back after it.
+- The lazy flags pass through `g_flag_*`.
+- Only two C locals live in the native frame: `_fpu_cmp` and `_df`.
+
+So the capture-point functions do not need the per-instruction dispatcher. They keep native speed, and a build step
+(`scripts/make_resumable.py`) rewrites their call sites into `NFS_RCALL`/`NFS_RICALL`/`NFS_RITAIL`. Each call then records
+`{function, site, target, _fpu_cmp, _df}` on a per-thread frame stack. Switch-table fallbacks use the table `jmp` as their site.
+
+The per-instruction emitter stays as the proof harness. Its whitelist no longer limits the game, so `rdtsc` in `0x531df0` is no
+longer a blocker.
+
+| Option | Effect |
+|---|---|
+| `-Pnfs.resumable=ON` (CMake `NFS_RESUMABLE`, default OFF) | Rewrites all 521 probe-live functions (4,719 call sites, about 3.5 s at configure time) |
+
+At every Present and every wait, the runtime checks whether the thread's guest stack consists entirely of recorded frames:
+- the bottom frame is the `callGuest` entry;
+- each frame's target equals the next frame's function;
+- the top frame called the host import directly;
+- there is no nested host callback.
+
+It logs `NFSResumable` capturable counts and the top blocking functions every 10 s. Nothing is captured or restored yet; this
+measures how often a capture would be possible.

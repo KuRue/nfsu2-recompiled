@@ -205,8 +205,56 @@ void stackProbe(const char* site){
 #else
 #define NFS_PROBE(site) ((void)0)
 #endif
+#ifdef NFS_RESUMABLE
+// Mirrors nfs_frame_t in arm64_guest.h (generated C records the frames; see make_resumable.py).
+struct ResumableFrame { uint32_t function, site, target; int32_t fpuCompare, direction; };
+constexpr uint32_t resumableFrameLimit=256;
+extern "C" { thread_local ResumableFrame nfs_frames[resumableFrameLimit]; thread_local uint32_t nfs_frame_depth=0; }
+// The guest entry this thread is running and the frame depth at that entry; nesting>1 means a
+// host callback runs guest code above host frames, which can never be resumed.
+thread_local uint32_t resumableEntry=0,resumableBase=0,resumableNesting=0;
+// Why this thread's guest stack could not be captured now (null: every frame is resumable).
+// `at` names the first guest function that is not in resumable form.
+const char* captureBlocker(uint32_t& at){
+    uint32_t depth=nfs_frame_depth;at=0;
+    if(resumableNesting!=1)return "host callback";
+    if(depth>resumableFrameLimit)return "too deep";
+    if(depth==resumableBase){at=g_cur_func;return "no resumable frame";}
+    const ResumableFrame* f=nfs_frames;
+    if(f[resumableBase].function!=resumableEntry){at=resumableEntry;return "entry";}
+    for(uint32_t i=resumableBase;i+1<depth;++i)if(f[i].target!=f[i+1].function){at=f[i].target;return "native frame";}
+    const ResumableFrame& top=f[depth-1];
+    // The host import must be the top frame's own callee: no lifted function may sit between.
+    if(g_cur_func!=top.function){at=g_cur_func;return "native top";}
+    if(!recomp_lookup_manual(top.target)&&recomp_lookup(top.target)){at=top.target;return "native top";}
+    return nullptr;
+}
+void captureCheck(const char* site){
+    struct Site{uint64_t checks=0,ok=0;std::map<std::pair<std::string,uint32_t>,uint64_t> blockers;};
+    static std::mutex lock;static std::map<std::string,Site> sites;static auto lastLog=std::chrono::steady_clock::now();
+    uint32_t at;const char* blocker=captureBlocker(at);
+    std::lock_guard<std::mutex> guard(lock);
+    Site& entry=sites[site];++entry.checks;
+    if(!blocker)++entry.ok;else ++entry.blockers[{blocker,at}];
+    auto now=std::chrono::steady_clock::now();
+    if(now-lastLog<std::chrono::seconds(10))return;
+    lastLog=now;
+    for(auto& [name,data]:sites){
+        std::vector<std::pair<uint64_t,std::pair<std::string,uint32_t>>> top;
+        for(auto& [key,count]:data.blockers)top.push_back({count,key});
+        std::sort(top.rbegin(),top.rend());
+        std::string text;
+        for(size_t i=0;i<std::min<size_t>(top.size(),6);++i){char b[64];snprintf(b,sizeof b," %s@%08x=%llu",top[i].second.first.c_str(),top[i].second.second,(unsigned long long)top[i].first);text+=b;}
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSResumable","%s capturable %llu/%llu;%s",name.c_str(),
+            (unsigned long long)data.ok,(unsigned long long)data.checks,text.c_str());
+    }
+}
+#define NFS_CAPTURE_CHECK(site) captureCheck(site)
+#else
+#define NFS_CAPTURE_CHECK(site) ((void)0)
+#endif
 struct WaitScope {
-    WaitScope(const char* what,uint32_t handle){NFS_PROBE(what);auto& trace=currentTrace();trace.wait=what;trace.handle=handle;}
+    WaitScope(const char* what,uint32_t handle){NFS_PROBE(what);NFS_CAPTURE_CHECK(what);auto& trace=currentTrace();trace.wait=what;trace.handle=handle;}
     ~WaitScope(){currentTrace().wait=nullptr;}
 };
 std::atomic<int64_t> lastPresentMs{0};
@@ -393,7 +441,7 @@ void d3dDispatch(){
     static std::array<std::chrono::nanoseconds,4096> methodTime{};
     if(timed){auto spent=std::chrono::steady_clock::now()-bridgeStart;bridgeTime+=token==0x7e002110u?spent:spent*64;presentTime+=token==0x7e002110u?spent:std::chrono::nanoseconds{};
         methodTime[((token-0x7e000000u)/16u)&4095u]+=token==0x7e002110u?spent:spent*64;}
-    if(token==0x7e002110u){NFS_PROBE("Present");nfs_widescreen_apply_frame_rate();lastPresentMs=steadyMs();startStallWatch();}
+    if(token==0x7e002110u){NFS_PROBE("Present");NFS_CAPTURE_CHECK("Present");nfs_widescreen_apply_frame_rate();lastPresentMs=steadyMs();startStallWatch();}
     if(token==0x7e002110u&&result==0){
         samplePhysicsForPhone();
         static FramePacer pacer;
@@ -632,6 +680,11 @@ uint32_t callGuest(uint32_t va, const uint32_t* args, size_t count, uint32_t cle
 #ifdef NFS_STACK_PROBE
         uint32_t shadowDepth=nfs_shadow_depth;NFS_SHADOW_MARK();
         struct Restore{uint32_t d;~Restore(){nfs_shadow_depth=d;}} restoreShadow{shadowDepth};
+#endif
+#ifdef NFS_RESUMABLE
+        struct ResumableScope{uint32_t entry,base;
+            ResumableScope(uint32_t va):entry(resumableEntry),base(resumableBase){resumableEntry=va;resumableBase=nfs_frame_depth;++resumableNesting;}
+            ~ResumableScope(){resumableEntry=entry;resumableBase=base;--resumableNesting;}} resumableScope{va};
 #endif
         fn(); g_esp+=cleanup;
         if (g_esp!=saved.esp&&!(threadStart&&g_esp+4u*uint32_t(count)==saved.esp)) throw GuestStop("Guest call stack imbalance at " + hex(va));

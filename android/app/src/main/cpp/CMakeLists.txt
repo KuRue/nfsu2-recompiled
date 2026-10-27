@@ -41,6 +41,23 @@ foreach(source IN LISTS GEN_SOURCES)
         list(APPEND ANDROID_GEN_SOURCES "${source}")
     endif()
 endforeach()
+# Durable save states (development): rewrite the call sites of the functions that can be live at
+# a capture point so they record resumable frames. The list comes from the phone stack probe.
+option(NFS_RESUMABLE "Record resumable frames in capture-point functions" OFF)
+if(NFS_RESUMABLE)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    set(RESUMABLE_LIST "${NFS_ROOT}/docs/data/stackprobe-live-functions-2026-10-27.txt")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${ANDROID_GEN_SOURCES} "${RESUMABLE_LIST}" "${NFS_ROOT}/scripts/make_resumable.py")
+    execute_process(COMMAND "${Python3_EXECUTABLE}" "${NFS_ROOT}/scripts/make_resumable.py" "${RESUMABLE_LIST}"
+        "${CMAKE_CURRENT_BINARY_DIR}/resumable_guest" ${ANDROID_GEN_SOURCES}
+        RESULT_VARIABLE resumable_status OUTPUT_VARIABLE resumable_sources ERROR_VARIABLE resumable_summary
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT resumable_status EQUAL 0)
+        message(FATAL_ERROR "Failed to make capture-point functions resumable: ${resumable_summary}")
+    endif()
+    message(STATUS "${resumable_summary}")
+    string(REPLACE "\n" ";" ANDROID_GEN_SOURCES "${resumable_sources}")
+endif()
 # server.dll (EA's LAN game server) lifted from a copy relocated to its guest
 # base: scripts/prepare_module.py + run_lift.py --prefix server_. Optional: a
 # build without it reports LAN hosting as unavailable instead of failing.
@@ -109,6 +126,10 @@ endif()
 target_compile_features(nfsu2_android PRIVATE cxx_std_17)
 # Development-only call-stack recorder for save-state capture planning (see
 # docs/ANDROID_DURABLE_STATE_PROTOTYPE.md). Never enabled in normal builds.
+if(NFS_RESUMABLE)
+    target_compile_definitions(nfs_guest PRIVATE NFS_RESUMABLE)
+    target_compile_definitions(nfsu2_android PRIVATE NFS_RESUMABLE)
+endif()
 option(NFS_STACK_PROBE "Record live lifted call chains at Present/wait points" OFF)
 if(NFS_STACK_PROBE)
     target_compile_definitions(nfs_guest PRIVATE NFS_STACK_PROBE)
