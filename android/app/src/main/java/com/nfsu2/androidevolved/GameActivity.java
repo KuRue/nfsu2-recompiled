@@ -328,7 +328,9 @@ public final class GameActivity extends NativeActivity {
             if (benchmarkOverlay == null) return;
             long now = android.os.SystemClock.uptimeMillis();
             if (now - benchmarkPhoneRead >= 1000) { benchmarkPhoneRead = now; benchmarkPhone = phoneState(); }
-            benchmarkOverlay.update(values, benchmarkPhone, benchmarkCap);
+            android.view.Display display = getWindowManager().getDefaultDisplay();
+            int panel = display != null ? Math.round(display.getMode().getRefreshRate()) : 0;
+            benchmarkOverlay.update(values, benchmarkPhone, benchmarkCap, panel);
             if (!benchmarkWindow.isShowing() && hasWindowFocus())
                 benchmarkWindow.showAtLocation(getWindow().getDecorView(), Gravity.TOP | Gravity.START,
                         Math.round(16 * getResources().getDisplayMetrics().density), Math.round(16 * getResources().getDisplayMetrics().density));
@@ -350,7 +352,6 @@ public final class GameActivity extends NativeActivity {
         android.view.Display display = getWindowManager().getDefaultDisplay();
         // getRefreshRate() reports this app's frame-rate override; the mode is the panel itself.
         if (display != null) text.append(String.format(java.util.Locale.US, "  ·  panel %.0f Hz", display.getMode().getRefreshRate()));
-        text.append(benchmarkCap > 0 ? "  ·  cap " + benchmarkCap : "  ·  uncapped");
         return text.toString();
     }
     /** Called from the guest thread once the benchmark file has been written. */

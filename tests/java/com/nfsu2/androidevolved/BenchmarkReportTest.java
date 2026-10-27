@@ -27,6 +27,14 @@ public final class BenchmarkReportTest {
         check(report.summary().contains("Apply stores 85% and 60 FPS"));
         String keep = text.replace("action raise-resolution", "action keep").replace("next-resolution 85", "next-resolution 75");
         check(!BenchmarkReport.parse(keep).canApply());
+        check(report.timeline.length == 0 && report.averageFps == 0);
+        BenchmarkReport rich = BenchmarkReport.parse(text + "average-fps 116.60\nlow-fps 78.04\n"
+                + "timeline 120.0:110.0:121.0:1.20:27000,90.0:60.0:100.0:1.80:29000\n");
+        check(rich.averageFps == 116.6 && rich.timeline.length == 10 && rich.timelineMin() == 60 && rich.timelineMax() == 121);
+        check(Math.abs(rich.timelineMean(4) - 28000) < 0.01 && rich.summary().contains("Min 60, max 121 FPS"));
+        boolean badTimeline = false;
+        try { BenchmarkReport.parse(text + "timeline 1:2:3\n"); } catch (IllegalArgumentException error) { badTimeline = true; }
+        check(badTimeline);
         boolean rejected = false;
         try { BenchmarkReport.parse("not a report\n"); }
         catch (IllegalArgumentException error) { rejected = true; }

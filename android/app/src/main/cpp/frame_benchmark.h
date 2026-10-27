@@ -99,7 +99,7 @@ inline BenchmarkAdvice adviseBenchmark(const BenchmarkView& view){
     return keep;
 }
 
-inline std::string formatBenchmarkReport(const BenchmarkView& view,const BenchmarkAdvice& advice){
+inline std::string formatBenchmarkReport(const BenchmarkView& view,const BenchmarkAdvice& advice,const std::string& timeline=""){
     char line[512];
     std::string out="nfs-benchmark 1\n";
     auto add=[&](const char* key,const char* value){std::snprintf(line,sizeof line,"%s %s\n",key,value?value:"");out+=line;};
@@ -111,17 +111,28 @@ inline std::string formatBenchmarkReport(const BenchmarkView& view,const Benchma
     addU("refresh",view.refresh);add("pace",view.steady?"steady":"exact");add("resolution",view.resolution);
     add("action",advice.action);add("next-resolution",advice.resolution);addU("next-fps",advice.frameRate);
     add("reason",advice.reason);
+    if(!timeline.empty())out+="timeline "+timeline+"\n";
     return out;
 }
 
 // Waits for a busy frame, then keeps the intervals for a fixed stretch.
 // The frame that crosses the busy threshold is not a sample: its interval
 // still includes the menu. Later frames are, including hitch frames.
+class BenchmarkRun;
+inline std::string formatBenchmarkTimeline(const BenchmarkRun& run);
 class BenchmarkRun {
 public:
     using Clock=std::chrono::steady_clock;
-    void arm(unsigned seconds){seconds_=seconds?seconds:1;phase_=Phase::Waiting;armedAt_={};started_={};busyStreak_=0;samples_=FrameMetrics<8192>{};recentCount_=recentNext_=0;totalMs_=0;totalFrames_=0;}
-    bool present(Clock::time_point now,double intervalMs,unsigned calls){
+    // One point of the run's timeline: a quarter second of frames.
+    static constexpr unsigned kSlotMs=250;
+    static constexpr unsigned kMaxSlots=4*120+8;
+    struct Slot {float fps=0,minFps=0,maxFps=0,calls=0,renderMs=0;};
+    void arm(unsigned seconds){
+        seconds_=seconds?seconds:1;phase_=Phase::Waiting;armedAt_={};started_={};busyStreak_=0;samples_=FrameMetrics<8192>{};
+        totalMs_=0;totalFrames_=0;slotCount_=0;open_={};lastMs_=0;
+    }
+    // renderMs: CPU time the frame spent translating Direct3D calls (render thread).
+    bool present(Clock::time_point now,double intervalMs,unsigned calls,double renderMs=0){
         if(phase_==Phase::Idle||phase_==Phase::Finished)return false;
         if(phase_==Phase::Waiting){
             if(armedAt_==Clock::time_point{})armedAt_=now;
@@ -132,48 +143,69 @@ public:
             phase_=Phase::Recording;started_=now;return false;
         }
         if(std::isfinite(intervalMs)&&intervalMs>0){
-            samples_.add(intervalMs);recent_[recentNext_]=float(intervalMs);recentNext_=(recentNext_+1)%kRecent;
-            recentCount_=std::min(recentCount_+1,kRecent);totalMs_+=intervalMs;++totalFrames_;
+            samples_.add(intervalMs);totalMs_+=intervalMs;++totalFrames_;lastMs_=intervalMs;lastCalls_=calls;lastRender_=renderMs;
+            unsigned slot=unsigned(std::chrono::duration_cast<std::chrono::milliseconds>(now-started_).count()/kSlotMs);
+            if(slot!=openIndex_&&open_.frames)closeSlot();
+            openIndex_=slot;
+            open_.frames++;open_.ms+=intervalMs;open_.slowest=std::max(open_.slowest,intervalMs);
+            open_.fastest=open_.fastest>0?std::min(open_.fastest,intervalMs):intervalMs;open_.calls+=calls;open_.render+=renderMs;
         }
-        if(now-started_>=std::chrono::seconds(seconds_)){phase_=Phase::Finished;return true;}
+        if(now-started_>=std::chrono::seconds(seconds_)){if(open_.frames)closeSlot();phase_=Phase::Finished;return true;}
         return false;
     }
-    // Live figures for the on-screen panel. Graph holds the newest intervals, oldest first.
-    static constexpr unsigned kRecent=120;
-    struct Live {bool recording=false;double fps=0,frameMs=0,averageFps=0,lowFps=0,worstMs=0;double elapsed=0;unsigned total=0;unsigned graphCount=0;std::array<float,kRecent> graph{};};
+    struct Live {bool recording=false;double fps=0,frameMs=0,averageFps=0,lowFps=0,worstMs=0,elapsed=0,minFps=0,maxFps=0;unsigned total=0,calls=0;double renderMs=0;};
     Live live(Clock::time_point now) const {
         Live out;out.recording=phase_==Phase::Recording;out.total=seconds_;
         if(!out.recording)return out;
         out.elapsed=std::chrono::duration<double>(now-started_).count();
-        out.graphCount=recentCount_;
-        for(unsigned i=0;i<recentCount_;++i)out.graph[i]=recent_[(recentNext_+kRecent-recentCount_+i)%kRecent];
-        if(recentCount_){
-            unsigned n=std::min(recentCount_,30u);double sum=0;for(unsigned i=recentCount_-n;i<recentCount_;++i)sum+=out.graph[i];
-            out.frameMs=sum/n;out.fps=out.frameMs>0?1000.0/out.frameMs:0;
-        }
-        if(totalFrames_&&totalMs_>0)out.averageFps=1000.0*totalFrames_/totalMs_;
+        if(slotCount_){const Slot& last=slots_[slotCount_-1];out.fps=last.fps;out.calls=unsigned(last.calls);out.renderMs=last.renderMs;}
+        else if(lastMs_>0){out.fps=1000.0/lastMs_;out.calls=lastCalls_;out.renderMs=lastRender_;}
+        out.frameMs=out.fps>0?1000.0/out.fps:0;
+        out.averageFps=averageFps();
         auto worst=samples_.slowest((totalFrames_+99)/100);
         out.worstMs=worst.maximum;out.lowFps=worst.average>0?1000.0/worst.average:0;
+        for(unsigned i=0;i<slotCount_;++i){
+            if(!out.minFps||slots_[i].minFps<out.minFps)out.minFps=slots_[i].minFps;
+            out.maxFps=std::max(out.maxFps,double(slots_[i].maxFps));
+        }
         return out;
     }
     double averageFps() const {return totalFrames_&&totalMs_>0?1000.0*totalFrames_/totalMs_:0;}
     double onePercentLowFps() const {auto w=samples_.slowest((totalFrames_+99)/100);return w.average>0?1000.0/w.average:0;}
+    const Slot* timeline() const {return slots_.data();}
+    unsigned timelineCount() const {return slotCount_;}
     // The autopilot has taken the car: record from here. Busy frames stay a fallback.
-    void begin(Clock::time_point now){if(phase_==Phase::Waiting){phase_=Phase::Recording;started_=now;}}
-    const char* label() const {
-        if(phase_==Phase::Waiting)return "Benchmark: starting the race.";
-        if(phase_==Phase::Recording)return "Benchmark: recording this stretch.";
-        return nullptr;
-    }
+    void begin(Clock::time_point now){if(phase_==Phase::Waiting){phase_=Phase::Recording;started_=now;openIndex_=0;}}
     bool finished() const {return phase_==Phase::Finished;}
     FrameMetrics<8192>& samples(){return samples_;}
 private:
+    struct Open {unsigned frames=0;double ms=0,slowest=0,fastest=0,calls=0,render=0;};
+    void closeSlot(){
+        if(slotCount_<kMaxSlots){
+            Slot& slot=slots_[slotCount_++];
+            slot.fps=float(1000.0*open_.frames/open_.ms);slot.minFps=float(1000.0/open_.slowest);slot.maxFps=float(1000.0/open_.fastest);
+            slot.calls=float(open_.calls/open_.frames);slot.renderMs=float(open_.render/open_.frames);
+        }
+        open_={};
+    }
     enum class Phase {Idle,Waiting,Recording,Finished};
     Phase phase_=Phase::Idle;
     unsigned seconds_=0;
     Clock::time_point armedAt_{},started_{};
     unsigned busyStreak_=0;
     FrameMetrics<8192> samples_{};
-    std::array<float,kRecent> recent_{};unsigned recentCount_=0,recentNext_=0;
     double totalMs_=0;unsigned totalFrames_=0;
+    std::array<Slot,kMaxSlots> slots_{};unsigned slotCount_=0,openIndex_=0;
+    Open open_{};double lastMs_=0,lastRender_=0;unsigned lastCalls_=0;
 };
+
+// Report line: one "fps:min:max:render-ms:calls" point per quarter second, comma separated.
+inline std::string formatBenchmarkTimeline(const BenchmarkRun& run){
+    std::string out;char point[64];
+    for(unsigned i=0;i<run.timelineCount();++i){
+        const auto& slot=run.timeline()[i];
+        std::snprintf(point,sizeof point,"%s%.1f:%.1f:%.1f:%.2f:%.0f",i?",":"",slot.fps,slot.minFps,slot.maxFps,slot.renderMs,slot.calls);
+        out+=point;
+    }
+    return out;
+}

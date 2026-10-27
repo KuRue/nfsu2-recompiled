@@ -614,6 +614,18 @@ public final class LauncherActivity extends Activity {
         catch (IllegalArgumentException error) { message("Benchmark", "The report was not usable."); return; }
         AlertDialog.Builder dialog = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setTitle("Benchmark").setMessage(report.summary()).setNegativeButton(report.canApply() ? "Keep settings" : "OK", null);
+        if (report.timeline.length > 0) {
+            float density = getResources().getDisplayMetrics().density;
+            BenchmarkGraphView graph = new BenchmarkGraphView(this);
+            int count = report.timeline.length / BenchmarkGraphView.FIELDS;
+            graph.setTimeline(report.timeline, 0, count, count / 4f, report.limit > 0 ? report.limit : report.refresh);
+            graph.setMinimumHeight(Math.round(130 * density));
+            android.widget.FrameLayout frame = new android.widget.FrameLayout(this);
+            int pad = Math.round(20 * density);
+            frame.setPadding(pad, Math.round(8 * density), pad, 0);
+            frame.addView(graph, new android.widget.FrameLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, Math.round(130 * density)));
+            dialog.setView(frame);
+        }
         if (report.canApply()) dialog.setPositiveButton("Apply", (d, which) -> {
             GameOptions.set(this, GameOptions.RESOLUTION, report.nextResolution);
             GameOptions.set(this, GameOptions.FPS, Integer.toString(report.nextFps));

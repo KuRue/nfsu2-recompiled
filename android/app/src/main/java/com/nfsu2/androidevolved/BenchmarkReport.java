@@ -9,6 +9,8 @@ public final class BenchmarkReport {
     public final double p50, p95, p99, maximum, jitter;
     /** Zero in reports written before these fields existed. */
     public double averageFps, lowFps;
+    /** Quarter-second points, 5 floats each (fps, min, max, render ms, draw calls); empty in older reports. */
+    public float[] timeline = new float[0];
     public final boolean steady;
     public final String resolution, action, nextResolution, reason;
 
@@ -30,6 +32,9 @@ public final class BenchmarkReport {
         StringBuilder text = new StringBuilder();
         if (averageFps > 0)
             text.append(String.format(Locale.US, "Average %.1f FPS, 1%% low %.1f FPS\n", averageFps, lowFps));
+        if (timeline.length > 0)
+            text.append(String.format(Locale.US, "Min %.0f, max %.0f FPS. Render thread %.2f ms, %,.0f draw calls per frame\n",
+                    timelineMin(), timelineMax(), timelineMean(3), timelineMean(4)));
         text.append("Busy frames: ").append(count).append('\n');
         text.append(String.format(Locale.US, "Interval p50 / p95 / p99 / max: %.2f / %.2f / %.2f / %.2f ms\n", p50, p95, p99, maximum));
         text.append(String.format(Locale.US, "Jitter: %.2f ms\n", jitter));
@@ -81,10 +86,39 @@ public final class BenchmarkReport {
                 number(values, "p50"), number(values, "p95"), number(values, "p99"), number(values, "max"),
                 number(values, "jitter"), pace.equals("steady"), resolution, action, nextResolution,
                 required(values, "reason"));
+        if (values.containsKey("timeline")) report.timeline = timeline(values.get("timeline"));
         if (values.containsKey("average-fps")) report.averageFps = number(values, "average-fps");
         if (values.containsKey("low-fps")) report.lowFps = number(values, "low-fps");
         return report;
     }
+
+    private static float[] timeline(String text) {
+        String[] points = text.split(",");
+        float[] out = new float[points.length * 5];
+        for (int i = 0; i < points.length; i++) {
+            String[] fields = points[i].split(":");
+            if (fields.length != 5) throw new IllegalArgumentException("bad timeline");
+            for (int f = 0; f < 5; f++) {
+                try { out[i * 5 + f] = Float.parseFloat(fields[f]); }
+                catch (NumberFormatException error) { throw new IllegalArgumentException("bad timeline"); }
+                if (!Float.isFinite(out[i * 5 + f])) throw new IllegalArgumentException("bad timeline");
+            }
+        }
+        return out;
+    }
+
+    /** Mean of one timeline field (3 render ms, 4 draw calls), or 0 without a timeline. */
+    public double timelineMean(int field) {
+        int count = timeline.length / 5;
+        if (count == 0) return 0;
+        double sum = 0;
+        for (int i = 0; i < count; i++) sum += timeline[i * 5 + field];
+        return sum / count;
+    }
+
+    /** Lowest and highest quarter-second rate, or 0 without a timeline. */
+    public double timelineMin() { double v = 0; for (int i = 0; i < timeline.length / 5; i++) v = i == 0 ? timeline[1] : Math.min(v, timeline[i * 5 + 1]); return v; }
+    public double timelineMax() { double v = 0; for (int i = 0; i < timeline.length / 5; i++) v = Math.max(v, timeline[i * 5 + 2]); return v; }
 
     private static boolean knownResolution(String value) {
         return value.equals("100") || value.equals("85") || value.equals("75") || value.equals("60")

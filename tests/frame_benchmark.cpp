@@ -82,7 +82,6 @@ int main(){
         BenchmarkRun run;auto start=BenchmarkRun::Clock::time_point(seconds(50));
         run.arm(20);
         require(!run.present(start,100,10),"menu frames do not start the sample");
-        require(run.label()!=nullptr,"waiting label");
         require(!run.present(start+seconds(1),50,kBenchmarkRaceCalls),"one busy frame does not start");
         require(!run.present(start+seconds(1)+milliseconds(16),16,40000),"two busy frames do not start");
         auto gate=start+seconds(1)+milliseconds(32);
@@ -106,12 +105,17 @@ int main(){
         require(!run.live(start).recording,"no panel before recording");
         for(unsigned i=0;i<kBenchmarkBusyStreak;++i)run.present(start,16,40000);
         // 198 frames at 10 ms and 2 at 50 ms: the 1% low is the two slow frames.
-        auto at=start;for(unsigned i=0;i<200;++i){at+=milliseconds(10);run.present(at,i<198?10:50,40000);}
+        auto at=start;for(unsigned i=0;i<200;++i){at+=milliseconds(10);run.present(at,i<198?10:50,40000,1.5);}
         auto live=run.live(at);
-        require(live.recording&&live.total==60&&live.graphCount==BenchmarkRun::kRecent,"panel fills its graph");
-        require(live.graph[BenchmarkRun::kRecent-1]==50&&live.graph[0]==10,"graph is oldest first");
+        require(live.recording&&live.total==60,"panel records");
         require(std::fabs(live.averageFps-1000.0*200/2080)<0.01,"average rate");
         require(std::fabs(live.lowFps-20)<0.01&&live.worstMs==50,"1% low is the slowest frames");
+        // Frames land 10 ms apart up to 2.00 s: slots 0..7 are closed, slot 8 is still open.
+        require(run.timelineCount()==8,"quarter-second timeline");
+        require(std::fabs(run.timeline()[0].fps-100)<0.01&&run.timeline()[0].calls==40000&&std::fabs(run.timeline()[0].renderMs-1.5)<0.01,"slot averages");
+        require(live.minFps>0&&live.maxFps>=live.minFps,"min and max");
+        auto text=formatBenchmarkTimeline(run);
+        require(text.rfind("100.0:100.0:100.0:1.50:40000,",0)==0,"timeline text");
         require(std::fabs(run.onePercentLowFps()-20)<0.01,"report 1% low");
     }
     {

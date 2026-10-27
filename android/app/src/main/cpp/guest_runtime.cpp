@@ -581,7 +581,7 @@ void finishGuestBenchmark(){
     view.resolution=resolution.c_str();
     view.averageFps=averageFps;view.lowFps=lowFps;
     auto advice=adviseBenchmark(view);
-    std::string report=formatBenchmarkReport(view,advice);
+    std::string report=formatBenchmarkReport(view,advice,formatBenchmarkTimeline(benchmarkRun));
 #ifdef __ANDROID__
     bool wrote=writeBenchmarkFile(path,report);
 #else
@@ -628,7 +628,7 @@ void d3dDispatch(){
     // The arguments are read in place on the guest stack (one bounds check)
     // instead of copying 128 bytes for each of the ~40k calls of a race frame.
     const uint32_t* args=static_cast<const uint32_t*>(ptr(g_esp+4,128));uint32_t count=0;uint32_t token=d3dToken;
-    static uint64_t bridgeCalls=0,d3dCalls=0;static std::chrono::nanoseconds bridgeTime{},presentTime{};
+    static uint64_t bridgeCalls=0,d3dCalls=0;static std::chrono::nanoseconds bridgeTime{},presentTime{},bridgeTotal{};
     ++d3dCalls;
     // Time one call in 64 (and every Present) so the statistic does not cost
     // two clock reads on each of the ~40k calls in a race frame.
@@ -640,7 +640,7 @@ void d3dDispatch(){
         NFS_RUNTIME_LOG(ANDROID_LOG_ERROR,"NFSU2","D3D9 guest caller=%08x stack=%08x token=%08x self=%08x",g_cur_func,g_esp,token,args[0]);throw;}
     // Per method (kind*256+method), to name the calls that block the frame.
     static std::array<std::chrono::nanoseconds,4096> methodTime{};
-    if(timed){auto spent=std::chrono::steady_clock::now()-bridgeStart;bridgeTime+=token==0x7e002110u?spent:spent*64;presentTime+=token==0x7e002110u?spent:std::chrono::nanoseconds{};
+    if(timed){auto spent=std::chrono::steady_clock::now()-bridgeStart;bridgeTime+=token==0x7e002110u?spent:spent*64;bridgeTotal+=token==0x7e002110u?spent:spent*64;presentTime+=token==0x7e002110u?spent:std::chrono::nanoseconds{};
         methodTime[((token-0x7e000000u)/16u)&4095u]+=token==0x7e002110u?spent:spent*64;}
     if(token==0x7e002110u){NFS_PROBE("Present");NFS_CAPTURE_CHECK("Present");nfs_widescreen_apply_frame_rate();lastPresentMs=steadyMs();startStallWatch();}
     if(token==0x7e002110u&&result==0){
@@ -699,9 +699,12 @@ void d3dDispatch(){
         if(!benchmarkArmed&&benchmarkSeconds.load(std::memory_order_relaxed)){benchmarkArmed=true;benchmarkRun.arm(benchmarkSeconds.load(std::memory_order_relaxed));}
         if(benchmarkArmed&&!benchmarkRun.finished()){
             if(autopilotDriving.load(std::memory_order_relaxed))benchmarkRun.begin(completed);
-            bool finished=benchmarkRun.present(completed,frameMs,calls);
-            // Four panel updates a second: fps, frame ms, average fps, 1% low fps, worst ms,
-            // elapsed s, total s, then the recent intervals oldest first.
+            // Render-thread CPU per frame: D3D translation time, sampled one call in 64.
+            static std::chrono::nanoseconds bridgeAtFrame{};
+            double renderMs=double((bridgeTotal-bridgeAtFrame).count())/1e6;bridgeAtFrame=bridgeTotal;
+            bool finished=benchmarkRun.present(completed,frameMs,calls,renderMs);
+            // Four panel updates a second. Header: fps, frame ms, average fps, 1% low fps, worst ms,
+            // elapsed s, total s, calls, render ms, min fps, max fps; then the timeline, 5 floats a point.
             static auto lastStats=std::chrono::steady_clock::time_point{};
             void (*stats)(const float*,unsigned)=nullptr;
             if(completed-lastStats>=std::chrono::milliseconds(250)){
@@ -709,11 +712,12 @@ void d3dDispatch(){
                 {std::lock_guard<std::mutex> lock(benchmarkMutex);stats=benchmarkStatsHandler;}
                 auto live=benchmarkRun.live(completed);
                 if(stats&&live.recording){
-                    std::array<float,7+BenchmarkRun::kRecent> packed{};
-                    packed[0]=float(live.fps);packed[1]=float(live.frameMs);packed[2]=float(live.averageFps);packed[3]=float(live.lowFps);
-                    packed[4]=float(live.worstMs);packed[5]=float(live.elapsed);packed[6]=float(live.total);
-                    for(unsigned i=0;i<live.graphCount;++i)packed[7+i]=live.graph[i];
-                    stats(packed.data(),7+live.graphCount);
+                    static std::vector<float> packed;packed.clear();
+                    packed.insert(packed.end(),{float(live.fps),float(live.frameMs),float(live.averageFps),float(live.lowFps),float(live.worstMs),
+                        float(live.elapsed),float(live.total),float(live.calls),float(live.renderMs),float(live.minFps),float(live.maxFps)});
+                    for(unsigned i=0;i<benchmarkRun.timelineCount();++i){const auto& p=benchmarkRun.timeline()[i];
+                        packed.insert(packed.end(),{p.fps,p.minFps,p.maxFps,p.renderMs,p.calls});}
+                    stats(packed.data(),unsigned(packed.size()));
                 }
             }
             if(finished)finishGuestBenchmark();
@@ -1442,6 +1446,13 @@ std::string connectGuestRuntime(const char* executable) {
         // each run is the same race; `debug.nfs.skipfe 1` does the same for development.
         {char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.skipfe",value);
             if(std::atoi(value)||benchmarkSeconds.load()){write32(0x864fac,1);NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","SkipFE: straight into a race");}}
+        // Development: `debug.nfs.poke "ADDR=VALUE,..."` (hex address, decimal value) writes
+        // 32-bit values before the entry, for trying the SkipFE race settings.
+        {char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.poke",value);
+            for(char* item=std::strtok(value,",");item;item=std::strtok(nullptr,",")){
+                char* split=std::strchr(item,'=');if(!split)continue;*split=0;
+                uint32_t address=uint32_t(std::strtoul(item,nullptr,16));int32_t data=int32_t(std::strtol(split+1,nullptr,10));
+                if(memory->readable(address,4)){write32(address,uint32_t(data));NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","poke %08x=%d",address,data);}}}
 #endif
         // Restore a clean CPU state before executing the real CRT entry.
         fresh.load();
@@ -1560,6 +1571,7 @@ void setGuestBenchmark(unsigned seconds,const std::string& reportPath,const std:
     if(!benchmarkSeconds)benchmarkPath.clear();
 }
 void setGuestBenchmarkHandler(void (*handler)(const char*)){std::lock_guard<std::mutex> lock(benchmarkMutex);benchmarkHandler=handler;}
+bool guestBenchmarkActive(){return benchmarkSeconds.load()!=0;}
 void setGuestBenchmarkStatsHandler(void (*handler)(const float*,unsigned)){std::lock_guard<std::mutex> lock(benchmarkMutex);benchmarkStatsHandler=handler;}
 void setGuestKey(unsigned scan,bool down){if(scan>=256)return;std::lock_guard<std::mutex> lock(inputMutex);if(bool(inputKeys[scan])==down)return;inputKeys[scan]=down?0x80:0;recordInputKey(scan,down);enqueueGuestKey(scan,down);}
 void clearGuestInput(){std::lock_guard<std::mutex> lock(inputMutex);for(unsigned scan=0;scan<256;++scan)if(inputKeys[scan]){recordInputKey(scan,false);enqueueGuestKey(scan,false);}inputKeys.fill(0);inputMouseButtons.fill(0);inputMouseX=inputMouseY=inputMouseZ=0;}
