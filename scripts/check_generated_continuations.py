@@ -120,6 +120,18 @@ def main():
             if name == 'root_host' and phases != {0, 1, 2}:
                 raise RuntimeError('Pending/completed host-call snapshots were not exercised')
             print(f"{name}: x86 match and {baseline['steps']} fresh-process execution checkpoints passed", flush=True)
+        # Real functions keep cold blocks elsewhere, and pad no-return paths with int3.
+        accepted = generator.generate({0x401000: [(0x401000, b'\xe9\xfb\x0f\x00\x00'), (0x402000, b'\xc3\xcc')]}, pcrecomp)
+        if 'Guest reached int3' not in accepted or 'case 0x402000u' not in accepted:
+            raise RuntimeError('Chunked function or int3 padding was not emitted')
+        for bad in [{0x401001: [(0x401000, b'\xb8\x01\x00\x00\x00\xc3')]}, {0x401000: [(0x401000, b'\xe9\xfb\x0f\x00\x00')]},
+                    {0x401000: [(0x401000, b'\x90\xc3'), (0x401001, b'\xc3')]}]:
+            try:
+                generator.generate(bad, pcrecomp)
+            except ValueError:
+                pass
+            else:
+                raise RuntimeError('Mid-instruction entry, missing chunk or overlapping chunk was accepted')
         # Fail closed rather than emit a partial implementation for unsupported code.
         for encoding in [b'\xd9\xfe\xc3', b'\x0f\x5e\xc0\xc3', b'\xe8\x00\x10\x00\x00\xc3', b'\xff\x18\xc3', b'\x0f\xa2\xc3', b'\x0f\xb6\xc4\x0f\xa2\xc3', b'\x65\x8b\x00\xc3', b'\x64\x8a\x00\xc3']:
             try:

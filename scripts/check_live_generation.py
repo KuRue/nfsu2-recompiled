@@ -7,7 +7,7 @@ import collections, importlib.util, json, pathlib, struct, sys
 from capstone import Cs, CS_ARCH_X86, CS_MODE_32
 from capstone.x86 import X86_OP_IMM
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-args = sys.argv[1:]
+args = [a for a in sys.argv[1:] if a != '--compile']
 pcrecomp = ROOT.parent / 'pcrecomp'
 if '--pcrecomp' in args:
     k = args.index('--pcrecomp'); pcrecomp = pathlib.Path(args[k+1]); del args[k:k+2]
@@ -26,15 +26,26 @@ def read(va, size):
         if va0 <= rva < va0 + max(vs, rs):
             return data[ro+rva-va0:ro+rva-va0+size]
 decoder = Cs(CS_ARCH_X86, CS_MODE_32)
-results = collections.Counter(); failures = collections.defaultdict(list)
+emitted = [];results = collections.Counter(); failures = collections.defaultdict(list)
 by_address = {f['address']: f for f in catalog['functions']}
+def chunks(f):
+    # Merge the catalog's adjacent blocks; its 'end' field misses cold blocks placed after other functions.
+    merged = []
+    for start, end, *_ in sorted(f['blocks']):
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return [(start, read(start, end - start)) for start, end in merged]
+def inside(f, t):
+    return any(start <= t < end for start, end, *_ in f['blocks'])
 def branches(f):
-    code = read(f['address'], f['end'] - f['address'])
-    for i in decoder.disasm(code, f['address']):
-        if (i.mnemonic in ('call', 'jmp') or i.mnemonic.startswith('j')) and i.op_str.startswith('0x'):
-            t = int(i.op_str, 16)
-            if not f['address'] <= t < f['end']:
-                yield i.mnemonic, t
+    for start, code in chunks(f):
+        for i in decoder.disasm(code, start):
+            if (i.mnemonic in ('call', 'jmp') or i.mnemonic.startswith('j')) and i.op_str.startswith('0x'):
+                t = int(i.op_str, 16)
+                if not inside(f, t):
+                    yield i.mnemonic, t
 tail_targets = set()
 for address in sorted(only):
     if address not in by_address:
@@ -45,12 +56,12 @@ for address in sorted(only):
         a = pending.pop()
         if a in group or a not in by_address:
             continue
-        group[a] = read(a, by_address[a]['end'] - a)
+        group[a] = chunks(by_address[a])
         pending += [t for m, t in branches(by_address[a]) if m != 'call']
     tail_targets |= group.keys() - only
     imports = {t: 1 for a in group for m, t in branches(by_address[a]) if m == 'call' and t not in group}
     try:
-        g.generate(group, pcrecomp, imports)
+        emitted.append((address, g.generate(group, pcrecomp, imports)))
         results['ok'] += 1
     except ValueError as e:
         reason = str(e).split(':')[0] if str(e).startswith('Unsupported lifted') else str(e)
@@ -61,3 +72,17 @@ print(f"{results['ok']} of {total} functions generate (with their tail-jump clos
 for reason, count in results.most_common():
     if reason != 'ok':
         print(f'  {count:4} {reason}: ' + ' '.join(f'{a:08x}' for a in failures[reason][:6]))
+if '--compile' in sys.argv:
+    # Every generated unit must also compile cleanly in the host prototype runtime.
+    import os, subprocess, tempfile
+    with tempfile.TemporaryDirectory(prefix='nfsu2-live-continuations-') as folder:
+        source = pathlib.Path(folder) / 'live.cpp'
+        parts = ['#include "cpu_test_runtime.h"',
+                 'inline void generated_host_step(snapshot_prototype::State&){throw std::runtime_error("host");}']
+        parts += [f'namespace live_{a:08x} {{\n{text}}}' for a, text in emitted]
+        parts.append('int main(){return 0;}')
+        source.write_text('\n'.join(parts))
+        subprocess.run([os.environ.get('CXX', 'g++'), '-std=c++17', '-O0', '-fno-strict-aliasing', '-Wall', '-Wextra', '-Werror',
+                        '-Wno-unused-function', '-isystem', str(ROOT / 'android/app/src/main/cpp'), '-isystem', str(pcrecomp / 'runtime/recomp32'),
+                        '-I', str(ROOT / 'experimental/save_states'), '-c', str(source), '-o', str(source.with_suffix('.o'))], check=True)
+    print(f'{len(emitted)} generated units compile with -Wall -Wextra -Werror')

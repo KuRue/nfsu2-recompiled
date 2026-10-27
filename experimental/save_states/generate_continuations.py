@@ -39,7 +39,10 @@ def generate(functions, pcrecomp, imports=None):
         raise ValueError("Unknown synthetic host service")
     if not functions or len(functions) > 128:
         raise ValueError('Invalid function count for experimental emitter')
-    spans = sorted((address, address + len(code)) for address, code in functions.items())
+    # A function is either contiguous bytes or a list of (address, bytes) chunks; real
+    # functions keep cold blocks away from their entry.
+    functions = {address: sorted(code) if isinstance(code, list) else [(address, code)] for address, code in functions.items()}
+    spans = sorted((start, start + len(code)) for chunks in functions.values() for start, code in chunks)
     if any(start < 4096 or end <= start or end > 0x100000000 for start, end in spans):
         raise ValueError('Invalid function range')
     if any(left[1] > right[0] for left, right in zip(spans, spans[1:])):
@@ -53,15 +56,18 @@ def generate(functions, pcrecomp, imports=None):
     decoder.detail = True
     decoded = {}
     owner = {}
-    for address, code in functions.items():
-        instructions = [Instruction(i) for i in decoder.disasm(code, address)]
-        if sum(i.size for i in instructions) != len(code):
-            raise ValueError('Undecodable function bytes')
+    for address, chunks in functions.items():
+        instructions = []
+        for start, code in chunks:
+            chunk = [Instruction(i) for i in decoder.disasm(code, start)]
+            if sum(i.size for i in chunk) != len(code):
+                raise ValueError('Undecodable function bytes')
+            instructions += chunk
         for i in instructions:
             if i.address in owner:
                 raise ValueError('Overlapping functions')
             owner[i.address] = address
-            if i.mnemonic not in INTEGER | EXTENDED | JCC | STRING | {'call', 'jmp', 'ret'}:
+            if i.mnemonic not in INTEGER | EXTENDED | JCC | STRING | {'call', 'jmp', 'ret', 'int3'}:
                 raise ValueError(f'Unsupported instruction: {i.mnemonic}')
             if i.mnemonic in ('call', 'jmp') and i.opcode[0] == 0xff and (i.modrm >> 3) & 7 in (3, 5):
                 raise ValueError('Far control flow is unsupported')  # Capstone reports it as a plain call/jmp.
@@ -82,6 +88,8 @@ def generate(functions, pcrecomp, imports=None):
                     continue
                 if op.type == X86_OP_MEM and (op.mem.segment or (not wide and op.size not in ((1, 2, 4) if i.mnemonic in NARROW else (4,)))):
                     raise ValueError('Only unsegmented 32-bit memory operands are supported')
+        if address not in {i.address for i in instructions}:
+            raise ValueError('Function entry is not an instruction boundary')
         decoded[address] = instructions
     def target(insn, lifter):
         op = insn.operands[0]
@@ -135,6 +143,9 @@ def generate(functions, pcrecomp, imports=None):
                           'require(generated_entry(target),"Unknown call target");',
                           'require(state.frames.size()<64,"Continuation stack limit");',
                           'esp-=4;MEM32(esp)=next;action=1;']
+            elif i.mnemonic == 'int3':
+                # Padding after no-return calls; reaching it would crash the original too.
+                lines.append('throw std::runtime_error("Guest reached int3");')
             elif i.mnemonic == 'ret':
                 cleanup = i.operands[0].imm if i.operands else 0
                 lines += [f'target=MEM32(esp);esp+={4+cleanup}u;action=2;']

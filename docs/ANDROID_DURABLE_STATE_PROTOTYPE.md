@@ -189,3 +189,18 @@ Remaining 18:
 - 1 uses `rdtsc`.
 
 The first 14 need the catalog's chunk boundaries merged. `int3` padding and `rdtsc` need small dedicated handling.
+
+### Catalog chunks and compile check (2026-10-27)
+
+The catalog's `end` field misses cold blocks that the compiler placed after other functions. The emitter now accepts a function as a
+list of `(address, bytes)` chunks, and the live checker builds these from the catalog's merged blocks. The entry only has to be an
+instruction boundary. `int3` padding is emitted as a fail-closed trap.
+
+Results:
+- 520 of 521 live functions generate. Only the 5 genuine tail-jump targets are converted alongside them; before, 83 were, because
+  most of the "targets" were cold blocks.
+- `check_live_generation.py --compile` builds all 520 units (241k generated lines) with `-Wall -Wextra -Werror`.
+- The fixture proof adds positive and negative checks for chunked functions and `int3`.
+
+The only live function left is `0x531df0` (`rdtsc`). It needs a host-provided time value, which is also what step 2's runtime
+integration needs.
