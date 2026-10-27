@@ -33,7 +33,7 @@ public final class BenchmarkGraphView extends View {
         line.setStrokeJoin(Paint.Join.ROUND);
         grid.setColor(0x26ffffff); grid.setStrokeWidth(1f * density);
         target.setColor(0x99ffd54f); target.setStrokeWidth(1f * density);
-        axis.setColor(0xff9aa4ad); axis.setTextSize(9.5f * density);
+        axis.setColor(0xff9aa4ad); axis.setTextSize(7.5f * density);
     }
 
     /** points holds FIELDS floats per quarter second, starting at offset. goalFps 0 hides the cap line. */
@@ -44,15 +44,15 @@ public final class BenchmarkGraphView extends View {
     }
 
     @Override protected void onDraw(Canvas canvas) {
-        float labelWidth = 24 * density;
+        float labelWidth = 18 * density;
         float left = labelWidth, right = getWidth() - 2 * density;
-        float top = 4 * density, bottom = getHeight() - 13 * density;
+        float top = 4 * density, bottom = getHeight() - 10 * density;
         float peak = goalFps;
         // Scale to the average line and the cap, not the band: one very fast frame would
         // otherwise squash the line. Round to 30s so the scale does not jump every update.
         for (int i = 0; i < count; i++) peak = Math.max(peak, points[offset + i * FIELDS]);
         float scale = Math.max(30, (float) Math.ceil(peak * 1.2f / 30) * 30);
-        for (int step = 0; step <= scale; step += scale > 90 ? 30 : 15) {
+        for (int step = 0; step <= scale; step += scale > 120 ? 60 : 30) {
             float y = bottom - step / scale * (bottom - top);
             canvas.drawLine(left, y, right, y, grid);
             canvas.drawText(String.valueOf(step), 0, y + 3 * density, axis);

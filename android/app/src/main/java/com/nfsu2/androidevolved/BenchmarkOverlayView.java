@@ -26,15 +26,15 @@ public final class BenchmarkOverlayView extends LinearLayout {
         super(context);
         density = context.getResources().getDisplayMetrics().density;
         setOrientation(VERTICAL);
-        int pad = Math.round(14 * density);
-        setPadding(pad, Math.round(12 * density), pad, Math.round(10 * density));
+        int pad = Math.round(10 * density);
+        setPadding(pad, Math.round(8 * density), pad, Math.round(6 * density));
         GradientDrawable background = new GradientDrawable();
-        background.setColor(0xd00b0f14); background.setCornerRadius(12 * density);
+        background.setColor(0xc00b0f14); background.setCornerRadius(10 * density);
         setBackground(background);
         figures = new Figures(context);
-        addView(figures, new LayoutParams(Math.round(340 * density), Math.round(150 * density)));
+        addView(figures, new LayoutParams(Math.round(250 * density), Math.round(80 * density)));
         graph = new BenchmarkGraphView(context);
-        addView(graph, new LayoutParams(Math.round(340 * density), Math.round(96 * density)));
+        addView(graph, new LayoutParams(Math.round(250 * density), Math.round(52 * density)));
     }
 
     /** Called on the UI thread. */
@@ -55,23 +55,23 @@ public final class BenchmarkOverlayView extends LinearLayout {
 
         Figures(Context context) {
             super(context);
-            title.setColor(0xffe6edf3); title.setTextSize(12 * density); title.setTypeface(Typeface.DEFAULT_BOLD); title.setLetterSpacing(0.14f);
-            timer.setColor(0xff9aa4ad); timer.setTextSize(12 * density); timer.setTypeface(Typeface.MONOSPACE); timer.setTextAlign(Paint.Align.RIGHT);
-            big.setColor(Color.WHITE); big.setTextSize(40 * density); big.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-            unit.setColor(0xff9aa4ad); unit.setTextSize(12 * density);
-            label.setColor(0xff8b949e); label.setTextSize(9.5f * density); label.setLetterSpacing(0.08f);
-            value.setColor(Color.WHITE); value.setTextSize(16 * density); value.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+            title.setColor(0xffe6edf3); title.setTextSize(9.5f * density); title.setTypeface(Typeface.DEFAULT_BOLD); title.setLetterSpacing(0.14f);
+            timer.setColor(0xff9aa4ad); timer.setTextSize(9.5f * density); timer.setTypeface(Typeface.MONOSPACE); timer.setTextAlign(Paint.Align.RIGHT);
+            big.setColor(Color.WHITE); big.setTextSize(28 * density); big.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+            unit.setColor(0xff9aa4ad); unit.setTextSize(9 * density);
+            label.setColor(0xff8b949e); label.setTextSize(8 * density); label.setLetterSpacing(0.06f);
+            value.setColor(Color.WHITE); value.setTextSize(13 * density); value.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
             track.setColor(0x33ffffff); progress.setColor(0xff4fc3f7); rule.setColor(0x22ffffff);
         }
 
         private void tile(Canvas canvas, float x, float y, String name, String text) {
             canvas.drawText(name, x, y, label);
-            canvas.drawText(text, x, y + 19 * density, value);
+            canvas.drawText(text, x, y + 14 * density, value);
         }
 
         @Override protected void onDraw(Canvas canvas) {
             float w = getWidth();
-            float y = 12 * density;
+            float y = 9 * density;
             canvas.drawText("BENCHMARK", 0, y, title);
             if (stats.length < HEADER) return;
             float fps = stats[0], frameMs = stats[1], average = stats[2], low = stats[3], worst = stats[4];
@@ -79,29 +79,25 @@ public final class BenchmarkOverlayView extends LinearLayout {
             float minFps = stats[9], maxFps = stats[10];
             canvas.drawText(String.format(Locale.US, "%d:%02d / %d:%02d", (int) elapsed / 60, (int) elapsed % 60,
                     (int) total / 60, (int) total % 60), w, y, timer);
-            y += 6 * density;
-            canvas.drawRect(0, y, w, y + 3 * density, track);
-            canvas.drawRect(0, y, w * (total > 0 ? elapsed / total : 0), y + 3 * density, progress);
+            y += 4 * density;
+            canvas.drawRect(0, y, w, y + 2 * density, track);
+            canvas.drawRect(0, y, w * (total > 0 ? elapsed / total : 0), y + 2 * density, progress);
 
-            y += 44 * density;
+            // Headline rate on the left; average and 1% low beside it.
+            y += 30 * density;
             String rate = String.format(Locale.US, "%.0f", fps);
             canvas.drawText(rate, 0, y, big);
-            float after = big.measureText(rate) + 8 * density;
-            canvas.drawText("FPS", after, y - 18 * density, unit);
-            canvas.drawText(String.format(Locale.US, "%.2f ms", frameMs), after, y - 2 * density, unit);
-            tile(canvas, w * 0.52f, y - 26 * density, "RENDER THREAD", String.format(Locale.US, "%.2f ms", render));
-            tile(canvas, w * 0.78f, y - 26 * density, "DRAW CALLS", String.format(Locale.US, "%,.0f", calls));
+            float after = big.measureText(rate) + 5 * density;
+            canvas.drawText("FPS", after, y - 11 * density, unit);
+            canvas.drawText(String.format(Locale.US, "%.1f ms", frameMs), after, y, unit);
+            tile(canvas, w * 0.46f, y - 14 * density, "AVERAGE", String.format(Locale.US, "%.1f", average));
+            tile(canvas, w * 0.74f, y - 14 * density, "1% LOW", String.format(Locale.US, "%.1f", low));
 
+            // Everything else on one line.
+            y += 15 * density;
+            canvas.drawText(String.format(Locale.US, "min %.0f · max %.0f · worst %.0f ms · render %.1f ms · %.1fk calls",
+                    minFps, maxFps, worst, render, calls / 1000f), 0, y, label);
             y += 12 * density;
-            canvas.drawRect(0, y, w, y + 1 * density, rule);
-            y += 16 * density;
-            float column = w / 5;
-            tile(canvas, 0, y, "AVERAGE", String.format(Locale.US, "%.1f", average));
-            tile(canvas, column, y, "1% LOW", String.format(Locale.US, "%.1f", low));
-            tile(canvas, 2 * column, y, "MIN", String.format(Locale.US, "%.0f", minFps));
-            tile(canvas, 3 * column, y, "MAX", String.format(Locale.US, "%.0f", maxFps));
-            tile(canvas, 4 * column, y, "WORST", String.format(Locale.US, "%.0f ms", worst));
-            y += 38 * density;
             canvas.drawText(phone + (targetFps > 0 ? "  ·  cap " + targetFps : "  ·  uncapped"), 0, y, label);
         }
     }
