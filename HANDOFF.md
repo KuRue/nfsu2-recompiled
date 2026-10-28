@@ -763,3 +763,23 @@ FILETIME and generated callbacks. `scripts/check_phone_source.py` and normal
 snapshot load was performed. Cross-thread lock contention and same-session capture loading
 remain unverified by this startup smoke test. Next offline work: capture/restore per-thread
 TLS and last-error state; graphics reconstruction still needs the phone inventory.
+
+## 2026-10-28: capture/restore thread-local state (phone unavailable)
+
+Schema 3 appends the 1,088 process TLS allocation flags plus all slot values and lastError for
+every captured thread. Park records copy locals before releasing the machine. The presenting
+thread restores locals immediately; workers consume pending locals under the machine lock,
+even when idle outside guest code. Socket waits now take pending rewinds on lock reacquisition.
+A further capture/load is blocked until pending workers have consumed the previous load, so
+stale park records cannot be recaptured. Exiting threads clear pending entries. Schemas 1/2
+still decode for inspection but are refused by the loader before changing state.
+
+Passed format round trips (different main/worker/timer locals, first/last slots), schema 1/2
+compatibility, valid-checksum invalid TLS flags/truncated values, and ASan/UBSan. Host real-CRT
+startup passed, including deliberately clobbering then restoring both threads' complete TLS
+arrays/last-error and checking isolation over 100 handovers. Phone source checks passed.
+`bash gradlew assembleDebug -Pnfs.resumable=ON` passed from android/ (18 seconds on final run).
+No phone install/load performed. Next: exercise capture/load during a race when the phone
+returns, and collect D3D inventory for cross-session graphics reconstruction. The debug load
+still requires the same build/executable, thread roles and graphics object list; full exact
+cross-session Resume is not ready.

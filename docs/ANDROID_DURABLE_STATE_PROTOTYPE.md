@@ -327,7 +327,18 @@ It then restores, in order: page protections opened, guest memory regions, captu
 
 Critical sections now lock on their guest fields (recursion at +8, owner at +12) instead of host recursive mutexes, so rewinding guest memory rewinds lock ownership.
 
-Not restored yet: per-thread TLS values and `lastError` (thread-local on the host), and graphics contents (hence same-session only).
+Schema 3 also stores all 1,088 TLS allocation flags, each thread's 1,088 slot values and its
+`lastError`. The presenting thread applies its local state before rebuilding; parked workers
+apply theirs under the machine lock when their wait returns, including workers idle outside
+guest code. Socket waits take pending loads after reacquiring the machine too. A second
+capture/load waits until all pending worker state has been consumed. Schemas 1/2 remain
+readable for inspection, but the loader rejects them before changing anything because their
+thread-local state is missing. Slot values are kept even for unallocated slots, matching the
+runtime's existing TLS behavior.
+
+Graphics contents remain unrestored (hence same-session only). The TLS changes passed format
+round trips, malformed-input checks and host thread isolation/restore checks; they have not
+been exercised by loading a capture on the phone.
 
 Phone test:
 1. Install `assembleDebug -Pnfs.resumable=ON`, start a race.

@@ -53,6 +53,9 @@ template<class F> auto released(F f){
     State saved;saved.save();machineLease->unlock();
     auto result=f();int error=errno;
     machineLease->lock();saved.load();errno=error;
+#ifdef NFS_RESUMABLE
+    if(!pendingRewinds.empty()||!pendingThreadLocals.empty())takePendingRewind();
+#endif
     return result;
 }
 Socket* find(uint32_t handle){auto found=sockets.find(handle);return found==sockets.end()?nullptr:&found->second;}

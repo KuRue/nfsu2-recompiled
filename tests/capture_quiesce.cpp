@@ -21,6 +21,7 @@ nfs_capture::Capture sample() {
     capture.build = hex64('a');
     capture.game = hex64('b');
     capture.pageSize = 4096;
+    capture.tlsUsed[0] = capture.tlsUsed[1087] = true;
     nfs_capture::ThreadImage main;
     main.id = 1; main.capturer = true; main.resumable = true; main.wait = nfs_capture::WaitKind::Present;
     main.cpu.gpr[0] = 0x11111111; main.cpu.st[0] = 0x3ff0000000000000ull; main.cpu.xmm[1][0] = 0x7e;
@@ -30,6 +31,9 @@ nfs_capture::Capture sample() {
     worker.frames.push_back({0x520000u, 0x520020u, 0x7f000100u, 0, 0});
     nfs_capture::ThreadImage timer;
     timer.id = 9; timer.outsideGuest = true; timer.wait = nfs_capture::WaitKind::TimerIdle;
+    main.locals.lastError = 123; main.locals.values[0] = 0x12345678; main.locals.values[1087] = 0xabcdef01;
+    worker.locals.lastError = 456; worker.locals.values[0] = 0x76543210; worker.locals.values[1087] = 0xfedcba98;
+    timer.locals.lastError = 789; timer.locals.values[0] = 0x11112222;
     capture.threads.push_back(main);
     capture.threads.push_back(worker);
     capture.threads.push_back(timer);
@@ -70,6 +74,7 @@ bool sameFrame(const nfs_capture::Frame& a, const nfs_capture::Frame& b) {
 }
 bool same(const nfs_capture::Capture& left, const nfs_capture::Capture& right) {
     if (left.build != right.build || left.game != right.game || left.careerRollback != right.careerRollback) return false;
+    if (left.hasThreadLocals != right.hasThreadLocals || left.tlsUsed != right.tlsUsed) return false;
     if (left.omitted != right.omitted || left.pageSize != right.pageSize) return false;
     if (left.threads.size() != right.threads.size() || left.events.size() != right.events.size()) return false;
     if (left.mutexes.size() != right.mutexes.size() || left.timers.size() != right.timers.size()) return false;
@@ -100,6 +105,7 @@ bool same(const nfs_capture::Capture& left, const nfs_capture::Capture& right) {
         const auto& a = left.threads[i]; const auto& b = right.threads[i];
         if (a.id != b.id || a.capturer != b.capturer || a.outsideGuest != b.outsideGuest || a.resumable != b.resumable) return false;
         if (a.wait != b.wait || a.waitHandle != b.waitHandle || a.blockedAt != b.blockedAt || a.frames.size() != b.frames.size()) return false;
+        if (a.locals.lastError != b.locals.lastError || a.locals.values != b.locals.values) return false;
         if (!sameCpu(a.cpu, b.cpu)) return false;
         for (size_t n = 0; n < a.frames.size(); ++n) if (!sameFrame(a.frames[n], b.frames[n])) return false;
     }
@@ -191,12 +197,35 @@ int main() {
     {
         // A schema 1 file has no files section: drop it, restamp the header and read it back.
         auto older = sample(); older.files.clear(); older.heaps.clear(); older.heapNext = 0; older.omitted |= omitHeap | omitAudio; older.sounds.clear(); older.graphics.clear(); older.criticalSections.clear();
-        auto bytes = encode(older); bytes.resize(bytes.size() - 24); // file, sound, graphics and section counts, heap next, heap count
+        auto bytes = encode(older);
+        const size_t localsBytes = 4 * (tlsSlots + older.threads.size() * (tlsSlots + 1));
+        bytes.resize(bytes.size() - localsBytes - 24); // file, sound, graphics and section counts, heap next, heap count
         Bytes payload(bytes.begin() + 19, bytes.end());
         Bytes header = {'N','F','S','C','A','P','1'}; word(header, 1); word(header, uint32_t(payload.size())); word(header, crc(payload));
         header.insert(header.end(), payload.begin(), payload.end());
+        older.hasThreadLocals = false; older.tlsUsed.fill(false);
+        for (auto& thread : older.threads) thread.locals = {};
         auto read = decode(header);
         expect(same(older, read) && read.files.empty(), "schema 1 capture still reads");
+    }
+    {
+        auto original = sample(); auto bytes = encode(original);
+        const size_t localsBytes = 4 * (tlsSlots + original.threads.size() * (tlsSlots + 1));
+        auto restamp = [](Bytes payload, uint32_t version) {
+            Bytes header = {'N','F','S','C','A','P','1'}; word(header, version);
+            word(header, uint32_t(payload.size())); word(header, crc(payload));
+            header.insert(header.end(), payload.begin(), payload.end()); return header;
+        };
+        Bytes payload(bytes.begin() + 19, bytes.end());
+        payload[payload.size() - localsBytes] = 2;
+        expectThrow("nonboolean TLS allocation flag", restamp(payload, 3));
+        payload.assign(bytes.begin() + 19, bytes.end() - localsBytes);
+        auto read = decode(restamp(payload, 2));
+        original.hasThreadLocals = false; original.tlsUsed.fill(false);
+        for (auto& thread : original.threads) thread.locals = {};
+        expect(same(original, read), "schema 2 remains readable with locals marked missing");
+        Bytes partial(bytes.begin() + 19, bytes.end() - 4);
+        expectThrow("truncated TLS values with valid checksum", restamp(partial, 3));
     }
     if (failures) { std::cerr << failures << " capture checks failed\n"; return 1; }
     std::cout << "capture quiesce and format checks passed\n";

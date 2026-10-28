@@ -1,7 +1,8 @@
 #pragma once
-// Capture of one quiesced guest moment. This file is not a restore: graphics,
-// audio, heap metadata and file contents are recorded as omitted on purpose,
-// and careerRollback must be zero so a later restore cannot roll career files back.
+// Capture of one quiesced guest moment. Graphics and file contents stay omitted;
+// audio and heap metadata carry explicit omission flags when unavailable.
+// careerRollback must be zero so loading cannot roll career files back.
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
@@ -17,7 +18,7 @@
 #include <unistd.h>
 
 namespace nfs_capture {
-constexpr uint32_t schema = 2; // 2 adds open files; 1 is still read
+constexpr uint32_t schema = 3; // 3 adds TLS allocation, per-thread values and last-error
 constexpr uint32_t omitGraphics = 1u, omitAudio = 2u, omitHeap = 4u, omitFileContents = 8u;
 // Heap bookkeeping and sound objects are stored from schema 2; omitHeap and omitAudio are clear
 // only when they are.
@@ -106,12 +107,18 @@ struct CpuImage {
     uint8_t xmm[8][16]{};
 };
 struct Frame { uint32_t function = 0, site = 0, target = 0; int32_t fpuCompare = 0, direction = 0; };
+constexpr size_t tlsSlots = 1088;
+struct ThreadLocals {
+    uint32_t lastError = 0;
+    std::array<uint32_t, tlsSlots> values{};
+};
 struct ThreadImage {
     uint32_t id = 0;
     bool capturer = false, outsideGuest = false, resumable = false;
     WaitKind wait = WaitKind::None;
     uint32_t waitHandle = 0, blockedAt = 0;
     CpuImage cpu;
+    ThreadLocals locals;
     std::vector<Frame> frames;
 };
 struct EventImage { uint32_t id = 0; bool manual = false, signaled = false; std::string name; };
@@ -143,6 +150,8 @@ struct Protect { uint32_t address = 0, flags = 4; };
 struct Inventory { uint32_t kind = 0, count = 0; };
 struct Capture {
     std::string build, game;
+    bool hasThreadLocals = true;
+    std::array<bool, tlsSlots> tlsUsed{};
     uint32_t careerRollback = 0;
     uint32_t omitted = omitRequired | omitHeap | omitAudio;
     uint32_t pageSize = 4096;
@@ -363,6 +372,12 @@ inline Bytes encode(const Capture& capture) {
         word(payload, heap.id); word(payload, heap.options); word(payload, heap.maximum); word(payload, uint32_t(heap.blocks.size()));
         for (const auto& block : heap.blocks) { word(payload, block.address); word(payload, block.capacity); word(payload, block.requested); }
     }
+    require(capture.hasThreadLocals, "Cannot encode capture without thread-local state");
+    for (bool used : capture.tlsUsed) word(payload, used ? 1u : 0u);
+    for (const auto& thread : capture.threads) {
+        word(payload, thread.locals.lastError);
+        for (uint32_t value : thread.locals.values) word(payload, value);
+    }
     Bytes file = {'N','F','S','C','A','P','1'};
     word(file, schema); word(file, uint32_t(payload.size())); word(file, crc(payload));
     file.insert(file.end(), payload.begin(), payload.end());
@@ -374,7 +389,7 @@ inline Capture decode(const Bytes& file) {
     Reader header{file};
     require(header.take(7) == Bytes({'N','F','S','C','A','P','1'}), "Not a capture file");
     uint32_t version = header.word();
-    require(version == 1 || version == schema, "Unsupported capture schema");
+    require(version >= 1 && version <= schema, "Unsupported capture schema");
     uint32_t size = header.word(), checksum = header.word();
     require(size == file.size() - header.offset, "Invalid capture size");
     Bytes payload = header.take(size);
@@ -459,6 +474,16 @@ inline Capture decode(const Bytes& file) {
             uint32_t count = reader.word(); require(count <= (1u << 22) && size_t(count) * 12 <= payload.size() - reader.offset, "Too many heap blocks");
             for (uint32_t n = 0; n < count; ++n) { HeapBlock block; block.address = reader.word(); block.capacity = reader.word(); block.requested = reader.word(); heap.blocks.push_back(block); }
             capture.heaps.push_back(std::move(heap));
+        }
+    }
+    capture.hasThreadLocals = version >= 3;
+    if (capture.hasThreadLocals) {
+        for (auto& used : capture.tlsUsed) {
+            uint32_t value = reader.word(); require(value <= 1, "Invalid TLS allocation flag"); used = value != 0;
+        }
+        for (auto& thread : capture.threads) {
+            thread.locals.lastError = reader.word();
+            for (auto& value : thread.locals.values) value = reader.word();
         }
     }
     require(reader.offset == payload.size(), "Unexpected trailing capture");

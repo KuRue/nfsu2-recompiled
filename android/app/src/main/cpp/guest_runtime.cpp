@@ -174,11 +174,14 @@ public:
 MachineMutex machine;
 thread_local std::unique_lock<MachineMutex>* machineLease=nullptr;
 thread_local uint32_t guestThreadId=1;
+std::array<bool,nfs_capture::tlsSlots> tlsUsed{};
+thread_local std::array<uint32_t,nfs_capture::tlsSlots> tlsValues{};
 #ifdef NFS_RESUMABLE
 // Last place this thread dropped the machine. Written before unlock and read
 // only while the capturer holds the lock, so it needs no mutex of its own.
 struct ParkedGuest {
     State cpu;
+    nfs_capture::ThreadLocals locals;
     std::vector<nfs_capture::Frame> frames;
     const char* blocker="host callback";
     uint32_t blockedAt=0,waitHandle=0;
@@ -190,10 +193,13 @@ std::map<uint32_t,ParkedGuest> parkedThreads;
 // rebuilds its stack from these registers and frames (guarded by the machine lock).
 struct PendingRewind {State cpu;std::vector<nfs_capture::Frame> frames;};
 std::map<uint32_t,PendingRewind> pendingRewinds;
+std::map<uint32_t,nfs_capture::ThreadLocals> pendingThreadLocals;
 #endif
 std::vector<Import> imports;
 std::map<std::string,uint32_t> modules;
 thread_local uint32_t lastError=0;
+nfs_capture::ThreadLocals captureThreadLocals(){return {lastError,tlsValues};}
+void restoreThreadLocals(const nfs_capture::ThreadLocals& locals){lastError=locals.lastError;tlsValues=locals.values;}
 uint32_t imageBase{}, imageSize{}, entry{};
 uint32_t resourceRva{},resourceSize{};
 // Set and read under the machine lock with no yield in between (lookup -> call):
@@ -231,7 +237,7 @@ GuestThreadTrace& currentTrace(){
 void forgetThreadTrace(){
     std::lock_guard<std::mutex> lock(threadTracesMutex);threadTraces.erase(guestThreadId);threadTrace.reset();
 #ifdef NFS_RESUMABLE
-    parkedThreads.erase(guestThreadId);
+    parkedThreads.erase(guestThreadId);pendingRewinds.erase(guestThreadId);pendingThreadLocals.erase(guestThreadId);
 #endif
 }
 #ifdef NFS_STACK_PROBE
@@ -413,7 +419,7 @@ int64_t steadyMs(){return std::chrono::duration_cast<std::chrono::milliseconds>(
 void publishPark(const char* label){
 #ifdef NFS_RESUMABLE
     ParkedGuest& park=parkedThreads[guestThreadId];
-    park.cpu.save();park.frames.clear();
+    park.cpu.save();park.locals=captureThreadLocals();park.frames.clear();
     park.outsideGuest=resumableNesting==0;
     const char* waitName=label&&label[0]?label:currentTrace().wait.load();
     park.wait=nfs_capture::waitKindOf(waitName);
@@ -460,7 +466,7 @@ void yieldGuestMachine(unsigned milliseconds=0,std::chrono::steady_clock::time_p
     else if(milliseconds)std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));else std::this_thread::yield();
     machineLease->lock();saved.load();
 #ifdef NFS_RESUMABLE
-    if(!pendingRewinds.empty())takePendingRewind();
+    if(!pendingRewinds.empty()||!pendingThreadLocals.empty())takePendingRewind();
 #endif
 }
 thread_local bool renderThread=false;
@@ -833,6 +839,10 @@ std::atomic<bool> lanBroadcastWanted{false};
 // Every other live thread parked at a resumable point (or idle outside guest code), and this
 // presenting thread resumable: the moment a capture is written or loaded. Null when ready.
 const char* quiesceProblem(std::vector<nfs_capture::ThreadView>& views,uint32_t& selfAt,uint32_t& blockedId){
+    blockedId=0;
+    // Park records still describe the old timeline until every worker consumes its load.
+    if(!pendingRewinds.empty()){blockedId=pendingRewinds.begin()->first;return "thread has a pending rewind";}
+    if(!pendingThreadLocals.empty()){blockedId=pendingThreadLocals.begin()->first;return "thread has pending local state";}
     views.clear();views.reserve(guestThreads.size()+1);
     const char* selfBlocker=captureBlocker(selfAt);
     nfs_capture::ThreadView self;
@@ -887,11 +897,13 @@ void maybeWriteCapture(){
             for(unsigned i=0;i<8;++i)std::memcpy(cpu.xmm[i],&state.xmm[i],16);
         };
         nfs_capture::Capture capture;
+        capture.tlsUsed=tlsUsed;
         capture.build=NFS_GIT_IDENTITY;capture.game=nfs_capture::sha256File(guestExecutable);
         capture.careerRollback=0;capture.omitted=nfs_capture::omitRequired|nfs_capture::omitHeap|nfs_capture::omitAudio;capture.pageSize=uint32_t(memory->pageSize());
         auto addThread=[&](uint32_t id,bool capturer,bool outsideGuest,bool resumable,nfs_capture::WaitKind wait,uint32_t handle,uint32_t blockedAt,const State& cpu,const std::vector<nfs_capture::Frame>& frames){
             nfs_capture::ThreadImage image;image.id=id;image.capturer=capturer;image.outsideGuest=outsideGuest;image.resumable=resumable;
             image.wait=wait;image.waitHandle=handle;image.blockedAt=blockedAt;storeCpu(image.cpu,cpu);image.frames=frames;
+            image.locals=capturer?captureThreadLocals():parkedThreads.at(id).locals;
             capture.threads.push_back(std::move(image));
         };
         std::vector<nfs_capture::Frame> selfFrames;
@@ -994,6 +1006,10 @@ RebuildRequest rewindRequest(const PendingRewind& rewind){
 }
 // Called by a parked worker when it gets the machine back during a load.
 void takePendingRewind(){
+    auto locals=pendingThreadLocals.find(guestThreadId);
+    if(locals!=pendingThreadLocals.end()){
+        restoreThreadLocals(locals->second);pendingThreadLocals.erase(locals);
+    }
     auto found=pendingRewinds.find(guestThreadId);if(found==pendingRewinds.end())return;
     auto request=rewindRequest(found->second);pendingRewinds.erase(found);
     {auto& trace=currentTrace();for(auto& slot:trace.held)slot=0;for(auto& slot:trace.heldAt)slot=0;}
@@ -1018,6 +1034,7 @@ void maybeLoadCapture(){
         std::ifstream in(wanted,std::ios::binary);if(!in)throw std::runtime_error("cannot read the capture file");
         nfs_capture::Bytes bytes((std::istreambuf_iterator<char>(in)),std::istreambuf_iterator<char>());
         capture=nfs_capture::decode(bytes);
+        if(!capture.hasThreadLocals)throw std::runtime_error("capture lacks thread-local state");
         if(capture.build!=NFS_GIT_IDENTITY)throw std::runtime_error("capture is from another build");
         if(capture.game!=nfs_capture::sha256File(guestExecutable))throw std::runtime_error("capture is from another game executable");
         if(capture.graphics!=d3d9ObjectList())throw std::runtime_error("graphics objects changed since the capture");
@@ -1076,8 +1093,10 @@ void maybeLoadCapture(){
         {std::map<uint32_t,std::shared_ptr<std::recursive_mutex>> sections;pendingCriticalDeletes.clear();
             for(uint32_t address:capture.criticalSections)sections[address]=std::make_shared<std::recursive_mutex>();
             criticalSections.swap(sections);}
-        pendingRewinds.clear();
+        tlsUsed=capture.tlsUsed;
+        pendingRewinds.clear();pendingThreadLocals.clear();
         for(const auto& thread:capture.threads){
+            if(!thread.capturer)pendingThreadLocals[thread.id]=thread.locals;
             if(thread.capturer||thread.outsideGuest)continue;
             pendingRewinds[thread.id]=PendingRewind{stateFromImage(thread.cpu),thread.frames};
         }
@@ -1087,32 +1106,35 @@ void maybeLoadCapture(){
         throw GuestStop(std::string("Load failed after the game state was replaced: ")+error.what());
     }
     const auto* self=&capture.threads.front();for(const auto& thread:capture.threads)if(thread.capturer)self=&thread;
+    restoreThreadLocals(self->locals);
     throw rewindRequest(PendingRewind{stateFromImage(self->cpu),self->frames});
 #endif
 }
 #endif
 void testGuestScheduling(){
-    State original;original.save();uint32_t savedError=lastError,savedTLS=tlsValues[1087];
+    State original;original.save();auto savedLocals=captureThreadLocals();
     g_eax=0x11223344;g_fs_base=0x21000000;g_st[0]=123.5;g_xmm[7].u64[0]=0x123456789abcdef0ull;
-    lastError=111;tlsValues[1087]=0x55;
+    lastError=111;tlsValues[0]=0x12345678;tlsValues[1087]=0x55;
+    auto mainLocals=captureThreadLocals();tlsValues.fill(0xdeadbeef);lastError=999;restoreThreadLocals(mainLocals);
     bool done=false;std::string failure;
     std::thread worker([&]{
         std::unique_lock<MachineMutex> lease(machine);machineLease=&lease;guestThreadId=9000;
         State fresh;fresh.eax=0xaabbccdd;fresh.fs=0xdead1000;fresh.st[0]=-456.25;fresh.xmm[7].u64[0]=0xfedcba9876543210ull;fresh.load();
-        lastError=222;tlsValues[1087]=0xaa;
+        lastError=222;tlsValues[0]=0x87654321;tlsValues[1087]=0xaa;
+        auto workerLocals=captureThreadLocals();tlsValues.fill(0xbadbad);lastError=888;restoreThreadLocals(workerLocals);
         try{for(unsigned i=0;i<100;++i){checkGuestProgress();yieldGuestMachine();
-            if(g_eax!=0xaabbccdd||g_fs_base!=0xdead1000||g_st[0]!=-456.25||g_xmm[7].u64[0]!=0xfedcba9876543210ull||lastError!=222||tlsValues[1087]!=0xaa)
+            if(g_eax!=0xaabbccdd||g_fs_base!=0xdead1000||g_st[0]!=-456.25||g_xmm[7].u64[0]!=0xfedcba9876543210ull||lastError!=222||tlsValues!=workerLocals.values)
                 throw GuestStop("Guest worker context was not isolated");}}
         catch(const std::exception& error){failure=error.what();}
         forgetThreadTrace();done=true;machineLease=nullptr;
     });
     try{while(!done){checkGuestProgress();yieldGuestMachine(0,std::chrono::steady_clock::now()+std::chrono::milliseconds(1));
-        if(g_eax!=0x11223344||g_fs_base!=0x21000000||g_st[0]!=123.5||g_xmm[7].u64[0]!=0x123456789abcdef0ull||lastError!=111||tlsValues[1087]!=0x55)
+        if(g_eax!=0x11223344||g_fs_base!=0x21000000||g_st[0]!=123.5||g_xmm[7].u64[0]!=0x123456789abcdef0ull||lastError!=111||tlsValues!=mainLocals.values)
             failure="Main guest context was not preserved during handover";
     }}catch(const std::exception& error){failure=error.what();}
-    machineLease->unlock();worker.join();machineLease->lock();original.load();lastError=savedError;tlsValues[1087]=savedTLS;
+    machineLease->unlock();worker.join();machineLease->lock();original.load();restoreThreadLocals(savedLocals);
     if(!failure.empty())throw GuestStop(failure);
-    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest scheduler passed 100 handovers with separate integer, FS, x87, XMM, TLS and last-error state");
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest scheduler passed 100 handovers with separate integer, FS, x87, XMM, TLS and last-error state, including capture/restore");
 }
 void testGuestSoundCaps(){
     State saved;saved.save();

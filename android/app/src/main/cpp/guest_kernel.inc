@@ -3,8 +3,6 @@
 uint32_t guestCommandLine{}, guestEnvironmentA{}, guestEnvironmentW{}, exceptionFilter{};
 uint32_t processErrorMode{};
 void setErrorMode(){uint32_t old=processErrorMode;processErrorMode=arg(0);ret(old,1);}
-std::array<bool,1088> tlsUsed{};
-thread_local std::array<uint32_t,1088> tlsValues{};
 std::map<uint32_t,std::shared_ptr<std::recursive_mutex>> criticalSections;
 std::map<uint32_t,bool> pendingCriticalDeletes;
 uint32_t ansiString(const std::string& value) {
