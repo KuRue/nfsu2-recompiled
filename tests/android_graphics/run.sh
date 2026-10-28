@@ -22,3 +22,4 @@ with tempfile.TemporaryDirectory(prefix="nfs-buffer-archive-") as directory:
     subprocess.run([sys.argv[1], "--write", directory], check=True)
     subprocess.run([sys.argv[1], "--read", directory], check=True)
 PYTEST
+"$task_build/graphics_texture_check"

@@ -1,4 +1,7 @@
-struct ResourceLock {void* native;uint32_t guest,size,pitch,rowBytes,rows,flags;CompressedView compressed{};RECT rectangle{};uint32_t nativePitch{};uint32_t bufferOffset=0,bufferSize=0;};
+// shadowRow/shadowByte: where the locked rows start in the level (row blocks for DXT, bytes);
+// shadowWhole: the lock covered the whole level. Used to keep texture shadows for captures.
+struct ResourceLock {void* native;uint32_t guest,size,pitch,rowBytes,rows,flags;CompressedView compressed{};RECT rectangle{};uint32_t nativePitch{};uint32_t bufferOffset=0,bufferSize=0;
+    uint32_t shadowRow=0,shadowByte=0;bool shadowWhole=false;};
 std::map<uint64_t,ResourceLock> resourceLocks;
 uint64_t lockKey(uint32_t object,uint32_t subresource){return (uint64_t(object)<<32)|subresource;}
 uint32_t rowBytes(D3DFORMAT format,uint32_t width){
@@ -34,7 +37,9 @@ HRESULT lockPixels(uint32_t address,uint32_t subresource,const D3DSURFACE_DESC& 
         uint32_t pitch=texture.pitch(view.level),rows=(region.bottom-region.top+3)/4,bytes=((region.right-region.left+3)/4)*texture.blockBytes();
         uint32_t temporary=allocateGuest(pitch*rows),offset=(region.top/4)*pitch+(region.left/4)*texture.blockBytes();auto& raw=texture.bytes(view.face,view.level);
         if(!(flags&D3DLOCK_DISCARD))for(uint32_t row=0;row<rows;++row)std::memcpy(static_cast<uint8_t*>(pointer(temporary))+row*pitch,raw.data()+offset+row*pitch,bytes);
-        resourceLocks.emplace(lockKey(address,subresource),ResourceLock{native.pBits,temporary,pitch*rows,pitch,bytes,rows,flags,view,region,static_cast<uint32_t>(native.Pitch)});
+        auto& entry=resourceLocks.emplace(lockKey(address,subresource),ResourceLock{native.pBits,temporary,pitch*rows,pitch,bytes,rows,flags,view,region,static_cast<uint32_t>(native.Pitch)}).first->second;
+        entry.shadowRow=region.top/4;entry.shadowByte=(region.left/4)*texture.blockBytes();
+        entry.shadowWhole=region.left==0&&region.top==0&&region.right==static_cast<LONG>(fullWidth)&&region.bottom==static_cast<LONG>(fullHeight);
         write(output,pitch);write(output+4,temporary);return D3D_OK;
     }
     uint32_t rows=blockCompressed(desc.Format)?(height+3)/4:height,bytes=rowBytes(desc.Format,width);
@@ -42,7 +47,9 @@ HRESULT lockPixels(uint32_t address,uint32_t subresource,const D3DSURFACE_DESC& 
     uint64_t size=uint64_t(native.Pitch)*rows;if(size>0x7fffffff)throw std::runtime_error("D3D9 lock allocation too large");
     uint32_t temporary=allocateGuest(size);
     if(!(flags&D3DLOCK_DISCARD))for(uint32_t row=0;row<rows;++row)std::memcpy(static_cast<uint8_t*>(pointer(temporary))+row*native.Pitch,static_cast<const uint8_t*>(native.pBits)+row*native.Pitch,bytes);
-    resourceLocks.emplace(lockKey(address,subresource),ResourceLock{native.pBits,temporary,static_cast<uint32_t>(size),static_cast<uint32_t>(native.Pitch),bytes,rows,flags});
+    auto& entry=resourceLocks.emplace(lockKey(address,subresource),ResourceLock{native.pBits,temporary,static_cast<uint32_t>(size),static_cast<uint32_t>(native.Pitch),bytes,rows,flags}).first->second;
+    if(rect){entry.shadowRow=blockCompressed(desc.Format)?rect->top/4:rect->top;entry.shadowByte=rect->left?rowBytes(desc.Format,rect->left):0;}
+    entry.shadowWhole=!rect||(rect->left==0&&rect->top==0&&uint32_t(rect->right)==desc.Width&&uint32_t(rect->bottom)==desc.Height);
     write(output,native.Pitch);write(output+4,temporary);return D3D_OK;
 }
 void copyLockBack(uint32_t address,uint32_t subresource){

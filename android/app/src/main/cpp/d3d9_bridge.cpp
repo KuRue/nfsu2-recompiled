@@ -1,6 +1,7 @@
 #include "d3d9_bridge.h"
 #include "d3d9_program_state.h"
 #include "d3d9_buffer_state.h"
+#include "graphics_texture.h"
 #include "runtime_log.h"
 #include "dxt_shadow.h"
 #include "texture_pack.h"
@@ -41,6 +42,7 @@ struct Object {IUnknown* native;Kind kind;uint32_t references=1;CompressedView c
 std::unordered_map<uint32_t,Object> objects;
 #ifdef NFS_RESUMABLE
 std::map<uint32_t,nfs_d3d9::BufferShadow> bufferShadows;
+std::map<uint32_t,nfs_d3d9::TextureShadow> textureShadows;
 #endif
 // Nearly every call of a frame targets the same object (the device). Element
 // pointers of an unordered_map survive rehashing; only erasing an object
@@ -117,7 +119,7 @@ std::string inventoryText(){
 }
 void retireGuestObject(uint32_t address){
 #ifdef NFS_RESUMABLE
-    bufferShadows.erase(address);
+    bufferShadows.erase(address);textureShadows.erase(address);
 #endif
     cachedObjectAddress=0;cachedObject=nullptr;
     auto found=objects.find(address);if(found==objects.end())return;
@@ -194,7 +196,7 @@ void configureD3D9Bridge(void* base,uint32_t (*allocator)(uint32_t),void (*deall
 }
 void shutdownD3D9Bridge(){
 #ifdef NFS_RESUMABLE
-    bufferShadows.clear();
+    bufferShadows.clear();textureShadows.clear();
 #endif
     clearTexturePacks();
     for(auto& lock:resourceLocks)freeGuest(lock.second.guest);resourceLocks.clear();
@@ -253,6 +255,56 @@ void recordCreation(uint32_t method,const uint32_t* args,uint32_t count){
     if(method==86||method==91||method==106){creation->args[1]=0;creation->args[2]=0;}
     found->second.creation=std::move(creation);
 }
+// Layout of a texture or cube as the game created it: guest format and size from its Create
+// arguments, level count from the native object (0 levels asks for a full chain).
+bool textureLayout(const Object& object,nfs_d3d9::Texture& out){
+    if((object.kind!=Kind::Texture&&object.kind!=Kind::Cube)||!object.creation)return false;
+    const auto& a=object.creation->args;out=nfs_d3d9::Texture{};
+    if(object.kind==Kind::Texture){if(a.size()<7)return false;out.kind=3;out.width=a[1];out.height=a[2];out.usage=a[4];out.format=a[5];out.pool=a[6];
+        out.levels=static_cast<IDirect3DTexture9*>(object.native)->GetLevelCount();}
+    else{if(a.size()<6)return false;out.kind=4;out.width=out.height=a[1];out.usage=a[3];out.format=a[4];out.pool=a[5];
+        out.levels=static_cast<IDirect3DCubeTexture9*>(object.native)->GetLevelCount();}
+    out.transient=(out.usage&(D3DUSAGE_RENDERTARGET|D3DUSAGE_DEPTHSTENCIL))!=0;
+    return true;
+}
+#ifdef NFS_RESUMABLE
+// After a successful texture or cube Unlock: keep the guest-format bytes the game wrote.
+void recordTextureUnlock(uint32_t address,uint32_t subresource,HRESULT status){
+    auto lock=resourceLocks.find(lockKey(address,subresource));if(lock==resourceLocks.end())return;
+    if(FAILED(status)){textureShadows.erase(address);return;}
+    const auto& data=lock->second;if(data.flags&D3DLOCK_READONLY)return;
+    try{
+        auto found=objects.find(address);nfs_d3d9::Texture layout;
+        if(found==objects.end()||!textureLayout(found->second,layout)||layout.transient)return;
+        auto shadow=textureShadows.find(address);
+        if(shadow==textureShadows.end()){
+            size_t total=0;for(const auto& entry:textureShadows)total+=entry.second.bytes();
+            nfs_d3d9::TextureShadow created(layout);
+            nfs_d3d9::check(total+created.bytes()<=nfs_d3d9::maxTextureTotal,"D3D9 texture shadows too large");
+            shadow=textureShadows.emplace(address,std::move(created)).first;
+        }
+        shadow->second.update(subresource/32,subresource%32,data.shadowRow,data.shadowByte,data.rows,data.rowBytes,
+            static_cast<const uint8_t*>(pointer(data.guest)),data.pitch,data.shadowWhole);
+    }catch(const std::exception& error){textureShadows.erase(address);NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSCapture","Texture shadow unavailable: %s",error.what());}
+}
+// Writes the guest never sees in a lock: drop that texture's shadow. A surface names its parent.
+void forgetTextureContents(uint32_t address){
+    auto found=objects.find(address);if(found==objects.end())return;
+    textureShadows.erase(found->second.parent?found->second.parent:address);
+}
+void invalidateTextureShadowsForDeviceCall(uint32_t method,const uint32_t* args){
+    switch(method){
+    case 30:case 34:forgetTextureContents(args[3]);break;   // UpdateSurface, StretchRect destination
+    case 31:case 32:forgetTextureContents(args[2]);break;   // UpdateTexture, GetRenderTargetData destination
+    case 35:forgetTextureContents(args[1]);break;           // ColorFill
+    case 16:for(auto it=textureShadows.begin();it!=textureShadows.end();){ // Reset loses default-pool contents
+        auto object=objects.find(it->first);nfs_d3d9::Texture layout;
+        if(object==objects.end()||!textureLayout(object->second,layout)||layout.pool==D3DPOOL_DEFAULT)it=textureShadows.erase(it);else ++it;}
+        break;
+    default:break;
+    }
+}
+#endif
 #ifdef NFS_RESUMABLE
 void invalidateBufferShadowsForDeviceCall(uint32_t method,const uint32_t* args){
     if(method==85)bufferShadows.erase(args[4]); // ProcessVertices may modify its destination even on failure.
@@ -266,7 +318,7 @@ void invalidateBufferShadowsForDeviceCall(uint32_t method,const uint32_t* args){
 #endif
 uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumentCount){
 #ifdef NFS_RESUMABLE
-    if((token-methodBase)/4096==2)invalidateBufferShadowsForDeviceCall(((token-methodBase)%4096)/16,args);
+    if((token-methodBase)/4096==2){invalidateBufferShadowsForDeviceCall(((token-methodBase)%4096)/16,args);invalidateTextureShadowsForDeviceCall(((token-methodBase)%4096)/16,args);}
 #endif
     uint32_t result=dispatchGuestD3D9Call(token,args,argumentCount);
     if((token-methodBase)/4096==2&&SUCCEEDED(static_cast<HRESULT>(result))){
@@ -403,16 +455,28 @@ uint32_t dispatchGuestD3D9Call(uint32_t token,const uint32_t* args,uint32_t* arg
         if(method==17){*argumentCount=3;auto desc=static_cast<D3DSURFACE_DESC*>(pointer(args[2]));HRESULT status=texture->GetLevelDesc(args[1],desc);if(SUCCEEDED(status))describeOriginal(args[0],desc);return status;}
         if(method==18){*argumentCount=3;IDirect3DSurface9* surface=nullptr;HRESULT status=texture->GetSurfaceLevel(args[1],&surface);uint32_t address=SUCCEEDED(status)?wrap(surface,Kind::Surface):0;if(address){attachTextureSurface(args[0],address);auto view=compressionView(args[0]);view.level=args[1];objects.at(address).compressed=view;}write(args[2],address);return status;}
         if(method==19){*argumentCount=5;return lockTexture(args[0],args[1],args[2],static_cast<const RECT*>(pointer(args[3])),args[4]);}
-        if(method==20){*argumentCount=2;copyLockBack(args[0],args[1]);texturePackUpload(args[0],args[1]);HRESULT status=texture->UnlockRect(args[1]);releaseLock(args[0],args[1]);return status;}}
+        if(method==20){*argumentCount=2;copyLockBack(args[0],args[1]);texturePackUpload(args[0],args[1]);HRESULT status=texture->UnlockRect(args[1]);
+#ifdef NFS_RESUMABLE
+            recordTextureUnlock(args[0],args[1],status);
+#endif
+            releaseLock(args[0],args[1]);return status;}}
     if(kind==4){auto texture=static_cast<IDirect3DCubeTexture9*>(object);
         if(method==17){*argumentCount=3;auto desc=static_cast<D3DSURFACE_DESC*>(pointer(args[2]));HRESULT status=texture->GetLevelDesc(args[1],desc);if(SUCCEEDED(status))describeOriginal(args[0],desc);return status;}
         if(method==18){*argumentCount=4;IDirect3DSurface9* surface=nullptr;HRESULT status=texture->GetCubeMapSurface(static_cast<D3DCUBEMAP_FACES>(args[1]),args[2],&surface);uint32_t address=SUCCEEDED(status)?wrap(surface,Kind::Surface):0;if(address){attachTextureSurface(args[0],address);auto view=compressionView(args[0]);view.face=args[1];view.level=args[2];objects.at(address).compressed=view;}write(args[3],address);return status;}
         if(method==19){*argumentCount=6;return lockCube(args[0],args[1],args[2],args[3],static_cast<const RECT*>(pointer(args[4])),args[5]);}
-        if(method==20){*argumentCount=3;uint32_t subresource=args[1]*32+args[2];copyLockBack(args[0],subresource);HRESULT status=texture->UnlockRect(static_cast<D3DCUBEMAP_FACES>(args[1]),args[2]);releaseLock(args[0],subresource);return status;}}
+        if(method==20){*argumentCount=3;uint32_t subresource=args[1]*32+args[2];copyLockBack(args[0],subresource);HRESULT status=texture->UnlockRect(static_cast<D3DCUBEMAP_FACES>(args[1]),args[2]);
+#ifdef NFS_RESUMABLE
+            recordTextureUnlock(args[0],subresource,status);
+#endif
+            releaseLock(args[0],subresource);return status;}}
     if(kind==5){auto surface=static_cast<IDirect3DSurface9*>(object);
         if(method==12){*argumentCount=2;auto desc=static_cast<D3DSURFACE_DESC*>(pointer(args[1]));HRESULT status=surface->GetDesc(desc);if(SUCCEEDED(status))describeOriginal(args[0],desc);return status;}
         if(method==13){*argumentCount=4;return lockSurface(args[0],args[1],static_cast<const RECT*>(pointer(args[2])),args[3]);}
-        if(method==14){*argumentCount=1;copyLockBack(args[0],0);disablePackedTexture(args[0]);HRESULT status=surface->UnlockRect();releaseLock(args[0],0);return status;}}
+        if(method==14){*argumentCount=1;
+#ifdef NFS_RESUMABLE
+            {auto lock=resourceLocks.find(lockKey(args[0],0));if(lock!=resourceLocks.end()&&!(lock->second.flags&D3DLOCK_READONLY))forgetTextureContents(args[0]);}
+#endif
+            copyLockBack(args[0],0);disablePackedTexture(args[0]);HRESULT status=surface->UnlockRect();releaseLock(args[0],0);return status;}}
     if(kind==6||kind==7){
         if(method==11){*argumentCount=5;return kind==6?lockBuffer<IDirect3DVertexBuffer9,D3DVERTEXBUFFER_DESC>(args[0],args[1],args[2],args[3],args[4]):lockBuffer<IDirect3DIndexBuffer9,D3DINDEXBUFFER_DESC>(args[0],args[1],args[2],args[3],args[4]);}
         if(method==12){*argumentCount=1;copyLockBack(args[0],0);HRESULT status=kind==6?static_cast<IDirect3DVertexBuffer9*>(object)->Unlock():static_cast<IDirect3DIndexBuffer9*>(object)->Unlock();recordBufferUnlock(args[0],status);releaseLock(args[0],0);return status;}}
@@ -494,4 +558,107 @@ void restoreD3D9Buffers(const std::vector<nfs_d3d9::BufferRecord>& records){
         shadow.update(0,record.definition.bytes.data(),record.definition.bytes.size(),true);
 #endif
     }
+}
+
+// Texture contents for captures, in the game's own format. Transient textures (render targets,
+// depth) keep none. A level without a complete shadow is read back only when the native object
+// holds the game's format as uploaded: not a CPU DXT fallback, not replaced by an HD pack, not a
+// default-pool texture (which cannot be locked); otherwise the capture is refused.
+namespace {
+nfs_d3d9::TextureRecord describeTexture(uint32_t address,const Object& object){
+    nfs_d3d9::TextureRecord record;record.address=address;std::memcpy(&record.table,pointer(address),4);
+    nfs_d3d9::check(object.creation&&!object.creation->args.empty()&&textureLayout(object,record.definition),"D3D9 texture recipe missing");
+    record.device=object.creation->args[0];record.references=object.references;
+    return record;
+}
+bool anyLock(uint32_t address){auto it=resourceLocks.lower_bound(lockKey(address,0));return it!=resourceLocks.end()&&(it->first>>32)==address;}
+std::vector<uint8_t> readTextureLevel(const Object& object,const nfs_d3d9::Texture& texture,uint32_t face,uint32_t level){
+    nfs_d3d9::check(!object.compressed.texture,"D3D9 texture uses the CPU DXT fallback and lacks a shadow");
+    nfs_d3d9::check(texture.pool!=D3DPOOL_DEFAULT||(texture.usage&D3DUSAGE_DYNAMIC),"Default-pool D3D9 texture lacks a shadow");
+    auto base=static_cast<IDirect3DBaseTexture9*>(static_cast<IDirect3DTexture9*>(object.native));
+    nfs_d3d9::check(!packedOriginals.count(base),"HD-pack D3D9 texture lacks a shadow");
+    D3DSURFACE_DESC desc{};D3DLOCKED_RECT locked{};HRESULT status;
+    if(texture.kind==3){auto native=static_cast<IDirect3DTexture9*>(object.native);status=native->GetLevelDesc(level,&desc);
+        nfs_d3d9::check(SUCCEEDED(status)&&uint32_t(desc.Format)==texture.format,"D3D9 texture native format differs");
+        status=native->LockRect(level,&locked,nullptr,D3DLOCK_READONLY);}
+    else{auto native=static_cast<IDirect3DCubeTexture9*>(object.native);status=native->GetLevelDesc(level,&desc);
+        nfs_d3d9::check(SUCCEEDED(status)&&uint32_t(desc.Format)==texture.format,"D3D9 cube native format differs");
+        status=native->LockRect(static_cast<D3DCUBEMAP_FACES>(face),level,&locked,nullptr,D3DLOCK_READONLY);}
+    nfs_d3d9::check(SUCCEEDED(status)&&locked.pBits,"Cannot read D3D9 texture");
+    uint32_t height=texture.kind==4?texture.width:texture.height;
+    uint32_t row=nfs_d3d9::textureRowBytes(texture.format,nfs_d3d9::mipExtent(texture.width,level)),rows=nfs_d3d9::textureRows(texture.format,nfs_d3d9::mipExtent(height,level));
+    std::vector<uint8_t> out;bool okay=locked.Pitch>0&&uint32_t(locked.Pitch)>=row;
+    if(okay){out.resize(size_t(row)*rows);for(uint32_t r=0;r<rows;++r)std::memcpy(out.data()+size_t(r)*row,static_cast<const uint8_t*>(locked.pBits)+size_t(r)*locked.Pitch,row);}
+    HRESULT unlocked=texture.kind==3?static_cast<IDirect3DTexture9*>(object.native)->UnlockRect(level):static_cast<IDirect3DCubeTexture9*>(object.native)->UnlockRect(static_cast<D3DCUBEMAP_FACES>(face),level);
+    nfs_d3d9::check(okay&&SUCCEEDED(unlocked),"Invalid D3D9 texture readback");
+    return out;
+}
+}
+std::vector<nfs_d3d9::TextureRecord> d3d9TextureList(){
+    std::vector<nfs_d3d9::TextureRecord> out;size_t total=0;
+    for(const auto& [address,object]:objects){
+        if(object.kind!=Kind::Texture&&object.kind!=Kind::Cube)continue;
+        nfs_d3d9::check(!anyLock(address),"D3D9 texture is locked");
+        auto record=describeTexture(address,object);auto& texture=record.definition;
+        if(!texture.transient){
+            const nfs_d3d9::TextureShadow* shadow=nullptr;
+#ifdef NFS_RESUMABLE
+            auto found=textureShadows.find(address);if(found!=textureShadows.end())shadow=&found->second;
+#endif
+            for(uint32_t face=0;face<nfs_d3d9::textureFaces(texture);++face)for(uint32_t level=0;level<texture.levels;++level){
+                nfs_d3d9::TextureLevel item{face,level,{}};
+                item.bytes=shadow&&shadow->complete(face,level)?shadow->level(face,level):readTextureLevel(object,texture,face,level);
+                total+=item.bytes.size();nfs_d3d9::check(total<=nfs_d3d9::maxTextureTotal,"D3D9 textures too large");
+                texture.contents.push_back(std::move(item));
+            }
+        }
+        nfs_d3d9::validate(texture);out.push_back(std::move(record));
+    }
+    std::sort(out.begin(),out.end(),[](const auto& a,const auto& b){return a.address<b.address;});return out;
+}
+void validateD3D9Textures(const std::vector<nfs_d3d9::TextureRecord>& records){
+    size_t count=0;for(const auto& [address,object]:objects)if(object.kind==Kind::Texture||object.kind==Kind::Cube)++count;
+    nfs_d3d9::check(count==records.size(),"D3D9 texture set changed");
+    uint32_t previous=0;
+    for(const auto& record:records){
+        nfs_d3d9::check(record.address>previous,"D3D9 textures must be sorted and unique");previous=record.address;
+        nfs_d3d9::validate(record.definition);auto found=objects.find(record.address);
+        nfs_d3d9::check(found!=objects.end()&&uint32_t(found->second.kind)==record.definition.kind,"D3D9 texture identity changed");
+        nfs_d3d9::check(!anyLock(record.address),"D3D9 texture is locked");
+        nfs_d3d9::check(nfs_d3d9::sameMetadata(record,describeTexture(record.address,found->second)),"D3D9 texture metadata/references changed");
+    }
+}
+// Same session: replay each level through the guest lock path (as the game's own upload), so the
+// DXT fallback and texture packs see it, then make the shadow match the capture.
+void restoreD3D9Textures(const std::vector<nfs_d3d9::TextureRecord>& records){
+    validateD3D9Textures(records);
+    uint32_t scratch=allocateGuest(8);
+    try{
+        for(const auto& record:records){
+            const auto& texture=record.definition;if(texture.transient)continue;
+#ifdef NFS_RESUMABLE
+            textureShadows.erase(record.address);
+#endif
+            for(const auto& item:texture.contents){
+                uint32_t subresource=item.face*32+item.level;
+                HRESULT status=texture.kind==3?lockTexture(record.address,item.level,scratch,nullptr,0):lockCube(record.address,item.face,item.level,scratch,nullptr,0);
+                nfs_d3d9::check(SUCCEEDED(status),"Cannot lock restored D3D9 texture");
+                uint32_t pitch,guest;std::memcpy(&pitch,pointer(scratch),4);std::memcpy(&guest,pointer(scratch+4),4);
+                uint32_t height=texture.kind==4?texture.width:texture.height;
+                uint32_t row=nfs_d3d9::textureRowBytes(texture.format,nfs_d3d9::mipExtent(texture.width,item.level)),rows=nfs_d3d9::textureRows(texture.format,nfs_d3d9::mipExtent(height,item.level));
+                for(uint32_t r=0;r<rows;++r)std::memcpy(static_cast<uint8_t*>(pointer(guest))+size_t(r)*pitch,item.bytes.data()+size_t(r)*row,row);
+                copyLockBack(record.address,subresource);
+                if(texture.kind==3)texturePackUpload(record.address,item.level);
+                auto native=objects.at(record.address).native;
+                status=texture.kind==3?static_cast<IDirect3DTexture9*>(native)->UnlockRect(item.level)
+                    :static_cast<IDirect3DCubeTexture9*>(native)->UnlockRect(static_cast<D3DCUBEMAP_FACES>(item.face),item.level);
+#ifdef NFS_RESUMABLE
+                recordTextureUnlock(record.address,subresource,status);
+#endif
+                releaseLock(record.address,subresource);
+                nfs_d3d9::check(SUCCEEDED(status),"Cannot unlock restored D3D9 texture");
+            }
+        }
+    }catch(...){freeGuest(scratch);throw;}
+    freeGuest(scratch);
 }

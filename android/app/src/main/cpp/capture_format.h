@@ -4,6 +4,7 @@
 // careerRollback must be zero so loading cannot roll career files back.
 #include "graphics_program.h"
 #include "graphics_buffer.h"
+#include "graphics_texture.h"
 #include <array>
 #include <cctype>
 #include <cmath>
@@ -20,7 +21,7 @@
 #include <unistd.h>
 
 namespace nfs_capture {
-constexpr uint32_t schema = 5; // 5 adds vertex/index buffer contents and proxy metadata
+constexpr uint32_t schema = 6; // 5 adds vertex/index buffer contents and proxy metadata; 6 texture contents
 constexpr uint32_t omitGraphics = 1u, omitAudio = 2u, omitHeap = 4u, omitFileContents = 8u;
 // Heap bookkeeping and sound objects are stored from schema 2; omitHeap and omitAudio are clear
 // only when they are.
@@ -156,6 +157,8 @@ struct Capture {
     bool hasPrograms = true;
     bool hasBuffers = true;
     std::vector<nfs_d3d9::BufferRecord> buffers;
+    bool hasTextures = true;
+    std::vector<nfs_d3d9::TextureRecord> textures;
     std::vector<nfs_d3d9::ProgramRecord> programs;
     std::array<bool, tlsSlots> tlsUsed{};
     uint32_t careerRollback = 0;
@@ -282,6 +285,22 @@ inline void validate(const Capture& capture) {
         require(bufferBytes <= (256u << 20), "Graphics buffers too large");
     }
     require(bufferIndex == capture.buffers.size(), "Unexpected graphics buffer records");
+    require(capture.textures.size() <= maxObjects, "Too many graphics textures");
+    size_t textureIndex = 0, textureBytes = 0;
+    for (const auto& object : capture.graphics) {
+        if ((object.second != 3 && object.second != 4) || !capture.hasTextures) continue;
+        require(textureIndex < capture.textures.size(), "Missing graphics texture contents");
+        const auto& texture = capture.textures[textureIndex++];
+        require(texture.address == object.first && texture.definition.kind == object.second, "Texture identity/kind mismatch");
+        require(texture.address >= capture.pageSize && !(texture.address & 3) && texture.table >= capture.pageSize && !(texture.table & 3)
+            && texture.device >= capture.pageSize && !(texture.device & 3) && texture.references > 0, "Invalid texture proxy metadata");
+        auto device = std::lower_bound(capture.graphics.begin(), capture.graphics.end(), std::make_pair(texture.device, 0u));
+        require(device != capture.graphics.end() && device->first == texture.device && device->second == 2, "Missing graphics texture device");
+        nfs_d3d9::validate(texture.definition);
+        for (const auto& level : texture.definition.contents) textureBytes += level.bytes.size();
+        require(textureBytes <= nfs_d3d9::maxTextureTotal, "Graphics textures too large");
+    }
+    require(textureIndex == capture.textures.size(), "Unexpected graphics texture records");
     require(capture.criticalSections.size() <= maxObjects * 4, "Too many critical sections");
     for (size_t i = 0; i < capture.criticalSections.size(); ++i)
         require(capture.criticalSections[i] >= capture.pageSize && (!i || capture.criticalSections[i - 1] < capture.criticalSections[i]), "Critical sections must be sorted and unique");
@@ -430,6 +449,17 @@ inline Bytes encode(const Capture& capture) {
         for (uint32_t value : {buffer.address, buffer.table, buffer.device, buffer.references, d.kind, d.usage, d.format, d.pool, d.fvf, uint32_t(d.bytes.size())}) word(payload, value);
         payload.insert(payload.end(), d.bytes.begin(), d.bytes.end());
     }
+    require(capture.hasTextures, "Cannot encode capture without graphics texture contents");
+    word(payload, uint32_t(capture.textures.size()));
+    for (const auto& texture : capture.textures) {
+        const auto& d = texture.definition;
+        for (uint32_t value : {texture.address, texture.table, texture.device, texture.references, d.kind, d.width, d.height, d.levels, d.usage, d.format, d.pool,
+                               d.transient ? 1u : 0u, uint32_t(d.contents.size())}) word(payload, value);
+        for (const auto& level : d.contents) {
+            word(payload, level.face); word(payload, level.level); word(payload, uint32_t(level.bytes.size()));
+            payload.insert(payload.end(), level.bytes.begin(), level.bytes.end());
+        }
+    }
     Bytes file = {'N','F','S','C','A','P','1'};
     word(file, schema); word(file, uint32_t(payload.size())); word(file, crc(payload));
     file.insert(file.end(), payload.begin(), payload.end());
@@ -561,6 +591,24 @@ inline Capture decode(const Bytes& file) {
             require(size && size <= nfs_d3d9::maxBufferBytes, "Invalid graphics buffer size");
             total += size;require(total <= (256u << 20), "Graphics buffers too large");
             d.bytes = reader.take(size);capture.buffers.push_back(std::move(buffer));
+        }
+    }
+    capture.hasTextures = version >= 6;
+    if (capture.hasTextures) {
+        uint32_t count = reader.word(); require(count <= maxObjects, "Too many graphics textures"); size_t total = 0;
+        for (uint32_t i = 0; i < count; ++i) {
+            nfs_d3d9::TextureRecord texture; auto& d = texture.definition;
+            texture.address = reader.word(); texture.table = reader.word(); texture.device = reader.word(); texture.references = reader.word();
+            d.kind = reader.word(); d.width = reader.word(); d.height = reader.word(); d.levels = reader.word(); d.usage = reader.word();
+            d.format = reader.word(); d.pool = reader.word(); d.transient = reader.word() != 0;
+            uint32_t levels = reader.word(); require(levels <= 6 * 14, "Too many texture levels");
+            for (uint32_t n = 0; n < levels; ++n) {
+                nfs_d3d9::TextureLevel level; level.face = reader.word(); level.level = reader.word(); uint32_t size = reader.word();
+                require(size && size <= nfs_d3d9::maxTextureBytes, "Invalid texture level size");
+                total += size; require(total <= nfs_d3d9::maxTextureTotal, "Graphics textures too large");
+                level.bytes = reader.take(size); d.contents.push_back(std::move(level));
+            }
+            capture.textures.push_back(std::move(texture));
         }
     }
     require(reader.offset == payload.size(), "Unexpected trailing capture");

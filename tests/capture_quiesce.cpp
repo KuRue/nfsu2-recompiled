@@ -68,11 +68,30 @@ nfs_capture::Capture sample() {
         {0x10000600u,0x10000700u,0x10000300u,1u,{6,8,100,0,0x112,{1,2,3,4,5,6,7,8}}},
         {0x10000610u,0x10000740u,0x10000300u,2u,{7,0,101,1,0,{0,0,1,0,2,0}}}
     };
+    // The sample's texture (0x10000310): 8x4 DXT1 with two levels, and a transient render target.
+    {nfs_d3d9::TextureRecord texture{0x10000310u,0x10000780u,0x10000300u,1u,{}};
+        auto& d=texture.definition;d.kind=3;d.width=8;d.height=4;d.levels=2;d.format=nfs_d3d9::fourccDXT1;d.pool=1;
+        d.contents={{0,0,std::vector<uint8_t>(16,0x11)},{0,1,std::vector<uint8_t>(8,0x22)}};
+        capture.textures.push_back(texture);}
+    capture.graphics.push_back({0x10000800u,3u});
+    {nfs_d3d9::TextureRecord target{0x10000800u,0x10000880u,0x10000300u,1u,{}};
+        auto& d=target.definition;d.kind=3;d.width=256;d.height=256;d.levels=1;d.usage=1;d.format=21;d.pool=0;d.transient=true;
+        capture.textures.push_back(target);}
     capture.criticalSections = {0x864f00u, 0x10806348u};
     capture.omitted &= ~omitHeap; capture.heapNext = 0xf0000108u;
     capture.heaps.push_back({0xf0000100u, 0u, 0u, {{0x10000000u, 32u, 31u}, {0x10000020u, 4096u, 4000u}}});
     capture.heaps.push_back({0xf0000104u, 4u, 65536u, {}});
     return capture;
+}
+size_t textureSectionBytes(const nfs_capture::Capture& capture) {
+    size_t size=4;for(const auto& texture:capture.textures){size+=52;for(const auto& level:texture.definition.contents)size+=12+level.bytes.size();}return size;
+}
+// The same capture written as schema 5 (no texture section), for the older-schema checks below.
+nfs_capture::Bytes encodeSchema5(const nfs_capture::Capture& capture) {
+    using namespace nfs_capture;
+    auto file=encode(capture);Bytes payload(file.begin()+19,file.end()-textureSectionBytes(capture));
+    Bytes header={'N','F','S','C','A','P','1'};word(header,5);word(header,uint32_t(payload.size()));word(header,crc(payload));
+    header.insert(header.end(),payload.begin(),payload.end());return header;
 }
 size_t bufferSectionBytes(const nfs_capture::Capture& capture) {
     size_t size=4;for(const auto& buffer:capture.buffers)size+=40+buffer.definition.bytes.size();return size;
@@ -94,6 +113,7 @@ bool sameFrame(const nfs_capture::Frame& a, const nfs_capture::Frame& b) {
 bool same(const nfs_capture::Capture& left, const nfs_capture::Capture& right) {
     if (left.build != right.build || left.game != right.game || left.careerRollback != right.careerRollback) return false;
     if(left.hasBuffers!=right.hasBuffers||left.buffers!=right.buffers)return false;
+    if(left.hasTextures!=right.hasTextures||left.textures!=right.textures)return false;
     if (left.hasPrograms != right.hasPrograms || left.programs != right.programs) return false;
     if (left.hasThreadLocals != right.hasThreadLocals || left.tlsUsed != right.tlsUsed) return false;
     if (left.omitted != right.omitted || left.pageSize != right.pageSize) return false;
@@ -217,20 +237,20 @@ int main() {
     expect(careerPath("appdata/Roaming/x") && careerPath("DOCUMENTS/a") && !careerPath("GLOBAL/documents"), "career paths");
     {
         // A schema 1 file has no files section: drop it, restamp the header and read it back.
-        auto older = sample(); older.files.clear(); older.heaps.clear(); older.heapNext = 0; older.omitted |= omitHeap | omitAudio; older.sounds.clear(); older.graphics.clear(); older.programs.clear();older.buffers.clear(); older.criticalSections.clear();
-        auto bytes = encode(older);
+        auto older = sample(); older.files.clear(); older.heaps.clear(); older.heapNext = 0; older.omitted |= omitHeap | omitAudio; older.sounds.clear(); older.graphics.clear(); older.programs.clear();older.buffers.clear(); older.textures.clear(); older.criticalSections.clear();
+        auto bytes = encodeSchema5(older);
         const size_t localsBytes = 4 * (tlsSlots + older.threads.size() * (tlsSlots + 1));
         bytes.resize(bytes.size() - programSectionBytes(older) - localsBytes - 24); // file, sound, graphics and section counts, heap next, heap count
         Bytes payload(bytes.begin() + 19, bytes.end());
         Bytes header = {'N','F','S','C','A','P','1'}; word(header, 1); word(header, uint32_t(payload.size())); word(header, crc(payload));
         header.insert(header.end(), payload.begin(), payload.end());
-        older.hasBuffers=false;older.hasPrograms = false; older.hasThreadLocals = false; older.tlsUsed.fill(false);
+        older.hasTextures=false;older.hasBuffers=false;older.hasPrograms = false; older.hasThreadLocals = false; older.tlsUsed.fill(false);
         for (auto& thread : older.threads) thread.locals = {};
         auto read = decode(header);
         expect(same(older, read) && read.files.empty(), "schema 1 capture still reads");
     }
     {
-        auto original = sample(); auto bytes = encode(original);
+        auto original = sample(); auto bytes = encodeSchema5(original); original.hasTextures=false; original.textures.clear();
         const size_t localsBytes = 4 * (tlsSlots + original.threads.size() * (tlsSlots + 1));
         auto restamp = [](Bytes payload, uint32_t version) {
             Bytes header = {'N','F','S','C','A','P','1'}; word(header, version);
@@ -255,7 +275,7 @@ int main() {
         expectThrow("missing schema-4 graphics programs with valid checksum", restamp(partial, 4));
     }
     {
-        auto capture = sample(); auto file = encode(capture);
+        auto capture = sample(); auto file = encodeSchema5(capture);
         Bytes payload(file.begin()+19,file.end());size_t start=payload.size()-programSectionBytes(capture);
         auto restamp = [](Bytes data) { Bytes header={'N','F','S','C','A','P','1'};word(header,5);word(header,uint32_t(data.size()));word(header,crc(data));header.insert(header.end(),data.begin(),data.end());return header; };
         auto set = [](Bytes& data,size_t at,uint32_t value){for(unsigned i=0;i<4;++i)data[at+i]=uint8_t(value>>(i*8));};
@@ -293,7 +313,7 @@ int main() {
         bad=sample();bad.buffers.push_back(bad.buffers[0]);rejectBuffer(bad);
     }
     {
-        auto capture=sample();auto file=encode(capture);Bytes payload(file.begin()+19,file.end());size_t start=payload.size()-bufferSectionBytes(capture);
+        auto capture=sample();auto file=encodeSchema5(capture);Bytes payload(file.begin()+19,file.end());size_t start=payload.size()-bufferSectionBytes(capture);
         auto restamp=[](Bytes data){Bytes h={'N','F','S','C','A','P','1'};word(h,5);word(h,uint32_t(data.size()));word(h,crc(data));h.insert(h.end(),data.begin(),data.end());return h;};
         auto set=[](Bytes& data,size_t at,uint32_t value){for(unsigned i=0;i<4;++i)data[at+i]=uint8_t(value>>(i*8));};
         auto bad=payload;set(bad,start,maxObjects+1);expectThrow("oversized buffer count",restamp(bad));
@@ -301,6 +321,53 @@ int main() {
         bad=payload;bad.pop_back();expectThrow("truncated buffer contents",restamp(bad));
     }
     if (failures) { std::cerr << failures << " capture checks failed\n"; return 1; }
+    {
+        // Schema 6 textures: round trip, schema 5 marks them missing, invalid records rejected.
+        auto capture=sample();auto read=decode(encode(capture));
+        expect(same(capture,read)&&read.hasTextures&&read.textures.size()==2,"texture round trip");
+        auto older=decode(encodeSchema5(capture));
+        expect(!older.hasTextures&&older.textures.empty(),"schema 5 remains readable with textures marked missing");
+        auto rejectTexture=[&](nfs_capture::Capture bad){bool rejected=false;try{encode(bad);}catch(const std::runtime_error&){rejected=true;}expect(rejected,"invalid texture record accepted");};
+        auto bad=sample();bad.textures[0].definition.contents.pop_back();rejectTexture(bad);
+        bad=sample();bad.textures[0].definition.contents[1].bytes.pop_back();rejectTexture(bad);
+        bad=sample();bad.textures[0].definition.contents[1].level=0;rejectTexture(bad);
+        bad=sample();bad.textures[0].definition.format=0x12345678u;rejectTexture(bad);
+        bad=sample();bad.textures[0].definition.usage=1;rejectTexture(bad);            // render target with contents
+        bad=sample();bad.textures[1].definition.transient=false;rejectTexture(bad);     // non-transient without contents
+        bad=sample();bad.textures[0].device=0x10000600u;rejectTexture(bad);             // device is a buffer
+        bad=sample();bad.textures[0].references=0;rejectTexture(bad);
+        bad=sample();bad.textures.pop_back();rejectTexture(bad);
+        bad=sample();bad.textures[0].definition.kind=4;rejectTexture(bad);              // kind differs from the object list
+        bad=sample();bad.textures[0].definition.levels=15;rejectTexture(bad);
+        auto file=encode(capture);Bytes payload(file.begin()+19,file.end());size_t start=payload.size()-textureSectionBytes(capture);
+        auto restamp=[](Bytes data){Bytes h={'N','F','S','C','A','P','1'};word(h,6);word(h,uint32_t(data.size()));word(h,crc(data));h.insert(h.end(),data.begin(),data.end());return h;};
+        auto set=[](Bytes& data,size_t at,uint32_t value){for(unsigned i=0;i<4;++i)data[at+i]=uint8_t(value>>(i*8));};
+        auto corrupt=payload;set(corrupt,start,maxObjects+1);expectThrow("oversized texture count",restamp(corrupt));
+        corrupt=payload;set(corrupt,start+4+48,6*14+1);expectThrow("too many texture levels",restamp(corrupt));
+        corrupt=payload;set(corrupt,start+4+52+8,uint32_t(nfs_d3d9::maxTextureBytes+1));expectThrow("oversized texture level",restamp(corrupt));
+        corrupt=payload;corrupt.pop_back();expectThrow("truncated texture section",restamp(corrupt));
+    }
+    {
+        // Texture shadows: a whole-level lock completes a level; partial locks only update a complete one.
+        nfs_d3d9::Texture layout;layout.kind=3;layout.width=8;layout.height=8;layout.levels=2;layout.format=21; // A8R8G8B8: 32-byte rows
+        nfs_d3d9::TextureShadow shadow(layout);
+        std::vector<uint8_t> rows(8*40,0x5a);
+        shadow.update(0,0,2,8,2,16,rows.data(),40,false);
+        expect(!shadow.complete(0,0),"partial lock on an unseen level stays incomplete");
+        shadow.update(0,0,0,0,8,32,rows.data(),40,true);
+        expect(shadow.complete(0,0)&&!shadow.complete(0,1),"whole-level lock completes only that level");
+        std::vector<uint8_t> patch(16,0x77);
+        shadow.update(0,0,3,4,1,16,patch.data(),16,false);
+        const auto& level=shadow.level(0,0);
+        expect(level.size()==256&&level[3*32+4]==0x77&&level[3*32+3]==0x5a&&level[3*32+20]==0x5a,"partial lock updates the right bytes");
+        bool outside=false;try{shadow.update(0,0,7,24,2,16,patch.data(),16,false);}catch(const std::runtime_error&){outside=true;}
+        expect(outside,"shadow update outside the level rejected");
+        shadow.forget(0,0);expect(!shadow.complete(0,0),"forgotten level is incomplete");
+        nfs_d3d9::Texture cube;cube.kind=4;cube.width=cube.height=4;cube.levels=1;cube.format=nfs_d3d9::fourccDXT1;
+        nfs_d3d9::TextureShadow faces(cube);std::vector<uint8_t> block(8,1);
+        faces.update(5,0,0,0,1,8,block.data(),8,true);
+        expect(faces.complete(5,0)&&!faces.complete(0,0)&&faces.bytes()==48,"cube faces tracked separately");
+    }
     std::cout << "capture quiesce and format checks passed\n";
     return 0;
 }
