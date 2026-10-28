@@ -213,8 +213,9 @@ uint32_t read32(uint32_t va);
 struct GuestThreadTrace {
     std::atomic<uint32_t> func{0},handle{0},esp{0};std::atomic<const char*> wait{nullptr};
     std::array<std::atomic<uint32_t>,8> held{};  // critical sections this thread owns (outermost entries)
-    void hold(uint32_t cs){for(auto& slot:held){uint32_t empty=0;if(slot.compare_exchange_strong(empty,cs))return;}}
-    void release(uint32_t cs){for(auto& slot:held){uint32_t value=cs;if(slot.compare_exchange_strong(value,0))return;}}
+    std::array<std::atomic<uint32_t>,8> heldAt{}; // guest return address of the EnterCriticalSection that took each
+    void hold(uint32_t cs,uint32_t at=0){for(size_t i=0;i<held.size();++i){uint32_t empty=0;if(held[i].compare_exchange_strong(empty,cs)){heldAt[i]=at;return;}}}
+    void release(uint32_t cs){for(size_t i=0;i<held.size();++i){uint32_t value=cs;if(held[i].compare_exchange_strong(value,0)){heldAt[i]=0;return;}}}
 };
 std::mutex threadTracesMutex;
 std::map<uint32_t,std::shared_ptr<GuestThreadTrace>> threadTraces;
@@ -342,7 +343,7 @@ void maybeRebuildStack(){
 #define NFS_CAPTURE_CHECK(site) ((void)0)
 #endif
 struct WaitScope {
-    WaitScope(const char* what,uint32_t handle){NFS_PROBE(what);NFS_CAPTURE_CHECK(what);auto& trace=currentTrace();trace.wait=what;trace.handle=handle;}
+    WaitScope(const char* what,uint32_t handle){NFS_PROBE(what);NFS_CAPTURE_CHECK(what);auto& trace=currentTrace();trace.wait=what;trace.handle=handle;trace.esp=g_esp;trace.func=g_cur_func;}
     ~WaitScope(){currentTrace().wait=nullptr;}
 };
 std::atomic<int64_t> lastPresentMs{0};
@@ -354,9 +355,11 @@ void startStallWatch(){
         while(!stopRequested.load()){
             std::this_thread::sleep_for(std::chrono::seconds(2));
             int64_t last=lastPresentMs.load(),idle=steadyMs()-last;
-            if(guestPaused.load()||idle<12000||reportedFor==last)continue;
-            reportedFor=last;
-            NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Guest stall: no frame for %lld s; guest threads:",static_cast<long long>(idle/1000));
+            if(guestPaused.load()||idle<12000)continue;
+            // The thread dump prints once per stall; the deadlock check below runs on every pass,
+            // since it only acts from 20 s (it used to be skipped with the dump, so never ran).
+            bool report=reportedFor!=last;reportedFor=last;
+            if(report)NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Guest stall: no frame for %lld s; guest threads:",static_cast<long long>(idle/1000));
             std::map<uint32_t,uint32_t> waitingFor;  // thread id -> critical section it wants
             std::lock_guard<std::mutex> lock(threadTracesMutex);
             for(auto& [id,trace]:threadTraces){
@@ -368,14 +371,16 @@ void startStallWatch(){
                     detail=" (owner thread "+std::to_string(owner)+", count "+std::to_string(read32(handle+8))+")";
                     if(owner&&owner!=id)waitingFor[id]=handle;
                 }
-                for(auto& slot:trace->held)if(uint32_t cs=slot.load())held+=" "+hex(cs);
+                for(size_t i=0;i<trace->held.size();++i)if(uint32_t cs=trace->held[i].load())held+=" "+hex(cs)+" (taken at "+hex(trace->heldAt[i].load())+")";
+                // The import's own return address: where in the game this wait was called from.
+                if(wait&&memory&&memory->readable(trace->esp.load(),4))detail+=" called from "+hex(read32(trace->esp.load()));
                 uint32_t esp=trace->esp.load();
                 for(unsigned i=0,found=0;memory&&i<256&&found<10;++i){
                     if(!memory->readable(esp+i*4,4))break;
                     uint32_t value=read32(esp+i*4);
                     if(value>=0x401000u&&value<0x75d000u&&recomp_lookup(value)==nullptr){callers+=" "+hex(value);++found;}
                 }
-                NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","  thread %u at %08x %s %08x%s; holds:%s; stack:%s",id,trace->func.load(),
+                if(report)NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","  thread %u at %08x %s %08x%s; holds:%s; stack:%s",id,trace->func.load(),
                     wait?wait:"running",wait?handle:0u,detail.c_str(),held.empty()?" none":held.c_str(),callers.c_str());
             }
             // A pair of threads each inside EnterCriticalSection on a lock the other
