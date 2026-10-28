@@ -2,6 +2,7 @@
 // Capture of one quiesced guest moment. This file is not a restore: graphics,
 // audio, heap metadata and file contents are recorded as omitted on purpose,
 // and careerRollback must be zero so a later restore cannot roll career files back.
+#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -15,7 +16,7 @@
 #include <unistd.h>
 
 namespace nfs_capture {
-constexpr uint32_t schema = 1;
+constexpr uint32_t schema = 2; // 2 adds open files; 1 is still read
 constexpr uint32_t omitGraphics = 1u, omitAudio = 2u, omitHeap = 4u, omitFileContents = 8u;
 constexpr uint32_t omitRequired = omitGraphics | omitAudio | omitHeap | omitFileContents;
 constexpr uint64_t maxBytes = 768ull << 20;
@@ -118,6 +119,13 @@ struct TimerImage {
     int64_t dueMs = 0;
 };
 struct Region { uint32_t address = 0; std::vector<uint8_t> bytes; };
+// An open file: reopened by path at its position. Contents are not stored, and a career or
+// profile file (under the Windows profile folders) is reopened as it is now, never rolled back.
+struct FileImage { uint32_t handle = 0, access = 0; uint64_t offset = 0; bool career = false; std::string path; };
+inline bool careerPath(const std::string& path) {
+    std::string lower = path; for (auto& c : lower) c = char(std::tolower(static_cast<unsigned char>(c)));
+    return lower.rfind("documents/", 0) == 0 || lower.rfind("appdata/", 0) == 0;
+}
 struct Protect { uint32_t address = 0, flags = 4; };
 struct Inventory { uint32_t kind = 0, count = 0; };
 struct Capture {
@@ -132,6 +140,7 @@ struct Capture {
     std::vector<Region> regions;
     std::vector<Protect> protections;
     std::vector<Inventory> inventory;
+    std::vector<FileImage> files;
 };
 
 using Bytes = std::vector<uint8_t>;
@@ -181,6 +190,14 @@ inline void validate(const Capture& capture) {
     for (size_t i = 1; i < spans.size(); ++i) require(spans[i - 1].second <= spans[i].first, "Overlapping memory regions");
     for (const auto& page : capture.protections) {
         require(page.address % capture.pageSize == 0 && allowedProtect(page.flags), "Invalid page protection");
+    }
+    require(capture.files.size() <= maxObjects, "Too many open files");
+    for (size_t i = 0; i < capture.files.size(); ++i) {
+        const auto& file = capture.files[i];
+        require(!file.path.empty() && file.path.size() <= maxName && file.path.front() != '/' && file.path.find(':') == std::string::npos, "Invalid capture file path");
+        for (const auto& part : std::filesystem::path(file.path)) require(part != "..", "Capture file path leaves the game folder");
+        require(file.career == careerPath(file.path), "Capture file career flag does not match its path");
+        for (size_t j = 0; j < i; ++j) require(capture.files[j].handle != file.handle, "Duplicate capture file handle");
     }
 }
 
@@ -279,6 +296,10 @@ inline Bytes encode(const Capture& capture) {
     for (const auto& page : capture.protections) { word(payload, page.address); word(payload, page.flags); }
     word(payload, uint32_t(capture.inventory.size()));
     for (const auto& item : capture.inventory) { word(payload, item.kind); word(payload, item.count); }
+    word(payload, uint32_t(capture.files.size()));
+    for (const auto& item : capture.files) {
+        word(payload, item.handle); word(payload, item.access); qword(payload, item.offset); word(payload, item.career ? 1u : 0u); putName(payload, item.path);
+    }
     Bytes file = {'N','F','S','C','A','P','1'};
     word(file, schema); word(file, uint32_t(payload.size())); word(file, crc(payload));
     file.insert(file.end(), payload.begin(), payload.end());
@@ -289,7 +310,8 @@ inline Capture decode(const Bytes& file) {
     require(file.size() <= maxBytes + 65536, "Capture too large");
     Reader header{file};
     require(header.take(7) == Bytes({'N','F','S','C','A','P','1'}), "Not a capture file");
-    require(header.word() == schema, "Unsupported capture schema");
+    uint32_t version = header.word();
+    require(version == 1 || version == schema, "Unsupported capture schema");
     uint32_t size = header.word(), checksum = header.word();
     require(size == file.size() - header.offset, "Invalid capture size");
     Bytes payload = header.take(size);
@@ -347,6 +369,13 @@ inline Capture decode(const Bytes& file) {
     for (uint32_t i = 0; i < protections; ++i) { Protect page; page.address = reader.word(); page.flags = reader.word(); capture.protections.push_back(page); }
     uint32_t inventory = reader.word(); require(inventory <= 32, "Too many inventory rows");
     for (uint32_t i = 0; i < inventory; ++i) { Inventory item; item.kind = reader.word(); item.count = reader.word(); capture.inventory.push_back(item); }
+    if (version >= 2) {
+        uint32_t files = reader.word(); require(files <= maxObjects, "Too many open files");
+        for (uint32_t i = 0; i < files; ++i) {
+            FileImage item; item.handle = reader.word(); item.access = reader.word(); item.offset = reader.qword(); item.career = reader.word() != 0; item.path = reader.name();
+            capture.files.push_back(std::move(item));
+        }
+    }
     require(reader.offset == payload.size(), "Unexpected trailing capture");
     validate(capture);
     return capture;

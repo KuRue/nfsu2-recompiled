@@ -40,6 +40,8 @@ nfs_capture::Capture sample() {
     capture.regions.push_back(std::move(region));
     capture.protections.push_back({4096u, 4u});
     capture.inventory.push_back({1u, 2u});
+    capture.files.push_back({0xf0060000u, 0x80000000u, 123456u, false, "TRACKS/STREAML4RA.BUN"});
+    capture.files.push_back({0xf0060001u, 0xc0000000u, 64u, true, "Documents/NFS Underground 2/Profile/save"});
     return capture;
 }
 bool sameCpu(const nfs_capture::CpuImage& a, const nfs_capture::CpuImage& b) {
@@ -59,7 +61,11 @@ bool same(const nfs_capture::Capture& left, const nfs_capture::Capture& right) {
     if (left.threads.size() != right.threads.size() || left.events.size() != right.events.size()) return false;
     if (left.mutexes.size() != right.mutexes.size() || left.timers.size() != right.timers.size()) return false;
     if (left.regions.size() != right.regions.size() || left.protections.size() != right.protections.size()) return false;
-    if (left.inventory.size() != right.inventory.size()) return false;
+    if (left.inventory.size() != right.inventory.size() || left.files.size() != right.files.size()) return false;
+    for (size_t i = 0; i < left.files.size(); ++i) {
+        const auto& a = left.files[i]; const auto& b = right.files[i];
+        if (a.handle != b.handle || a.access != b.access || a.offset != b.offset || a.career != b.career || a.path != b.path) return false;
+    }
     for (size_t i = 0; i < left.threads.size(); ++i) {
         const auto& a = left.threads[i]; const auto& b = right.threads[i];
         if (a.id != b.id || a.capturer != b.capturer || a.outsideGuest != b.outsideGuest || a.resumable != b.resumable) return false;
@@ -125,6 +131,28 @@ int main() {
     threw = false; try { encode(overlap); } catch (const std::runtime_error&) { threw = true; }
     expect(threw, "overlapping memory rejected");
     auto truncated = encoded; truncated.pop_back(); expectThrow("truncated", truncated);
+    for (const char* bad : {"../outside", "/absolute", "C:/drive", ""}) {
+        auto escaped = sample(); escaped.files[0].path = bad;
+        threw = false; try { encode(escaped); } catch (const std::runtime_error&) { threw = true; }
+        expect(threw, "file path must stay inside the game folder");
+    }
+    auto hidden = sample(); hidden.files[1].career = false;
+    threw = false; try { encode(hidden); } catch (const std::runtime_error&) { threw = true; }
+    expect(threw, "a profile file must be marked career");
+    auto twice = sample(); twice.files[1].handle = twice.files[0].handle;
+    threw = false; try { encode(twice); } catch (const std::runtime_error&) { threw = true; }
+    expect(threw, "duplicate file handle");
+    expect(careerPath("appdata/Roaming/x") && careerPath("DOCUMENTS/a") && !careerPath("GLOBAL/documents"), "career paths");
+    {
+        // A schema 1 file has no files section: drop it, restamp the header and read it back.
+        auto older = sample(); older.files.clear();
+        auto bytes = encode(older); bytes.resize(bytes.size() - 4);
+        Bytes payload(bytes.begin() + 19, bytes.end());
+        Bytes header = {'N','F','S','C','A','P','1'}; word(header, 1); word(header, uint32_t(payload.size())); word(header, crc(payload));
+        header.insert(header.end(), payload.begin(), payload.end());
+        auto read = decode(header);
+        expect(same(older, read) && read.files.empty(), "schema 1 capture still reads");
+    }
     if (failures) { std::cerr << failures << " capture checks failed\n"; return 1; }
     std::cout << "capture quiesce and format checks passed\n";
     return 0;

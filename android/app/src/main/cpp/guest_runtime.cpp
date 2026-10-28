@@ -935,6 +935,12 @@ void maybeWriteCapture(){
             }
         });
         nfs_capture::Inventory files;files.kind=1;files.count=uint32_t(fileHandles.size());capture.inventory.push_back(files);
+        for(auto& [handle,descriptor]:fileHandles){
+            auto origin=fileOrigins.find(handle);if(origin==fileOrigins.end())continue;
+            nfs_capture::FileImage file;file.handle=handle;file.access=origin->second.access;file.path=origin->second.relative;
+            off_t position=::lseek(descriptor,0,SEEK_CUR);file.offset=position<0?0:uint64_t(position);
+            file.career=nfs_capture::careerPath(file.path);capture.files.push_back(std::move(file));
+        }
         nfs_capture::Inventory sounds;sounds.kind=2;sounds.count=uint32_t(soundObjects.size());capture.inventory.push_back(sounds);
         nfs_capture::Inventory graphics;graphics.kind=3;graphics.count=guestD3DObjectCount();capture.inventory.push_back(graphics);
         auto stamp=std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
