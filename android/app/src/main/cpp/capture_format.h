@@ -5,6 +5,7 @@
 #include "graphics_program.h"
 #include "graphics_buffer.h"
 #include "graphics_texture.h"
+#include "graphics_device.h"
 #include <array>
 #include <cctype>
 #include <cmath>
@@ -21,7 +22,7 @@
 #include <unistd.h>
 
 namespace nfs_capture {
-constexpr uint32_t schema = 6; // 5 adds vertex/index buffer contents and proxy metadata; 6 texture contents
+constexpr uint32_t schema = 7; // 5 adds vertex/index buffer contents and proxy metadata; 6 texture contents; 7 device state
 constexpr uint32_t omitGraphics = 1u, omitAudio = 2u, omitHeap = 4u, omitFileContents = 8u;
 // Heap bookkeeping and sound objects are stored from schema 2; omitHeap and omitAudio are clear
 // only when they are.
@@ -159,6 +160,8 @@ struct Capture {
     std::vector<nfs_d3d9::BufferRecord> buffers;
     bool hasTextures = true;
     std::vector<nfs_d3d9::TextureRecord> textures;
+    bool hasDevices = true;
+    std::vector<nfs_d3d9::DeviceState> devices;
     std::vector<nfs_d3d9::ProgramRecord> programs;
     std::array<bool, tlsSlots> tlsUsed{};
     uint32_t careerRollback = 0;
@@ -301,6 +304,21 @@ inline void validate(const Capture& capture) {
         require(textureBytes <= nfs_d3d9::maxTextureTotal, "Graphics textures too large");
     }
     require(textureIndex == capture.textures.size(), "Unexpected graphics texture records");
+    if (capture.hasDevices) {
+        size_t deviceCount = 0;
+        for (const auto& object : capture.graphics) if (object.second == 2) ++deviceCount;
+        require(capture.devices.size() == deviceCount, "Device state count differs from the device objects");
+        for (size_t i = 0; i < capture.devices.size(); ++i) {
+            const auto& state = capture.devices[i];
+            nfs_d3d9::validate(state);
+            require(!i || capture.devices[i - 1].device < state.device, "Device states must be sorted and unique");
+            for (const auto& reference : nfs_d3d9::references(state)) {
+                auto object = std::lower_bound(capture.graphics.begin(), capture.graphics.end(), std::make_pair(reference.address, 0u));
+                require(object != capture.graphics.end() && object->first == reference.address && (reference.kinds >> object->second & 1u),
+                    "Device state refers to a missing or different object");
+            }
+        }
+    } else require(capture.devices.empty(), "Device states in a capture without them");
     require(capture.criticalSections.size() <= maxObjects * 4, "Too many critical sections");
     for (size_t i = 0; i < capture.criticalSections.size(); ++i)
         require(capture.criticalSections[i] >= capture.pageSize && (!i || capture.criticalSections[i - 1] < capture.criticalSections[i]), "Critical sections must be sorted and unique");
@@ -460,6 +478,13 @@ inline Bytes encode(const Capture& capture) {
             payload.insert(payload.end(), level.bytes.begin(), level.bytes.end());
         }
     }
+    // Present in every runtime capture (a load refuses one without it); focused tests may omit it.
+    word(payload, capture.hasDevices ? 1u : 0u);
+    if (capture.hasDevices) word(payload, uint32_t(capture.devices.size()));
+    for (const auto& state : capture.devices) {
+        std::vector<uint32_t> words; nfs_d3d9::serialize(state, words);
+        word(payload, uint32_t(words.size())); for (uint32_t value : words) word(payload, value);
+    }
     Bytes file = {'N','F','S','C','A','P','1'};
     word(file, schema); word(file, uint32_t(payload.size())); word(file, crc(payload));
     file.insert(file.end(), payload.begin(), payload.end());
@@ -609,6 +634,19 @@ inline Capture decode(const Bytes& file) {
                 level.bytes = reader.take(size); d.contents.push_back(std::move(level));
             }
             capture.textures.push_back(std::move(texture));
+        }
+    }
+    capture.hasDevices = false;
+    if (version >= 7) {
+        uint32_t present = reader.word(); require(present <= 1, "Invalid device state flag"); capture.hasDevices = present == 1;
+    }
+    if (capture.hasDevices) {
+        uint32_t count = reader.word(); require(count <= 16, "Too many graphics devices");
+        for (uint32_t i = 0; i < count; ++i) {
+            uint32_t words = reader.word(); require(words <= 65536 && size_t(words) * 4 <= payload.size() - reader.offset, "Invalid device state size");
+            size_t end = reader.offset + size_t(words) * 4, used = 0;
+            capture.devices.push_back(nfs_d3d9::deserialize([&] { require(used++ < words, "Device state shorter than its fields"); return reader.word(); }));
+            require(reader.offset == end, "Device state longer than its fields");
         }
     }
     require(reader.offset == payload.size(), "Unexpected trailing capture");

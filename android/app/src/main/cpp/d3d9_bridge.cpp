@@ -2,6 +2,7 @@
 #include "d3d9_program_state.h"
 #include "d3d9_buffer_state.h"
 #include "graphics_texture.h"
+#include "d3d9_device_state.h"
 #include "runtime_log.h"
 #include "dxt_shadow.h"
 #include "texture_pack.h"
@@ -661,4 +662,51 @@ void restoreD3D9Textures(const std::vector<nfs_d3d9::TextureRecord>& records){
         }
     }catch(...){freeGuest(scratch);throw;}
     freeGuest(scratch);
+}
+
+// Device state at a capture. Native objects map to the guest proxies that stand for them; a bound
+// HD-pack replacement maps to the game's own texture. A native object with no guest proxy refuses
+// the capture. Applying uses the bridge's own resolution (sampledTexture applies packs again).
+namespace {
+struct BridgeMapper {
+    template<class T> uint32_t guest(T* native){
+        if(!native)return 0;
+        if constexpr(std::is_base_of_v<IDirect3DBaseTexture9,T>){
+            auto packed=packedOriginals.find(native);
+            if(packed!=packedOriginals.end()){auto original=addresses.find(packed->second->original);
+                nfs_d3d9::check(original!=addresses.end(),"Bound HD-pack texture has no guest original");return original->second;}
+        }
+        auto found=addresses.find(static_cast<IUnknown*>(native));
+        nfs_d3d9::check(found!=addresses.end(),"Device state refers to an object the game never received");
+        return found->second;
+    }
+    IDirect3DBaseTexture9* texture(uint32_t address){return sampledTexture(address);}
+    IDirect3DSurface9* surface(uint32_t address){return nativeObject<IDirect3DSurface9>(address);}
+    IDirect3DVertexBuffer9* vertexBuffer(uint32_t address){return nativeObject<IDirect3DVertexBuffer9>(address);}
+    IDirect3DIndexBuffer9* indexBuffer(uint32_t address){return nativeObject<IDirect3DIndexBuffer9>(address);}
+    IDirect3DVertexDeclaration9* declaration(uint32_t address){return nativeObject<IDirect3DVertexDeclaration9>(address);}
+    IDirect3DVertexShader9* vertexShader(uint32_t address){return nativeObject<IDirect3DVertexShader9>(address);}
+    IDirect3DPixelShader9* pixelShader(uint32_t address){return nativeObject<IDirect3DPixelShader9>(address);}
+};
+}
+std::vector<nfs_d3d9::DeviceState> d3d9DeviceStates(){
+    std::vector<nfs_d3d9::DeviceState> out;BridgeMapper map;
+    for(const auto& [address,object]:objects)
+        if(object.kind==Kind::Device)out.push_back(nfs_d3d9::captureDevice(static_cast<IDirect3DDevice9*>(object.native),address,map));
+    std::sort(out.begin(),out.end(),[](const auto& a,const auto& b){return a.device<b.device;});return out;
+}
+void validateD3D9DeviceStates(const std::vector<nfs_d3d9::DeviceState>& states){
+    size_t devices=0;for(const auto& [address,object]:objects)if(object.kind==Kind::Device)++devices;
+    nfs_d3d9::check(devices==states.size(),"D3D9 device set changed");
+    for(const auto& state:states){
+        nfs_d3d9::validate(state);
+        for(const auto& reference:nfs_d3d9::references(state)){
+            auto found=objects.find(reference.address);
+            nfs_d3d9::check(found!=objects.end()&&(reference.kinds>>static_cast<uint32_t>(found->second.kind)&1u),"Device state refers to a missing or different object");
+        }
+    }
+}
+void restoreD3D9DeviceStates(const std::vector<nfs_d3d9::DeviceState>& states){
+    validateD3D9DeviceStates(states);BridgeMapper map;
+    for(const auto& state:states)nfs_d3d9::applyDevice(static_cast<IDirect3DDevice9*>(objects.at(state.device).native),state,map);
 }

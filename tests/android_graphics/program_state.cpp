@@ -111,7 +111,7 @@ int main(int argc,char** argv){try{
         nfs_capture::Capture archive;archive.build=std::string(64,'a');archive.game=std::string(64,'b');
         nfs_capture::ThreadImage main;main.id=1;main.capturer=true;main.resumable=true;main.wait=nfs_capture::WaitKind::Present;
         main.frames.push_back({0x401000,0x401020,0x7e002110,0,0});archive.threads.push_back(main);
-        archive.graphics=d3d9ObjectList();archive.programs=records;
+        archive.graphics=d3d9ObjectList();archive.hasDevices=false;archive.programs=records;
         auto encoded=nfs_capture::encode(archive);
         if(writeArchive)nfs_capture::writeAtomic(std::filesystem::path(argv[2])/(std::to_string(archiveIndex++)+".nfs"),encoded);
         auto decoded=nfs_capture::decode(encoded);

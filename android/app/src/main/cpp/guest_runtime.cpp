@@ -963,7 +963,7 @@ void maybeWriteCapture(){
             }
         });
         nfs_capture::Inventory files;files.kind=1;files.count=uint32_t(fileHandles.size());capture.inventory.push_back(files);
-        capture.graphics=d3d9ObjectList();capture.programs=d3d9ProgramList();capture.buffers=d3d9BufferList();capture.textures=d3d9TextureList();
+        capture.graphics=d3d9ObjectList();capture.programs=d3d9ProgramList();capture.buffers=d3d9BufferList();capture.textures=d3d9TextureList();capture.devices=d3d9DeviceStates();
         for(auto& entry:criticalSections)capture.criticalSections.push_back(entry.first);
         capture.sounds=captureSoundObjects();capture.omitted&=~nfs_capture::omitAudio;
         {auto state=heaps->exportState();capture.heapNext=state.next;
@@ -1041,6 +1041,8 @@ void maybeLoadCapture(){
         validateD3D9Buffers(capture.buffers);
         if(!capture.hasTextures)throw std::runtime_error("capture lacks graphics texture contents");
         validateD3D9Textures(capture.textures);
+        if(!capture.hasDevices)throw std::runtime_error("capture lacks graphics device state");
+        validateD3D9DeviceStates(capture.devices);
         if(!capture.hasPrograms)throw std::runtime_error("capture lacks graphics program metadata");
         if(capture.programs!=d3d9ProgramList())throw std::runtime_error("graphics program definitions or references changed since the capture");
         if(capture.graphics!=d3d9ObjectList())throw std::runtime_error("graphics objects changed since the capture");
@@ -1083,6 +1085,7 @@ void maybeLoadCapture(){
         restoreFiles(capture.files);
         restoreD3D9Buffers(capture.buffers);
         restoreD3D9Textures(capture.textures);
+        restoreD3D9DeviceStates(capture.devices);
         if(!(capture.omitted&nfs_capture::omitAudio))restoreSoundObjects(capture.sounds);
         {std::map<uint32_t,std::shared_ptr<GuestEvent>> events;namedEvents.clear();
             for(const auto& image:capture.events){auto event=std::make_shared<GuestEvent>(GuestEvent{image.manual,image.signaled});

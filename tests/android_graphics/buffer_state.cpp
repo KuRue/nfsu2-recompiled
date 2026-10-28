@@ -108,7 +108,7 @@ int main(int argc,char** argv){try{
         auto lockedOutput=alloc(4);require(SUCCEEDED(HRESULT(invoke(address,fixture.kind,11,{0,0,lockedOutput,0}))),"Test lock failed");rejects([&]{d3d9BufferList();});invoke(address,fixture.kind,12,{});freeAllocation(lockedOutput);
         nfs_capture::Capture archive;archive.build=std::string(64,'a');archive.game=std::string(64,'b');nfs_capture::ThreadImage main;
         main.id=1;main.capturer=true;main.resumable=true;main.wait=nfs_capture::WaitKind::Present;main.frames.push_back({0x401000,0x401020,0x7e002110,0,0});archive.threads.push_back(main);
-        archive.graphics=d3d9ObjectList();archive.buffers=records;auto encoded=nfs_capture::encode(archive);
+        archive.graphics=d3d9ObjectList();archive.hasDevices=false;archive.buffers=records;auto encoded=nfs_capture::encode(archive);
         if(writing)nfs_capture::writeAtomic(std::filesystem::path(argv[2])/(std::to_string(i)+".nfs"),encoded);
         auto decoded=nfs_capture::decode(encoded);require(decoded.buffers==records,"Buffer archive metadata differs");Device device{fixture};int before=live;
         {auto staged=recreateBuffer(&device,decoded.buffers[0].definition);require(staged.get()&&live==before+1,"Buffer not staged");}

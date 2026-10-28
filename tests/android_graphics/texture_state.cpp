@@ -144,7 +144,7 @@ int main(){try{
     // The capture format carries them.
     nfs_capture::Capture archive;archive.build=std::string(64,'a');archive.game=std::string(64,'b');nfs_capture::ThreadImage main;
     main.id=1;main.capturer=true;main.resumable=true;main.wait=nfs_capture::WaitKind::Present;main.frames.push_back({0x401000,0x401020,0x7e002110,0,0});archive.threads.push_back(main);
-    archive.graphics=d3d9ObjectList();archive.textures=list;
+    archive.graphics=d3d9ObjectList();archive.hasDevices=false;archive.textures=list;
     auto decoded=nfs_capture::decode(nfs_capture::encode(archive));
     require(decoded.textures.size()==2&&decoded.textures[0]==list[0]&&decoded.textures[1]==list[1],"Texture archive differs");
     // Retirement frees shadows and wrappers.

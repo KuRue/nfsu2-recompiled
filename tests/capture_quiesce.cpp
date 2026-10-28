@@ -15,6 +15,21 @@ void expectThrow(const char* what, const nfs_capture::Bytes& file) {
 }
 std::string hex64(char fill) { return std::string(64, fill); }
 
+// Device 0x10000300 at a Present: back buffer 0x10000330 (a surface), texture 0x10000310 bound,
+// buffers and programs from the sample bound, a light and a few states set.
+nfs_d3d9::DeviceState sampleDevice() {
+    nfs_d3d9::DeviceState d;d.device=0x10000300u;
+    d.renderStates={{7,1},{27,1},{137,0}};d.stageStates={{1,4},{64+1,1}};d.samplerStates={{1,3},{16+5,2}};
+    d.textures={{0,0x10000310u},{1,0}};
+    std::array<uint32_t,16> identity{};identity[0]=identity[5]=identity[10]=identity[15]=0x3f800000u;d.transforms={{2,identity},{256,identity}};
+    d.viewport={0,0,640,480,0,0x3f800000u};d.material[0]=0x3f000000u;
+    nfs_d3d9::Light light;light.index=1;light.enabled=true;light.words[0]=3;d.lights={light};
+    d.scissor={0,0,640,480};d.streams[0]={0x10000600u,16,32,1};d.indices=0x10000610u;d.declaration=0x10000420u;
+    d.vertexShader=0x10000400u;d.pixelShader=0x10000410u;d.renderTargets={0x10000330u,0,0,0};
+    d.vsFloat.assign(nfs_d3d9::vsFloatRegisters*4,0);d.vsFloat[3]=0x40000000u;d.vsInt.assign(64,0);d.vsBool.assign(16,0);d.vsBool[2]=1;
+    d.psFloat.assign(nfs_d3d9::psFloatRegisters*4,0);d.psInt.assign(64,0);d.psBool.assign(16,0);
+    return d;
+}
 nfs_capture::Capture sample() {
     using namespace nfs_capture;
     nfs_capture::Capture capture;
@@ -74,22 +89,34 @@ nfs_capture::Capture sample() {
         d.contents={{0,0,std::vector<uint8_t>(16,0x11)},{0,1,std::vector<uint8_t>(8,0x22)}};
         capture.textures.push_back(texture);}
     capture.graphics.push_back({0x10000800u,3u});
+    capture.graphics.push_back({0x10000330u,5u});
+    std::sort(capture.graphics.begin(),capture.graphics.end());
     {nfs_d3d9::TextureRecord target{0x10000800u,0x10000880u,0x10000300u,1u,{}};
         auto& d=target.definition;d.kind=3;d.width=256;d.height=256;d.levels=1;d.usage=1;d.format=21;d.pool=0;d.transient=true;
         capture.textures.push_back(target);}
+    capture.devices = {sampleDevice()};
     capture.criticalSections = {0x864f00u, 0x10806348u};
     capture.omitted &= ~omitHeap; capture.heapNext = 0xf0000108u;
     capture.heaps.push_back({0xf0000100u, 0u, 0u, {{0x10000000u, 32u, 31u}, {0x10000020u, 4096u, 4000u}}});
     capture.heaps.push_back({0xf0000104u, 4u, 65536u, {}});
     return capture;
 }
+size_t deviceSectionBytes(const nfs_capture::Capture& capture) {
+    size_t size=capture.hasDevices?8:4;for(const auto& state:capture.devices){std::vector<uint32_t> words;nfs_d3d9::serialize(state,words);size+=4+4*words.size();}return size;
+}
 size_t textureSectionBytes(const nfs_capture::Capture& capture) {
     size_t size=4;for(const auto& texture:capture.textures){size+=52;for(const auto& level:texture.definition.contents)size+=12+level.bytes.size();}return size;
 }
 // The same capture written as schema 5 (no texture section), for the older-schema checks below.
+nfs_capture::Bytes encodeSchema6(const nfs_capture::Capture& capture) {
+    using namespace nfs_capture;
+    auto file=encode(capture);Bytes payload(file.begin()+19,file.end()-deviceSectionBytes(capture));
+    Bytes header={'N','F','S','C','A','P','1'};word(header,6);word(header,uint32_t(payload.size()));word(header,crc(payload));
+    header.insert(header.end(),payload.begin(),payload.end());return header;
+}
 nfs_capture::Bytes encodeSchema5(const nfs_capture::Capture& capture) {
     using namespace nfs_capture;
-    auto file=encode(capture);Bytes payload(file.begin()+19,file.end()-textureSectionBytes(capture));
+    auto file=encode(capture);Bytes payload(file.begin()+19,file.end()-deviceSectionBytes(capture)-textureSectionBytes(capture));
     Bytes header={'N','F','S','C','A','P','1'};word(header,5);word(header,uint32_t(payload.size()));word(header,crc(payload));
     header.insert(header.end(),payload.begin(),payload.end());return header;
 }
@@ -114,6 +141,7 @@ bool same(const nfs_capture::Capture& left, const nfs_capture::Capture& right) {
     if (left.build != right.build || left.game != right.game || left.careerRollback != right.careerRollback) return false;
     if(left.hasBuffers!=right.hasBuffers||left.buffers!=right.buffers)return false;
     if(left.hasTextures!=right.hasTextures||left.textures!=right.textures)return false;
+    if(left.hasDevices!=right.hasDevices||left.devices!=right.devices)return false;
     if (left.hasPrograms != right.hasPrograms || left.programs != right.programs) return false;
     if (left.hasThreadLocals != right.hasThreadLocals || left.tlsUsed != right.tlsUsed) return false;
     if (left.omitted != right.omitted || left.pageSize != right.pageSize) return false;
@@ -237,20 +265,20 @@ int main() {
     expect(careerPath("appdata/Roaming/x") && careerPath("DOCUMENTS/a") && !careerPath("GLOBAL/documents"), "career paths");
     {
         // A schema 1 file has no files section: drop it, restamp the header and read it back.
-        auto older = sample(); older.files.clear(); older.heaps.clear(); older.heapNext = 0; older.omitted |= omitHeap | omitAudio; older.sounds.clear(); older.graphics.clear(); older.programs.clear();older.buffers.clear(); older.textures.clear(); older.criticalSections.clear();
+        auto older = sample(); older.files.clear(); older.heaps.clear(); older.heapNext = 0; older.omitted |= omitHeap | omitAudio; older.sounds.clear(); older.graphics.clear(); older.programs.clear();older.buffers.clear(); older.textures.clear(); older.devices.clear(); older.criticalSections.clear();
         auto bytes = encodeSchema5(older);
         const size_t localsBytes = 4 * (tlsSlots + older.threads.size() * (tlsSlots + 1));
         bytes.resize(bytes.size() - programSectionBytes(older) - localsBytes - 24); // file, sound, graphics and section counts, heap next, heap count
         Bytes payload(bytes.begin() + 19, bytes.end());
         Bytes header = {'N','F','S','C','A','P','1'}; word(header, 1); word(header, uint32_t(payload.size())); word(header, crc(payload));
         header.insert(header.end(), payload.begin(), payload.end());
-        older.hasTextures=false;older.hasBuffers=false;older.hasPrograms = false; older.hasThreadLocals = false; older.tlsUsed.fill(false);
+        older.hasTextures=false;older.hasDevices=false;older.devices.clear();older.hasBuffers=false;older.hasPrograms = false; older.hasThreadLocals = false; older.tlsUsed.fill(false);
         for (auto& thread : older.threads) thread.locals = {};
         auto read = decode(header);
         expect(same(older, read) && read.files.empty(), "schema 1 capture still reads");
     }
     {
-        auto original = sample(); auto bytes = encodeSchema5(original); original.hasTextures=false; original.textures.clear();
+        auto original = sample(); auto bytes = encodeSchema5(original); original.hasTextures=false; original.textures.clear(); original.hasDevices=false; original.devices.clear();
         const size_t localsBytes = 4 * (tlsSlots + original.threads.size() * (tlsSlots + 1));
         auto restamp = [](Bytes payload, uint32_t version) {
             Bytes header = {'N','F','S','C','A','P','1'}; word(header, version);
@@ -339,7 +367,7 @@ int main() {
         bad=sample();bad.textures.pop_back();rejectTexture(bad);
         bad=sample();bad.textures[0].definition.kind=4;rejectTexture(bad);              // kind differs from the object list
         bad=sample();bad.textures[0].definition.levels=15;rejectTexture(bad);
-        auto file=encode(capture);Bytes payload(file.begin()+19,file.end());size_t start=payload.size()-textureSectionBytes(capture);
+        auto file=encodeSchema6(capture);Bytes payload(file.begin()+19,file.end());size_t start=payload.size()-textureSectionBytes(capture);
         auto restamp=[](Bytes data){Bytes h={'N','F','S','C','A','P','1'};word(h,6);word(h,uint32_t(data.size()));word(h,crc(data));h.insert(h.end(),data.begin(),data.end());return h;};
         auto set=[](Bytes& data,size_t at,uint32_t value){for(unsigned i=0;i<4;++i)data[at+i]=uint8_t(value>>(i*8));};
         auto corrupt=payload;set(corrupt,start,maxObjects+1);expectThrow("oversized texture count",restamp(corrupt));
@@ -367,6 +395,36 @@ int main() {
         nfs_d3d9::TextureShadow faces(cube);std::vector<uint8_t> block(8,1);
         faces.update(5,0,0,0,1,8,block.data(),8,true);
         expect(faces.complete(5,0)&&!faces.complete(0,0)&&faces.bytes()==48,"cube faces tracked separately");
+    }
+    {
+        // Schema 7 device state: round trip, schema 6 marks it missing, bad references and corrupt sizes rejected.
+        auto capture=sample();auto read=decode(encode(capture));
+        expect(read.hasDevices&&read.devices.size()==1&&read.devices[0]==capture.devices[0],"device state round trip");
+        auto older=decode(encodeSchema6(capture));
+        expect(!older.hasDevices&&older.devices.empty()&&older.hasTextures,"schema 6 remains readable with device state marked missing");
+        auto rejectDevice=[&](nfs_capture::Capture bad){bool rejected=false;try{encode(bad);}catch(const std::runtime_error&){rejected=true;}expect(rejected,"invalid device state accepted");};
+        auto bad=sample();bad.devices.clear();rejectDevice(bad);
+        bad=sample();bad.devices[0].textures[0].second=0x10000600u;rejectDevice(bad);   // a buffer bound as a texture
+        bad=sample();bad.devices[0].streams[0].buffer=0x10000310u;rejectDevice(bad);    // a texture as a vertex stream
+        bad=sample();bad.devices[0].renderTargets[0]=0x10000310u;rejectDevice(bad);      // a texture as a render target
+        bad=sample();bad.devices[0].renderTargets[0]=0;rejectDevice(bad);
+        bad=sample();bad.devices[0].vertexShader=0x10000410u;rejectDevice(bad);          // a pixel shader as the vertex shader
+        bad=sample();bad.devices[0].indices=0x12345678u;rejectDevice(bad);
+        bad=sample();bad.devices[0].renderStates={{27,1},{7,1}};rejectDevice(bad);       // unsorted
+        bad=sample();bad.devices[0].vsBool[0]=2;rejectDevice(bad);
+        bad=sample();bad.devices[0].psFloat.pop_back();rejectDevice(bad);
+        bad=sample();bad.devices[0].textures={{16,0}};rejectDevice(bad);                // sampler 16 does not exist
+        bad=sample();bad.devices[0].streams[1].offset=8;rejectDevice(bad);               // offset on an unbound stream
+        auto file=encode(capture);Bytes payload(file.begin()+19,file.end());size_t start=payload.size()-deviceSectionBytes(capture);
+        auto restamp=[](Bytes data){Bytes h={'N','F','S','C','A','P','1'};word(h,7);word(h,uint32_t(data.size()));word(h,crc(data));h.insert(h.end(),data.begin(),data.end());return h;};
+        auto set=[](Bytes& data,size_t at,uint32_t value){for(unsigned i=0;i<4;++i)data[at+i]=uint8_t(value>>(i*8));};
+        auto corrupt=payload;set(corrupt,start,2);expectThrow("invalid device presence flag",restamp(corrupt));
+        corrupt=payload;set(corrupt,start+4,17);expectThrow("too many devices",restamp(corrupt));
+        corrupt=payload;set(corrupt,start+8,0x7fffffffu);expectThrow("oversized device state",restamp(corrupt));
+        corrupt=payload;{uint32_t w=0;std::memcpy(&w,&corrupt[start+8],4);set(corrupt,start+8,w-1);}expectThrow("device state size too small",restamp(corrupt));
+        corrupt=payload;set(corrupt,start,0);expectThrow("absent flag with states following",restamp(corrupt));
+        {auto none=sample();none.hasDevices=false;none.devices.clear();auto again=decode(encode(none));expect(!again.hasDevices&&again.devices.empty(),"capture without device state round trip");}
+        corrupt=payload;corrupt.pop_back();expectThrow("truncated device state",restamp(corrupt));
     }
     std::cout << "capture quiesce and format checks passed\n";
     return 0;
