@@ -41,10 +41,13 @@ void initCritical(uint32_t address,uint32_t spin) {
 void initializeCritical() {initCritical(arg(0),0);ret(0,1);}
 void initializeCriticalSpin() {initCritical(arg(0),arg(1));ret(1,2);}
 // The guest's own fields are the lock: recursion count at +8 and owner thread at +12. Every guest
-// thread holds the machine while it runs, so reading and updating them is atomic, and a load that
+// threads holds the machine while it runs, so reading and updating them is atomic, and a load that
 // rewinds guest memory rewinds lock ownership with it. (Host mutexes owned by host threads could
 // not be handed back to the threads a load rewinds.) The map entry is an identity token for
 // "initialized", compared across a wait to catch delete-and-reinitialize.
+// Normal builds keep the long-tested host-mutex locking; only resumable (save-state) builds need
+// guest-field locks, and they have not had a race on a real phone yet.
+#ifdef NFS_RESUMABLE
 void enterCritical() {
     uint32_t address=arg(0); auto cs=criticalSections.find(address);
     if(cs==criticalSections.end()) throw GuestStop("EnterCriticalSection without initialization");
@@ -70,6 +73,31 @@ void leaveCritical() {
     if(!count&&pendingCriticalDeletes.erase(address))criticalSections.erase(cs);
     ret(0,1);
 }
+#else
+void enterCritical() {
+    uint32_t address=arg(0); auto cs=criticalSections.find(address);
+    if(cs==criticalSections.end()) throw GuestStop("EnterCriticalSection without initialization");
+    auto mutex=cs->second;
+    // Contended: hand the machine over (the fair lock gives it to the waiting
+    // owner) instead of sleeping 1 ms per attempt; sleep only if it persists.
+    if(!mutex->try_lock()){
+        WaitScope scope("EnterCriticalSection",address);
+        for(unsigned spins=0;!mutex->try_lock();++spins){checkGuestProgress();yieldGuestMachine(spins<64?0:1);}
+    }
+    cs=criticalSections.find(address);
+    if(cs==criticalSections.end()||cs->second!=mutex){mutex->unlock();throw GuestStop("Critical section deleted while waiting");}
+    auto count=read32(address+8)+1; write32(address+8,count); write32(address+4,count-1); write32(address+12,guestThreadId);
+    if(count==1)currentTrace().hold(address,memory->readable(g_esp,4)?read32(g_esp):0);
+    ret(0,1);
+}
+void leaveCritical() {
+    uint32_t address=arg(0); auto cs=criticalSections.find(address); uint32_t count=read32(address+8);
+    if(cs==criticalSections.end()||!count||read32(address+12)!=guestThreadId) throw GuestStop("Unbalanced LeaveCriticalSection");
+    write32(address+8,--count);write32(address+4,count-1);if(!count){write32(address+12,0);currentTrace().release(address);}cs->second->unlock();
+    if(!count&&pendingCriticalDeletes.erase(address))criticalSections.erase(cs);
+    ret(0,1);
+}
+#endif
 void deleteCritical() {
     uint32_t address=arg(0);
     if(read32(address+8)){
