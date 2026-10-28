@@ -887,3 +887,30 @@ Draft changelog (first fork release; trim before publishing):
 
 Before release: install the RC on the phone, play one normal race and one
 benchmark run, then publish (ask the user first).
+
+## 2026-10-28: release candidate 0.14.13 phone test (partial)
+
+Installed today's RC APK on the SM-S938U1 after checking its local SHA-256
+against the recorded 9f1e9c1a…f54746. Version on device: 0.14.13-phone-dev-physics
+(versionCode 28, dev package com.nfsu2.androidevolved.dev).
+
+Normal race: PASSED. Quick Race → Circuit → Resort Loop, default game options
+(3 laps, forward), Peugeot 206, countdown, race HUD with a running timer.
+Throttle and steering respond in the physics log (forward=2.90 m/s under
+throttle, lateral=-0.99 while steering, suspension 0.29); presentation
+95–104 FPS at 37–42k D3D9 calls/frame on the 120 Hz panel.
+
+Benchmark: COMPLETED. "Run a benchmark" from Graphics and display; logcat
+confirms "Benchmark report /data/user/0/com.nfsu2.androidevolved.dev/files/
+benchmark-report.txt" written at 17:29:41 (~60 s after start) and the summary
+dialog appeared. The numbers were NOT read back: wireless ADB dropped
+("No route to host") immediately afterwards and the phone left the network.
+Screen-off timeout was raised to 2 h for the session and has not been restored.
+
+Test input notes: the frontend polls key state per frame, so instant
+`adb input tap`/keyevent presses are ignored; a held press (~500 ms) works and
+real finger taps exceed this. The overlay's top-right icon opens the layout
+editor, which swallows touches until CANCEL — avoid it in keyboard-driven tests.
+
+Next: reconnect (port may have rotated), read benchmark-report.txt, restore the
+screen timeout, then ask the user before publishing the release.
