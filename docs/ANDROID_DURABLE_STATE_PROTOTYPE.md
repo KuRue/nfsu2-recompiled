@@ -318,3 +318,19 @@ Direct3D is the open design question. Guest memory restores the proxies unchange
 - default-pool static buffers, if any: shadow the bytes on Unlock.
 
 The device itself (render states, transforms, bound streams and textures, shaders) is replayed from a recorded state block (proved in `check_graphics_state.py`). Next measurement: object counts and bytes per kind and pool during a race.
+
+### Load within a session (2026-10-28, not yet run on the phone)
+
+`debug.nfs.load <path>` (resumable build) loads a capture into the session that wrote it. Graphics contents are not stored, so the load first requires the live D3D9 objects to equal the capture's list, the build and executable digest to match, and every live thread to be in the capture with the same role and entry function. Any mismatch logs `load refused, nothing changed` under `NFSCapture`.
+
+It then restores, in order: page protections opened, guest memory regions, captured protections, heap bookkeeping, open files (reopened by path at their position; never created or truncated, so career files keep their newest contents), DirectSound objects (voices rebuilt from the guest sample copies), events, mutexes, timers (due times relative to now) and the set of initialized critical sections. Each parked worker gets a pending rewind and takes it in `yieldGuestMachine` when it next holds the machine: it throws the same `RebuildRequest` as the stack-rebuild test and resumes from its captured frames, re-issuing its wait. The presenting thread rebuilds at once.
+
+Critical sections now lock on their guest fields (recursion at +8, owner at +12) instead of host recursive mutexes, so rewinding guest memory rewinds lock ownership.
+
+Not restored yet: per-thread TLS values and `lastError` (thread-local on the host), and graphics contents (hence same-session only).
+
+Phone test:
+1. Install `assembleDebug -Pnfs.resumable=ON`, start a race.
+2. `adb shell setprop debug.nfs.capture 1`; wait for `NFSCapture: wrote .../captures/capture-N.nfs`; `setprop debug.nfs.capture 0`.
+3. Drive on for a few seconds, then `adb shell setprop debug.nfs.load /sdcard/nfsu2/captures/capture-N.nfs`.
+4. Expect `loaded ...; rewinding` and the race back at the capture moment, or a refusal naming the reason.
