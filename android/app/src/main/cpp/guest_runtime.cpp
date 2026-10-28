@@ -18,8 +18,8 @@
 #include "physics_haptics.h"
 #if defined(__ANDROID__) || defined(NFS_D3D9_BACKEND)
 #include "d3d9_bridge.h"
-#include "nfs_widescreen.h"
 #endif
+#include "nfs_widescreen.h"
 #include <array>
 #include <vector>
 #include <map>
@@ -89,8 +89,8 @@ std::mutex benchmarkMutex;
 std::string benchmarkPath,benchmarkResolution{"75"};
 void (*benchmarkHandler)(const char*)=nullptr;
 void (*benchmarkStatsHandler)(const float*,unsigned)=nullptr;
-std::atomic<bool> autopilotDriving{false};
-BenchmarkRun benchmarkRun;
+[[maybe_unused]] std::atomic<bool> autopilotDriving{false};
+[[maybe_unused]] BenchmarkRun benchmarkRun;
 std::string hex(uint32_t va) {
     std::ostringstream out; out << "0x" << std::hex << std::setw(8) << std::setfill('0') << va;
     return out.str();
@@ -352,7 +352,7 @@ struct WaitScope {
 };
 std::atomic<int64_t> lastPresentMs{0};
 int64_t steadyMs(){return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();}
-void startStallWatch(){
+[[maybe_unused]] void startStallWatch(){
     static std::once_flag started;
     std::call_once(started,[]{std::thread([]{
         int64_t reportedFor=0;bool cancelledStall=false;
@@ -439,7 +439,7 @@ void maybeLoadCapture();
 #endif
 struct HintStash { uint64_t busy=0; unsigned limit=0,refresh=0; bool pending=false; };
 HintStash hintStash;
-void flushGuestPerformanceHint(){
+[[maybe_unused]] void flushGuestPerformanceHint(){
     if(!hintStash.pending)return;
     hintStash.pending=false;
     reportGuestPerformanceHint(hintStash.busy,hintStash.limit,hintStash.refresh);
@@ -610,7 +610,7 @@ void finishGuestBenchmark(){
 void direct3DCreate(){ret(createGuestD3D9(arg(0)),1);}
 void freeD3DGuest(uint32_t address){heaps->free(GuestHeaps::process,address);}
 void serviceGuestSound();
-void samplePhysicsForPhone();
+[[maybe_unused]] void samplePhysicsForPhone();
 // Development hook for the benchmark: `adb shell setprop debug.nfs.autopilot 1` hands the
 // player's car to the game's own AI during a circuit race. The retail input handler
 // (0x603327, JOY_EVENT_AUTO_PILOT 0xB5) still sets the requested mode at player+0x230,
@@ -803,7 +803,7 @@ inline uint32_t callGuest(uint32_t va,const std::vector<uint32_t>& args,uint32_t
 #include "guest_input.inc"
 std::atomic<bool> physicsFeedbackEnabled{true};
 nfs_physics::Haptics physicsHaptics;
-void samplePhysicsForPhone(){
+[[maybe_unused]] void samplePhysicsForPhone(){
 #ifndef NFSU2_EXE_F4BB0D99
     if(!phoneFeedbackEnabled||!physicsFeedbackEnabled)return;
     uint64_t now=feedbackNow();
@@ -1665,11 +1665,15 @@ void setGuestPaused(bool paused) {
     // The AAudio stream keeps pulling from looping voices while the guest is
     // paused: in the background the last mixed sound repeated until the app
     // closed. Pause the output with the guest and restart it on resume.
+#ifdef __ANDROID__
     bool previous=guestPaused.exchange(paused);
     if(previous!=paused&&soundStream){
         aaudio_result_t status=paused?AAudioStream_requestPause(soundStream):AAudioStream_requestStart(soundStream);
         if(status!=AAUDIO_OK)NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFS","Audio %s failed: %d",paused?"pause":"resume",int(status));
     }
+#else
+    guestPaused.store(paused);
+#endif
 }
 bool guestDrivingControls() {return inputDrivingMode.load();}
 void setGuestPad(const float axes[6],uint32_t buttons,int hatX,int hatY){

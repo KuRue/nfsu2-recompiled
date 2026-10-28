@@ -2,6 +2,9 @@
 #include <cstdio>
 int main(int argc,char** argv) {
     if (argc!=2) return 64;
+    // Lifecycle pause must also work in the host runtime without AAudio.
+    setGuestPaused(true);
+    setGuestPaused(false);
     auto status=connectGuestRuntime(argv[1]);
     std::puts(status.c_str());
     // Initial bring-up must execute the real CRT and reach a named HLE

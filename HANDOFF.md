@@ -746,3 +746,20 @@ Seen once in about 12 benchmark loads (2026-10-27). Thread 1 held critical secti
 
 ## 2026-10-28: offline save-state work (phone unavailable)
 Captures (schema 2) now hold open files (path, access, position; career files flagged and never rolled back), heap bookkeeping, DirectSound objects, the D3D9 object list and initialized critical sections. `debug.nfs.load <path>` loads a capture into the same session (see the "Load within a session" section of docs/ANDROID_DURABLE_STATE_PROTOTYPE.md for checks, order and the phone test). Critical sections now lock on their guest fields. `debug.nfs.d3dinventory 1` logs D3D9 objects by kind and pool, plus recorded/derived creation counts, to decide how a cross-session restore handles graphics. None of this has run on the phone yet. The host runtime check (tests/android_runtime) no longer compiles (widescreen and AAudio code lacks host guards); the graphics host checks pass and tests/android_graphics/run.sh now runs both.
+
+## 2026-10-28: host runtime check restored (phone unavailable)
+
+The portable runtime now links the real widescreen implementation, includes its declarations
+without a graphics backend, and keeps AAudio pause/resume inside the Android guard. Host-only
+unused callbacks are explicitly marked; warnings remain errors. The host entry test exercises
+pause/resume before loading the game.
+
+Passed `tests/android_runtime/run.sh /home/ubuntu/projects/nfsu2-game/SPEED2.EXE` with SDK CMake
+on PATH: actual lifted CRT reached the expected Direct3DCreate9 HLE boundary. Startup checks
+passed 100 scheduler handovers (integer/FS/x87/XMM/TLS/last-error isolation), critical-section
+recursion/owner/guards/deferred retirement/reinitialization, heaps, input, sound caps, timers,
+FILETIME and generated callbacks. `scripts/check_phone_source.py` and normal
+`bash android/gradlew assembleDebug` (run from android/) passed too. No phone install or
+snapshot load was performed. Cross-thread lock contention and same-session capture loading
+remain unverified by this startup smoke test. Next offline work: capture/restore per-thread
+TLS and last-error state; graphics reconstruction still needs the phone inventory.
