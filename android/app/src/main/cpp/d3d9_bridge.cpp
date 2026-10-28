@@ -79,6 +79,31 @@ template<class T>T* nativeObject(uint32_t address){
     auto native=dynamic_cast<T*>(found->second.native);if(!native)throw std::runtime_error("D3D9 resource interface mismatch");return native;
 }
 uint32_t wrapTexture(IDirect3DBaseTexture9* texture){if(!texture)return 0;switch(texture->GetType()){case D3DRTYPE_TEXTURE:return wrap(texture,Kind::Texture);case D3DRTYPE_CUBETEXTURE:return wrap(texture,Kind::Cube);case D3DRTYPE_VOLUMETEXTURE:return wrap(texture,Kind::VolumeTexture);default:throw std::runtime_error("Unknown D3D9 base texture type");}}
+// Restore planning: live objects by kind and pool with estimated bytes, from each native
+// object's own description. Render thread only (D3D9 objects are not thread-safe).
+std::string inventoryText(){
+    struct Row{unsigned count=0;double bytes=0;};
+    std::map<std::pair<unsigned,unsigned>,Row> rows;
+    auto pixelBytes=[](D3DFORMAT f)->double{switch(f){case D3DFMT_DXT1:return .5;case D3DFMT_DXT2:case D3DFMT_DXT3:case D3DFMT_DXT4:case D3DFMT_DXT5:case D3DFMT_A8:case D3DFMT_L8:case D3DFMT_P8:return 1;
+        case D3DFMT_R5G6B5:case D3DFMT_X1R5G5B5:case D3DFMT_A1R5G5B5:case D3DFMT_A4R4G4B4:case D3DFMT_D16:case D3DFMT_A8L8:return 2;default:return 4;}};
+    for(auto& [address,object]:objects){
+        unsigned pool=9;double bytes=0;
+        switch(object.kind){
+        case Kind::Texture:{D3DSURFACE_DESC d{};auto t=static_cast<IDirect3DTexture9*>(object.native);if(SUCCEEDED(t->GetLevelDesc(0,&d))){pool=d.Pool;bytes=d.Width*double(d.Height)*pixelBytes(d.Format)*(t->GetLevelCount()>1?4.0/3:1);}break;}
+        case Kind::Cube:{D3DSURFACE_DESC d{};auto t=static_cast<IDirect3DCubeTexture9*>(object.native);if(SUCCEEDED(t->GetLevelDesc(0,&d))){pool=d.Pool;bytes=6*d.Width*double(d.Height)*pixelBytes(d.Format)*(t->GetLevelCount()>1?4.0/3:1);}break;}
+        case Kind::Surface:{D3DSURFACE_DESC d{};if(object.parent)continue;if(SUCCEEDED(static_cast<IDirect3DSurface9*>(object.native)->GetDesc(&d))){pool=d.Pool;bytes=d.Width*double(d.Height)*pixelBytes(d.Format);}break;}
+        case Kind::VertexBuffer:{D3DVERTEXBUFFER_DESC d{};if(SUCCEEDED(static_cast<IDirect3DVertexBuffer9*>(object.native)->GetDesc(&d))){pool=d.Pool+(d.Usage&D3DUSAGE_DYNAMIC?10:0);bytes=d.Size;}break;}
+        case Kind::IndexBuffer:{D3DINDEXBUFFER_DESC d{};if(SUCCEEDED(static_cast<IDirect3DIndexBuffer9*>(object.native)->GetDesc(&d))){pool=d.Pool+(d.Usage&D3DUSAGE_DYNAMIC?10:0);bytes=d.Size;}break;}
+        default:break;
+        }
+        auto& row=rows[{unsigned(object.kind),pool}];++row.count;row.bytes+=bytes;
+    }
+    static const char* kinds[]={"?","D3D9","Device","Texture","Cube","Surface","VB","IB","VS","PS","Decl","StateBlock","Query","SwapChain","VolTex","Volume"};
+    static const char* pools[]={"default","managed","system","scratch","?","?","?","?","?","-","default-dynamic","managed-dynamic","system-dynamic"};
+    std::string out;char item[96];
+    for(auto& [key,row]:rows){std::snprintf(item,sizeof item," %s/%s=%u(%.1fMB)",kinds[key.first<16?key.first:0],pools[key.second<13?key.second:4],row.count,row.bytes/1048576);out+=item;}
+    return out;
+}
 void retireGuestObject(uint32_t address){
     cachedObjectAddress=0;cachedObject=nullptr;
     auto found=objects.find(address);if(found==objects.end())return;
@@ -332,3 +357,4 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
 #include "d3d9_resource_methods.inc"
     throw std::runtime_error("D3D9 guest method pending: kind="+std::to_string(kind)+" slot="+std::to_string(method));
 }
+std::string d3d9Inventory(){return inventoryText();}

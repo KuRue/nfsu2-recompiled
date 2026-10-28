@@ -635,6 +635,12 @@ void maybeAutopilot(){
 }
 void d3dDispatch(){
     if(d3dToken==0x7e002110u)maybeAutopilot();
+#ifdef __ANDROID__
+    // Development: `debug.nfs.d3dinventory 1` logs live D3D objects by kind and pool every 10 s.
+    if(d3dToken==0x7e002110u){static auto last=std::chrono::steady_clock::time_point{};auto now=std::chrono::steady_clock::now();
+        if(now-last>=std::chrono::seconds(10)){last=now;char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.d3dinventory",value);
+            if(std::atoi(value))NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSInventory","D3D9%s",d3d9Inventory().c_str());}}
+#endif
 #ifdef NFS_RESUMABLE
     // Before Present runs, so a rebuild re-runs this same call. A rebuild throw
     // skips the capture; the capture runs only when the rebuild test returns.
