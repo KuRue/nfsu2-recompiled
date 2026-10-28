@@ -1,4 +1,5 @@
 #include "d3d9_bridge.h"
+#include "d3d9_program_state.h"
 #include "runtime_log.h"
 #include "dxt_shadow.h"
 #include "texture_pack.h"
@@ -234,17 +235,23 @@ void recordCreation(uint32_t method,const uint32_t* args,uint32_t count){
     uint32_t address;std::memcpy(&address,pointer(args[output]),4);
     auto found=objects.find(address);if(found==objects.end()||found->second.creation)return;
     auto creation=std::make_shared<Creation>();creation->method=method;creation->args.assign(args,args+count);
-    if(method==86&&args[1]){auto* elements=static_cast<const uint8_t*>(pointer(args[1]));
-        for(unsigned i=0;i<65;++i){creation->blob.insert(creation->blob.end(),elements+i*8,elements+i*8+8);if(elements[i*8]==0xff&&elements[i*8+1]==0)break;}}
-    if((method==91||method==106)&&args[1]){auto* tokens=static_cast<const uint32_t*>(pointer(args[1]));
-        for(unsigned i=0;i<65536;++i){auto* t=reinterpret_cast<const uint8_t*>(tokens+i);creation->blob.insert(creation->blob.end(),t,t+4);if(tokens[i]==0x0000ffffu)break;}}
+    // Copy through the newly created native object. Scanning guest bytecode for END could
+    // stop inside a comment, and the guest can free its input immediately after Create returns.
+    if(method==86){creation->blob=nfs_d3d9::captureDeclaration(static_cast<IDirect3DVertexDeclaration9*>(found->second.native)).bytes;}
+    if(method==91){creation->blob=nfs_d3d9::captureShader(static_cast<IDirect3DVertexShader9*>(found->second.native),nfs_d3d9::ProgramKind::VertexShader).bytes;}
+    if(method==106){creation->blob=nfs_d3d9::captureShader(static_cast<IDirect3DPixelShader9*>(found->second.native),nfs_d3d9::ProgramKind::PixelShader).bytes;}
+    if(method==86||method==91||method==106){creation->args[1]=0;creation->args[2]=0;}
     found->second.creation=std::move(creation);
 }
 uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumentCount){
     uint32_t result=dispatchGuestD3D9Call(token,args,argumentCount);
     if((token-methodBase)/4096==2&&SUCCEEDED(static_cast<HRESULT>(result))){
         uint32_t method=((token-methodBase)%4096)/16;
-        if(creationOutput(method)>=0)recordCreation(method,args,*argumentCount);
+        if(creationOutput(method)>=0){
+            // Metadata recording must not turn a successful game Create into a failure.
+            try{recordCreation(method,args,*argumentCount);}
+            catch(const std::exception& error){NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSCapture","D3D9 creation %u not recorded: %s",method,error.what());}
+        }
     }
     return result;
 }

@@ -6,3 +6,4 @@ cmake -S "$test_dir" -B "$task_build" -G Ninja -DCMAKE_CXX_COMPILER=clang++
 cmake --build "$task_build" -j2
 "$task_build/graphics_memory_check"
 "$task_build/graphics_com_check"
+"$task_build/graphics_program_check"

@@ -783,3 +783,27 @@ No phone install/load performed. Next: exercise capture/load during a race when 
 returns, and collect D3D inventory for cross-session graphics reconstruction. The debug load
 still requires the same build/executable, thread roles and graphics object list; full exact
 cross-session Resume is not ready.
+
+## 2026-10-28: immutable D3D9 program reconstruction helper (offline)
+
+The bridge now records shader definitions via native GetFunction and declarations via
+GetDeclaration, rather than scanning guest memory for the first END. Shader comments and
+SM1 constant values may contain that bit pattern. Definitions are size-bounded, checked for
+complete token spans/sentinels, and copied independently of guest input/output pointers;
+those transient arguments are cleared in the creation recipe. Recording failures log rather
+than breaking the successful game Create call.
+
+New d3d9_program_state.h recreates VS/PS/declarations using aligned driver input and an owned
+staging object: failure/abandonment releases it, while a later full restore can transfer it.
+This helper is NOT wired into the loader or serialized in NFSCAP1 yet. No graphics contents
+or device bindings are restored by this change. The old design assumption that default-pool
+render targets/dynamic buffers can be recreated empty is now explicitly marked unproven.
+
+The graphics test script runs a new mock-COM program test alongside memory and lifetime checks.
+Checks cover shader models 1/2/3, END in comments/constants, ps_1_4 instruction lengths,
+declarations, bad sizes/truncation, failed/null driver outputs, pointer removal and ownership.
+ASan/UBSan and the phone source checks pass. The resumable Android debug build passes.
+No phone install, real-DXVK program recreation, race or snapshot load was performed.
+Next offline step: serialize program recipes with proxy identity/reference metadata, then
+capture/recreate texture and buffer contents and derived surfaces before replaying device state.
+Cross-session exact Resume is still unfinished.

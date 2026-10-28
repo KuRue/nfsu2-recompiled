@@ -314,7 +314,7 @@ A capture already holds guest memory, thread registers and frames, and the logic
 
 Direct3D is the open design question. Guest memory restores the proxies unchanged, so only the address-to-native map and the contents need rebuilding. Proposed split, to be checked against a race-time inventory:
 - managed and system-memory pool resources: read back through DXVK at capture time and store;
-- default-pool render targets, depth buffers and dynamic buffers: recreate empty, since the game rewrites them every frame;
+- default-pool render targets, depth buffers and dynamic buffers: determine which contents survive a frame boundary; recreating these empty is not proven safe;
 - default-pool static buffers, if any: shadow the bytes on Unlock.
 
 The device itself (render states, transforms, bound streams and textures, shaders) is replayed from a recorded state block (proved in `check_graphics_state.py`). Next measurement: object counts and bytes per kind and pool during a race.
@@ -345,3 +345,27 @@ Phone test:
 2. `adb shell setprop debug.nfs.capture 1`; wait for `NFSCapture: wrote .../captures/capture-N.nfs`; `setprop debug.nfs.capture 0`.
 3. Drive on for a few seconds, then `adb shell setprop debug.nfs.load /sdcard/nfsu2/captures/capture-N.nfs`.
 4. Expect `loaded ...; rewinding` and the race back at the capture moment, or a refusal naming the reason.
+
+
+### Immutable graphics programs (offline, 2026-10-28)
+
+`d3d9_program_state.h` captures shader bytes through native `GetFunction` and declaration
+entries through `GetDeclaration`, with bounded sizes and token/declaration checks. This
+replaces the creation recorder's guest-pointer scan: an END value inside a shader comment
+or constant must not truncate the definition. Program creation records clear their input
+and output pointer arguments and keep an independent byte copy. A recording failure logs
+and leaves the definition unavailable; the successful game Create call still succeeds.
+
+The recreation helper validates a definition, calls the device's Create method with aligned
+storage, and returns an owned staged native object. Failure or abandonment releases it;
+a later complete graphics restore can transfer ownership only after all resources succeed.
+The helper has not been wired to the snapshot loader, and program definitions are not yet
+serialized in NFSCAP1. Guest proxy addresses/reference counts, device bindings/state blocks,
+textures, buffers and derived surfaces still need capture/reconstruction and a coordinated
+commit. No claim of cross-session graphics restore is made by this step.
+
+`tests/android_graphics/run.sh` now includes program capture/recreation and bridge record
+checks, using mock COM objects/device. Cases cover shader models 1/2/3, comment and constant
+END values, declaration sentinels, truncated/oversized definitions, driver failure/null output,
+input pointer removal and staged object lifetime. This verifies the shared helper and recorder,
+not DXVK rendering or a race. Run against a real device when available.
