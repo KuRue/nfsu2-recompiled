@@ -2,6 +2,7 @@
 // Capture of one quiesced guest moment. Graphics and file contents stay omitted;
 // audio and heap metadata carry explicit omission flags when unavailable.
 // careerRollback must be zero so loading cannot roll career files back.
+#include "graphics_program.h"
 #include <array>
 #include <cctype>
 #include <cmath>
@@ -18,7 +19,7 @@
 #include <unistd.h>
 
 namespace nfs_capture {
-constexpr uint32_t schema = 3; // 3 adds TLS allocation, per-thread values and last-error
+constexpr uint32_t schema = 4; // 4 adds immutable graphics programs and proxy metadata
 constexpr uint32_t omitGraphics = 1u, omitAudio = 2u, omitHeap = 4u, omitFileContents = 8u;
 // Heap bookkeeping and sound objects are stored from schema 2; omitHeap and omitAudio are clear
 // only when they are.
@@ -151,6 +152,8 @@ struct Inventory { uint32_t kind = 0, count = 0; };
 struct Capture {
     std::string build, game;
     bool hasThreadLocals = true;
+    bool hasPrograms = true;
+    std::vector<nfs_d3d9::ProgramRecord> programs;
     std::array<bool, tlsSlots> tlsUsed{};
     uint32_t careerRollback = 0;
     uint32_t omitted = omitRequired | omitHeap | omitAudio;
@@ -243,6 +246,23 @@ inline void validate(const Capture& capture) {
     }
     require(capture.graphics.size() <= (size_t(1) << 20), "Too many graphics objects");
     for (size_t i = 1; i < capture.graphics.size(); ++i) require(capture.graphics[i - 1].first < capture.graphics[i].first, "Graphics objects must be sorted and unique");
+    require(capture.programs.size() <= maxObjects, "Too many graphics programs");
+    size_t programIndex = 0, programBytes = 0;
+    for (const auto& object : capture.graphics) {
+        if (object.second < 8 || object.second > 10) continue;
+        if (!capture.hasPrograms) continue;
+        require(programIndex < capture.programs.size(), "Missing graphics program definition");
+        const auto& program = capture.programs[programIndex++];
+        require(program.address == object.first && uint32_t(program.definition.kind) == object.second, "Program identity/kind mismatch");
+        require(program.address >= capture.pageSize && !(program.address & 3) && program.device >= capture.pageSize && !(program.device & 3)
+            && program.table >= capture.pageSize && !(program.table & 3) && uint64_t(program.table) + 20 <= 0x100000000ull
+            && program.references > 0, "Invalid program proxy metadata");
+        auto device = std::lower_bound(capture.graphics.begin(), capture.graphics.end(), std::make_pair(program.device, 0u));
+        require(device != capture.graphics.end() && device->first == program.device && device->second == 2, "Missing graphics program device");
+        nfs_d3d9::validate(program.definition);
+        programBytes += program.definition.bytes.size(); require(programBytes <= (64u << 20), "Graphics programs too large");
+    }
+    require(programIndex == capture.programs.size(), "Unexpected graphics program definitions");
     require(capture.criticalSections.size() <= maxObjects * 4, "Too many critical sections");
     for (size_t i = 0; i < capture.criticalSections.size(); ++i)
         require(capture.criticalSections[i] >= capture.pageSize && (!i || capture.criticalSections[i - 1] < capture.criticalSections[i]), "Critical sections must be sorted and unique");
@@ -378,6 +398,12 @@ inline Bytes encode(const Capture& capture) {
         word(payload, thread.locals.lastError);
         for (uint32_t value : thread.locals.values) word(payload, value);
     }
+    require(capture.hasPrograms, "Cannot encode capture without graphics program metadata");
+    word(payload, uint32_t(capture.programs.size()));
+    for (const auto& program : capture.programs) {
+        for (uint32_t value : {program.address, program.table, program.device, program.references, uint32_t(program.definition.kind), uint32_t(program.definition.bytes.size())}) word(payload, value);
+        payload.insert(payload.end(), program.definition.bytes.begin(), program.definition.bytes.end());
+    }
     Bytes file = {'N','F','S','C','A','P','1'};
     word(file, schema); word(file, uint32_t(payload.size())); word(file, crc(payload));
     file.insert(file.end(), payload.begin(), payload.end());
@@ -484,6 +510,19 @@ inline Capture decode(const Bytes& file) {
         for (auto& thread : capture.threads) {
             thread.locals.lastError = reader.word();
             for (auto& value : thread.locals.values) value = reader.word();
+        }
+    }
+    capture.hasPrograms = version >= 4;
+    if (capture.hasPrograms) {
+        uint32_t count = reader.word(); require(count <= maxObjects, "Too many graphics programs");
+        size_t total = 0;
+        for (uint32_t i = 0; i < count; ++i) {
+            nfs_d3d9::ProgramRecord program;
+            program.address = reader.word(); program.table = reader.word(); program.device = reader.word(); program.references = reader.word();
+            program.definition.kind = nfs_d3d9::ProgramKind(reader.word()); uint32_t size = reader.word();
+            require(size && size <= nfs_d3d9::maxProgramBytes, "Invalid graphics program size");
+            total += size; require(total <= (64u << 20), "Graphics programs too large");
+            program.definition.bytes = reader.take(size); capture.programs.push_back(std::move(program));
         }
     }
     require(reader.offset == payload.size(), "Unexpected trailing capture");

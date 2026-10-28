@@ -1,4 +1,5 @@
 #pragma once
+#include "graphics_program.h"
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -14,6 +15,7 @@ bool d3d9RequestsSurface();
 void acknowledgeD3D9Surface(bool available);
 uint32_t createGuestD3D9(uint32_t sdk);
 std::string d3d9Inventory();
+std::vector<nfs_d3d9::ProgramRecord> d3d9ProgramList();
 std::vector<std::pair<uint32_t,uint32_t>> d3d9ObjectList();
 uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumentCount);
 uint32_t guestD3DObjectCount();

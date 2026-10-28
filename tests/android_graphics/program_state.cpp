@@ -1,3 +1,4 @@
+#include "../../android/app/src/main/cpp/capture_format.h"
 #include "../../android/app/src/main/cpp/guest_memory.h"
 #include "../../android/app/src/main/cpp/guest_heap.h"
 #include "../../android/app/src/main/cpp/android_resolution.h"
@@ -63,13 +64,34 @@ std::vector<uint8_t> shaderBytes(uint32_t version){
     std::vector<uint8_t> bytes(sizeof tokens);std::memcpy(bytes.data(),tokens,sizeof tokens);return bytes;
 }
 }
-int main(){try{
+int main(int argc,char** argv){try{
     using namespace nfs_d3d9;
     configureD3D9Bridge(memory.base(),alloc,freeAllocation);
     const D3DVERTEXELEMENT9 elements[]={{0,0,D3DDECLTYPE_FLOAT3,D3DDECLMETHOD_DEFAULT,D3DDECLUSAGE_POSITION,0},D3DDECL_END()};
     std::vector<uint8_t> declaration(sizeof elements);std::memcpy(declaration.data(),elements,sizeof elements);
     std::vector<Program> programs={{ProgramKind::VertexShader,shaderBytes(0xfffe0200u)},
         {ProgramKind::PixelShader,shaderBytes(0xffff0200u)},{ProgramKind::Declaration,declaration}};
+    bool writeArchive=argc==3&&std::string(argv[1])=="--write";
+    bool readArchive=argc==3&&std::string(argv[1])=="--read";
+    require(argc==1||writeArchive||readArchive,"Invalid archive test arguments");
+    if(readArchive){
+        require(objects.empty()&&live==0,"Fresh reader unexpectedly owns graphics resources");
+        for(size_t i=0;i<programs.size();++i){
+            std::ifstream input(std::filesystem::path(argv[2])/(std::to_string(i)+".nfs"),std::ios::binary);
+            require(bool(input),"Cannot read test capture");
+            nfs_capture::Bytes bytes((std::istreambuf_iterator<char>(input)),{});
+            auto archive=nfs_capture::decode(bytes);require(archive.programs.size()==1,"Fresh archive count differs");
+            const auto& record=archive.programs[0];
+            require(record.definition.kind==programs[i].kind&&record.definition.bytes==programs[i].bytes&&record.references==1,
+                "Fresh-process definition/references differ");
+            Device device{programs[i]};{auto staged=recreateProgram(&device,record.definition);require(staged.get(),"Fresh-process recreation failed");}
+            require(live==0&&objects.empty(),"Fresh-process recreation leaked or reused a proxy");
+        }
+        std::puts("Fresh-process captured program recreation passed for VS, PS and declaration");return 0;
+    }
+    size_t archiveIndex=0;
+    auto deviceNative=new Shader<IDirect3DVertexShader9>(programs[0].bytes);
+    auto deviceAddress=wrap(deviceNative,Kind::Device);
     for(auto& program:programs){
         IUnknown* native=nullptr;Program captured;
         if(program.kind==ProgramKind::VertexShader){auto shader=new Shader<IDirect3DVertexShader9>(program.bytes);native=shader;captured=captureShader(shader,program.kind);}
@@ -77,10 +99,26 @@ int main(){try{
         else{auto decl=new Declaration(program.bytes);native=decl;captured=captureDeclaration(decl);}
         require(captured.bytes==program.bytes,"Native program capture differs");
         auto address=wrap(native,static_cast<Kind>(program.kind));auto output=alloc(4);write(output,address);
-        uint32_t args[]={0x12345678u,0xdeadbeefu,output};uint32_t method=program.kind==ProgramKind::VertexShader?91:program.kind==ProgramKind::PixelShader?106:86;
+        uint32_t args[]={deviceAddress,0xdeadbeefu,output};uint32_t method=program.kind==ProgramKind::VertexShader?91:program.kind==ProgramKind::PixelShader?106:86;
         recordCreation(method,args,3);auto creation=objects.at(address).creation;
         require(creation&&creation->blob==program.bytes&&creation->args[1]==0&&creation->args[2]==0,"Creation record retained pointers or lost bytes");
+        auto records=d3d9ProgramList();require(records.size()==1,"Program list omitted or duplicated a definition");
+        uint32_t table=0;std::memcpy(&table,pointer(address),4);
+        require(records[0].address==address&&records[0].table==table&&records[0].device==deviceAddress
+            &&records[0].references==1&&records[0].definition.bytes==program.bytes,"Program proxy metadata differs");
+        auto savedRecipe=objects.at(address).creation;objects.at(address).creation.reset();
+        rejects([&]{d3d9ProgramList();});objects.at(address).creation=savedRecipe;
+        nfs_capture::Capture archive;archive.build=std::string(64,'a');archive.game=std::string(64,'b');
+        nfs_capture::ThreadImage main;main.id=1;main.capturer=true;main.resumable=true;main.wait=nfs_capture::WaitKind::Present;
+        main.frames.push_back({0x401000,0x401020,0x7e002110,0,0});archive.threads.push_back(main);
+        archive.graphics=d3d9ObjectList();archive.programs=records;
+        auto encoded=nfs_capture::encode(archive);
+        if(writeArchive)nfs_capture::writeAtomic(std::filesystem::path(argv[2])/(std::to_string(archiveIndex++)+".nfs"),encoded);
+        auto decoded=nfs_capture::decode(encoded);
+        require(decoded.programs==records,"Archived program/proxy metadata differs");
+        auto restored=decoded.programs.front().definition;
         Device device{captured};int before=live;
+        {auto staged=recreateProgram(&device,restored);require(staged.get(),"Archived definition did not recreate");}
         {auto staged=recreateProgram(&device,captured);require(staged.get()&&live==before+1,"Program not staged");
          auto moved=std::move(staged);require(!staged.get()&&moved.get(),"Staging move duplicated ownership");}
         require(live==before,"Staged program leaked");
@@ -112,6 +150,7 @@ int main(){try{
     }
     bad=programs[0];bad.bytes.resize(maxProgramBytes+4);rejects([&]{validate(bad);});
     bad=programs[2];bad.bytes.resize(66*8);rejects([&]{validate(bad);});
+    deviceNative->Release();retireGuestObject(deviceAddress);
     require(objects.empty()&&addresses.empty()&&live==1,"Program lifetime accounting differs");
     std::puts("D3D9 program capture/recreation passed: shader comments, declarations, pointer removal, bounds, failures and staged ownership");return 0;
 }catch(const std::exception& error){std::fprintf(stderr,"%s\n",error.what());return 1;}}

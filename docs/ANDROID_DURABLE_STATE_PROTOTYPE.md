@@ -359,8 +359,8 @@ and leaves the definition unavailable; the successful game Create call still suc
 The recreation helper validates a definition, calls the device's Create method with aligned
 storage, and returns an owned staged native object. Failure or abandonment releases it;
 a later complete graphics restore can transfer ownership only after all resources succeed.
-The helper has not been wired to the snapshot loader, and program definitions are not yet
-serialized in NFSCAP1. Guest proxy addresses/reference counts, device bindings/state blocks,
+The helper has not been wired to the snapshot loader. Schema 4 now serializes its program
+definitions and proxy metadata (see below). Guest proxy addresses/reference counts, device bindings/state blocks,
 textures, buffers and derived surfaces still need capture/reconstruction and a coordinated
 commit. No claim of cross-session graphics restore is made by this step.
 
@@ -369,3 +369,28 @@ checks, using mock COM objects/device. Cases cover shader models 1/2/3, comment 
 END values, declaration sentinels, truncated/oversized definitions, driver failure/null output,
 input pointer removal and staged object lifetime. This verifies the shared helper and recorder,
 not DXVK rendering or a race. Run against a real device when available.
+
+
+### Immutable program archive, schema 4 (offline, 2026-10-28)
+
+Captures now append every live vertex shader, pixel shader and vertex declaration as guest
+proxy address, method-table address, creating guest device, guest reference count, kind and
+definition bytes. `d3d9ProgramList()` refuses capture if any such object lacks a recorded recipe.
+There are no native pointers or transient Create input/output addresses in this section.
+
+The portable validator checks one sorted record per program in the graphics object list,
+matching kinds, a live device dependency, nonzero references and aligned proxy/table addresses.
+Shader/declaration checks are shared with the recreation helper. Counts and per-program/total
+byte limits are checked before copying definitions. Legacy schemas 1–3 remain readable for
+inspection; the live loader refuses captures missing program metadata. A same-session load
+also requires live program definitions, guest references and identity metadata to equal the
+capture, rather than leaving changed COM reference counts behind after rewinding guest memory.
+It still does not replace any native graphics objects.
+
+Offline tests cover archive round trips for all three kinds, legacy decoding, valid-checksum
+malformed counts/sizes/dependencies/reference metadata/definitions and decoded-definition
+recreation through the shared helper with mock COM objects. The graphics script writes three
+capture files, exits the writer, and starts a fresh reader process that recreates each program;
+this also runs under ASan/UBSan. The real graphics capture/load
+path still needs a phone run. Next: texture/buffer contents, derived surfaces, full proxy
+reference ownership and device state, with staged commit of the complete graphics graph.

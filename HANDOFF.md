@@ -807,3 +807,23 @@ No phone install, real-DXVK program recreation, race or snapshot load was perfor
 Next offline step: serialize program recipes with proxy identity/reference metadata, then
 capture/recreate texture and buffer contents and derived surfaces before replaying device state.
 Cross-session exact Resume is still unfinished.
+
+## 2026-10-28: immutable program definitions persisted in schema 4 (offline)
+
+Captures now contain all VS/PS/declaration definitions with guest proxy/table/device identities
+and guest reference counts. The bridge exports sorted complete records and refuses capture
+if a program recipe is missing. Shared portable graphics_program.h validates definitions without
+D3D headers. Decode bounds counts/bytes before allocation, then checks complete matching program
+coverage, device dependencies and valid aligned proxy metadata. Schema 1–3 remains readable
+for inspection but live loading requires schema-4 program metadata. Same-session loading also
+requires unchanged program definitions/proxy metadata/reference counts; it does not replace
+native graphics objects yet.
+
+Format tests cover round trips, legacy decoding and valid-checksum malformed program sections.
+Graphics tests cover actual bridge export -> NFSCAP1 encode/decode -> mock native recreation.
+The graphics script also exits the writer and recreates all three program kinds in a new reader
+process; ASan/UBSan runs pass. Format ASan/UBSan, phone source checks, real-CRT host startup and
+`bash gradlew assembleDebug -Pnfs.resumable=ON` pass (19s on final build). No phone install,
+real GPU recreation or race capture/load performed. Next: texture/buffer content capture and
+recreation, derived surfaces and device state, then commit the complete native object graph
+while retaining captured guest proxies. Exact cross-session Resume remains unfinished.

@@ -55,11 +55,22 @@ nfs_capture::Capture sample() {
     buffer.publishes = 6; buffer.locked = true; buffer.lockOffset = 4096; buffer.lockBytes = 2048; buffer.volume = 0xfffffc18u;
     capture.sounds = {device, buffer};
     capture.graphics = {{0x10000300u, 2u}, {0x10000310u, 3u}, {0x10000320u, 5u}};
+    capture.graphics.push_back({0x10000400u, 8u});
+    capture.graphics.push_back({0x10000410u, 9u});
+    capture.graphics.push_back({0x10000420u, 10u});
+    capture.programs = {
+        {0x10000400u, 0x10000500u, 0x10000300u, 2u, {nfs_d3d9::ProgramKind::VertexShader, {0,2,254,255,255,255,0,0}}},
+        {0x10000410u, 0x10000520u, 0x10000300u, 1u, {nfs_d3d9::ProgramKind::PixelShader, {0,2,255,255,255,255,0,0}}},
+        {0x10000420u, 0x10000540u, 0x10000300u, 3u, {nfs_d3d9::ProgramKind::Declaration, {255,0,0,0,17,0,0,0}}}
+    };
     capture.criticalSections = {0x864f00u, 0x10806348u};
     capture.omitted &= ~omitHeap; capture.heapNext = 0xf0000108u;
     capture.heaps.push_back({0xf0000100u, 0u, 0u, {{0x10000000u, 32u, 31u}, {0x10000020u, 4096u, 4000u}}});
     capture.heaps.push_back({0xf0000104u, 4u, 65536u, {}});
     return capture;
+}
+size_t programSectionBytes(const nfs_capture::Capture& capture) {
+    size_t size = 4; for (const auto& program : capture.programs) size += 24 + program.definition.bytes.size(); return size;
 }
 bool sameCpu(const nfs_capture::CpuImage& a, const nfs_capture::CpuImage& b) {
     if (std::memcmp(a.gpr, b.gpr, sizeof a.gpr) || std::memcmp(a.flags, b.flags, sizeof a.flags)) return false;
@@ -74,6 +85,7 @@ bool sameFrame(const nfs_capture::Frame& a, const nfs_capture::Frame& b) {
 }
 bool same(const nfs_capture::Capture& left, const nfs_capture::Capture& right) {
     if (left.build != right.build || left.game != right.game || left.careerRollback != right.careerRollback) return false;
+    if (left.hasPrograms != right.hasPrograms || left.programs != right.programs) return false;
     if (left.hasThreadLocals != right.hasThreadLocals || left.tlsUsed != right.tlsUsed) return false;
     if (left.omitted != right.omitted || left.pageSize != right.pageSize) return false;
     if (left.threads.size() != right.threads.size() || left.events.size() != right.events.size()) return false;
@@ -196,14 +208,14 @@ int main() {
     expect(careerPath("appdata/Roaming/x") && careerPath("DOCUMENTS/a") && !careerPath("GLOBAL/documents"), "career paths");
     {
         // A schema 1 file has no files section: drop it, restamp the header and read it back.
-        auto older = sample(); older.files.clear(); older.heaps.clear(); older.heapNext = 0; older.omitted |= omitHeap | omitAudio; older.sounds.clear(); older.graphics.clear(); older.criticalSections.clear();
+        auto older = sample(); older.files.clear(); older.heaps.clear(); older.heapNext = 0; older.omitted |= omitHeap | omitAudio; older.sounds.clear(); older.graphics.clear(); older.programs.clear(); older.criticalSections.clear();
         auto bytes = encode(older);
         const size_t localsBytes = 4 * (tlsSlots + older.threads.size() * (tlsSlots + 1));
-        bytes.resize(bytes.size() - localsBytes - 24); // file, sound, graphics and section counts, heap next, heap count
+        bytes.resize(bytes.size() - programSectionBytes(older) - localsBytes - 24); // file, sound, graphics and section counts, heap next, heap count
         Bytes payload(bytes.begin() + 19, bytes.end());
         Bytes header = {'N','F','S','C','A','P','1'}; word(header, 1); word(header, uint32_t(payload.size())); word(header, crc(payload));
         header.insert(header.end(), payload.begin(), payload.end());
-        older.hasThreadLocals = false; older.tlsUsed.fill(false);
+        older.hasPrograms = false; older.hasThreadLocals = false; older.tlsUsed.fill(false);
         for (auto& thread : older.threads) thread.locals = {};
         auto read = decode(header);
         expect(same(older, read) && read.files.empty(), "schema 1 capture still reads");
@@ -216,16 +228,46 @@ int main() {
             word(header, uint32_t(payload.size())); word(header, crc(payload));
             header.insert(header.end(), payload.begin(), payload.end()); return header;
         };
-        Bytes payload(bytes.begin() + 19, bytes.end());
+        Bytes payload(bytes.begin() + 19, bytes.end() - programSectionBytes(original));
+        auto schema3 = decode(restamp(payload, 3));
+        auto beforePrograms = original; beforePrograms.hasPrograms = false; beforePrograms.programs.clear();
+        expect(same(beforePrograms, schema3), "schema 3 remains readable with programs marked missing");
         payload[payload.size() - localsBytes] = 2;
         expectThrow("nonboolean TLS allocation flag", restamp(payload, 3));
-        payload.assign(bytes.begin() + 19, bytes.end() - localsBytes);
+        payload.assign(bytes.begin() + 19, bytes.end() - programSectionBytes(original) - localsBytes);
         auto read = decode(restamp(payload, 2));
-        original.hasThreadLocals = false; original.tlsUsed.fill(false);
+        original.hasPrograms = false; original.programs.clear(); original.hasThreadLocals = false; original.tlsUsed.fill(false);
         for (auto& thread : original.threads) thread.locals = {};
         expect(same(original, read), "schema 2 remains readable with locals marked missing");
-        Bytes partial(bytes.begin() + 19, bytes.end() - 4);
-        expectThrow("truncated TLS values with valid checksum", restamp(partial, 3));
+        Bytes partial(payload.begin(), payload.end()); // truncated schema-4 section, valid outer checksum
+        expectThrow("missing schema-4 graphics programs with valid checksum", restamp(partial, 4));
+    }
+    {
+        auto capture = sample(); auto file = encode(capture);
+        Bytes payload(file.begin()+19,file.end());size_t start=payload.size()-programSectionBytes(capture);
+        auto restamp = [](Bytes data) { Bytes header={'N','F','S','C','A','P','1'};word(header,4);word(header,uint32_t(data.size()));word(header,crc(data));header.insert(header.end(),data.begin(),data.end());return header; };
+        auto set = [](Bytes& data,size_t at,uint32_t value){for(unsigned i=0;i<4;++i)data[at+i]=uint8_t(value>>(i*8));};
+        auto bad=payload;set(bad,start,maxObjects+1);expectThrow("oversized program count",restamp(bad));
+        bad=payload;set(bad,start+4+20,nfs_d3d9::maxProgramBytes+1);expectThrow("oversized program definition",restamp(bad));
+        bad=payload;set(bad,start+4+12,0);expectThrow("zero program references",restamp(bad));
+        bad=payload;set(bad,start+4+8,0x10000310u);expectThrow("program device is a texture",restamp(bad));
+        bad=payload;bad.pop_back();expectThrow("truncated final declaration",restamp(bad));
+        bad=payload;bad[start+4+24+7]=1;expectThrow("corrupt shader END",restamp(bad));
+    }
+    {
+        auto rejectProgram = [&](const nfs_capture::Capture& bad) {
+            bool rejected = false; try { encode(bad); } catch (const std::runtime_error&) { rejected = true; }
+            expect(rejected, "invalid graphics program metadata accepted");
+        };
+        auto bad = sample(); bad.programs[0].device = 0x10000310u; rejectProgram(bad);
+        bad = sample(); bad.programs[0].references = 0; rejectProgram(bad);
+        bad = sample(); bad.programs[0].table = 3; rejectProgram(bad);
+        bad = sample(); bad.programs[0].address = bad.programs[1].address; rejectProgram(bad);
+        bad = sample(); bad.programs.pop_back(); rejectProgram(bad);
+        bad = sample(); bad.programs.push_back(bad.programs.back()); rejectProgram(bad);
+        bad = sample(); bad.programs[0].definition.kind = nfs_d3d9::ProgramKind::PixelShader; rejectProgram(bad);
+        bad = sample(); bad.programs[0].definition.bytes.pop_back(); rejectProgram(bad);
+        bad = sample(); bad.programs[2].definition.bytes[4] = 0; rejectProgram(bad);
     }
     if (failures) { std::cerr << failures << " capture checks failed\n"; return 1; }
     std::cout << "capture quiesce and format checks passed\n";

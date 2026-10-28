@@ -963,7 +963,7 @@ void maybeWriteCapture(){
             }
         });
         nfs_capture::Inventory files;files.kind=1;files.count=uint32_t(fileHandles.size());capture.inventory.push_back(files);
-        capture.graphics=d3d9ObjectList();
+        capture.graphics=d3d9ObjectList();capture.programs=d3d9ProgramList();
         for(auto& entry:criticalSections)capture.criticalSections.push_back(entry.first);
         capture.sounds=captureSoundObjects();capture.omitted&=~nfs_capture::omitAudio;
         {auto state=heaps->exportState();capture.heapNext=state.next;
@@ -1037,6 +1037,8 @@ void maybeLoadCapture(){
         if(!capture.hasThreadLocals)throw std::runtime_error("capture lacks thread-local state");
         if(capture.build!=NFS_GIT_IDENTITY)throw std::runtime_error("capture is from another build");
         if(capture.game!=nfs_capture::sha256File(guestExecutable))throw std::runtime_error("capture is from another game executable");
+        if(!capture.hasPrograms)throw std::runtime_error("capture lacks graphics program metadata");
+        if(capture.programs!=d3d9ProgramList())throw std::runtime_error("graphics program definitions or references changed since the capture");
         if(capture.graphics!=d3d9ObjectList())throw std::runtime_error("graphics objects changed since the capture");
         std::map<uint32_t,const nfs_capture::ThreadImage*> captured;
         for(const auto& thread:capture.threads)captured[thread.id]=&thread;

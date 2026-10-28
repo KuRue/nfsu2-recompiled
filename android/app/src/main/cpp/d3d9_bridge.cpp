@@ -403,3 +403,18 @@ std::vector<std::pair<uint32_t,uint32_t>> d3d9ObjectList(){
     for(auto& [address,object]:objects)out.emplace_back(address,static_cast<uint32_t>(object.kind));
     std::sort(out.begin(),out.end());return out;
 }
+
+// Complete immutable-program records, sorted by stable guest proxy address. Missing recipes
+// refuse a capture rather than silently claiming the resource can later be reconstructed.
+std::vector<nfs_d3d9::ProgramRecord> d3d9ProgramList(){
+    std::vector<nfs_d3d9::ProgramRecord> out;
+    for(const auto& [address,object]:objects){
+        if(object.kind!=Kind::VertexShader&&object.kind!=Kind::PixelShader&&object.kind!=Kind::Declaration)continue;
+        if(!object.creation||object.creation->blob.empty()||object.creation->args.empty())throw std::runtime_error("D3D9 program recipe missing");
+        uint32_t table;std::memcpy(&table,pointer(address),4);
+        nfs_d3d9::ProgramRecord record{address,table,object.creation->args[0],object.references,
+            {static_cast<nfs_d3d9::ProgramKind>(object.kind),object.creation->blob}};
+        nfs_d3d9::validate(record.definition);out.push_back(std::move(record));
+    }
+    std::sort(out.begin(),out.end(),[](const auto& a,const auto& b){return a.address<b.address;});return out;
+}
