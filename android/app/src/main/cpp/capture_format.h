@@ -160,6 +160,8 @@ struct Capture {
     // Graphics objects as (guest address, kind): contents are not stored, so this capture can only
     // be loaded into the session that still holds exactly these objects.
     std::vector<std::pair<uint32_t, uint32_t>> graphics;
+    // Initialized critical sections (sorted). Their owner and recursion live in guest memory.
+    std::vector<uint32_t> criticalSections;
 };
 
 using Bytes = std::vector<uint8_t>;
@@ -232,6 +234,9 @@ inline void validate(const Capture& capture) {
     }
     require(capture.graphics.size() <= (size_t(1) << 20), "Too many graphics objects");
     for (size_t i = 1; i < capture.graphics.size(); ++i) require(capture.graphics[i - 1].first < capture.graphics[i].first, "Graphics objects must be sorted and unique");
+    require(capture.criticalSections.size() <= maxObjects * 4, "Too many critical sections");
+    for (size_t i = 0; i < capture.criticalSections.size(); ++i)
+        require(capture.criticalSections[i] >= capture.pageSize && (!i || capture.criticalSections[i - 1] < capture.criticalSections[i]), "Critical sections must be sorted and unique");
     require(capture.files.size() <= maxObjects, "Too many open files");
     for (size_t i = 0; i < capture.files.size(); ++i) {
         const auto& file = capture.files[i];
@@ -351,6 +356,8 @@ inline Bytes encode(const Capture& capture) {
     }
     word(payload, uint32_t(capture.graphics.size()));
     for (const auto& item : capture.graphics) { word(payload, item.first); word(payload, item.second); }
+    word(payload, uint32_t(capture.criticalSections.size()));
+    for (uint32_t address : capture.criticalSections) word(payload, address);
     word(payload, capture.heapNext); word(payload, uint32_t(capture.heaps.size()));
     for (const auto& heap : capture.heaps) {
         word(payload, heap.id); word(payload, heap.options); word(payload, heap.maximum); word(payload, uint32_t(heap.blocks.size()));
@@ -443,6 +450,8 @@ inline Capture decode(const Bytes& file) {
         }
         uint32_t graphics = reader.word(); require(graphics <= (1u << 20) && size_t(graphics) * 8 <= payload.size() - reader.offset, "Too many graphics objects");
         for (uint32_t i = 0; i < graphics; ++i) { uint32_t address = reader.word(); capture.graphics.emplace_back(address, reader.word()); }
+        uint32_t sections = reader.word(); require(sections <= maxObjects * 4, "Too many critical sections");
+        for (uint32_t i = 0; i < sections; ++i) capture.criticalSections.push_back(reader.word());
         capture.heapNext = reader.word();
         uint32_t heaps = reader.word(); require(heaps <= maxObjects, "Too many heaps");
         for (uint32_t i = 0; i < heaps; ++i) {

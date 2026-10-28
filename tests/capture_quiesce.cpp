@@ -51,6 +51,7 @@ nfs_capture::Capture sample() {
     buffer.publishes = 6; buffer.locked = true; buffer.lockOffset = 4096; buffer.lockBytes = 2048; buffer.volume = 0xfffffc18u;
     capture.sounds = {device, buffer};
     capture.graphics = {{0x10000300u, 2u}, {0x10000310u, 3u}, {0x10000320u, 5u}};
+    capture.criticalSections = {0x864f00u, 0x10806348u};
     capture.omitted &= ~omitHeap; capture.heapNext = 0xf0000108u;
     capture.heaps.push_back({0xf0000100u, 0u, 0u, {{0x10000000u, 32u, 31u}, {0x10000020u, 4096u, 4000u}}});
     capture.heaps.push_back({0xf0000104u, 4u, 65536u, {}});
@@ -87,7 +88,7 @@ bool same(const nfs_capture::Capture& left, const nfs_capture::Capture& right) {
         if (a.position != b.position || a.staleFrames != b.staleFrames || a.left != b.left || a.right != b.right) return false;
         if (a.playing != b.playing || a.loop != b.loop || a.publishes != b.publishes) return false;
     }
-    if (left.graphics != right.graphics) return false;
+    if (left.graphics != right.graphics || left.criticalSections != right.criticalSections) return false;
     if (left.heapNext != right.heapNext || left.heaps.size() != right.heaps.size()) return false;
     for (size_t i = 0; i < left.heaps.size(); ++i) {
         const auto& a = left.heaps[i]; const auto& b = right.heaps[i];
@@ -189,8 +190,8 @@ int main() {
     expect(careerPath("appdata/Roaming/x") && careerPath("DOCUMENTS/a") && !careerPath("GLOBAL/documents"), "career paths");
     {
         // A schema 1 file has no files section: drop it, restamp the header and read it back.
-        auto older = sample(); older.files.clear(); older.heaps.clear(); older.heapNext = 0; older.omitted |= omitHeap | omitAudio; older.sounds.clear(); older.graphics.clear();
-        auto bytes = encode(older); bytes.resize(bytes.size() - 20); // file, sound and graphics counts, heap next, heap count
+        auto older = sample(); older.files.clear(); older.heaps.clear(); older.heapNext = 0; older.omitted |= omitHeap | omitAudio; older.sounds.clear(); older.graphics.clear(); older.criticalSections.clear();
+        auto bytes = encode(older); bytes.resize(bytes.size() - 24); // file, sound, graphics and section counts, heap next, heap count
         Bytes payload(bytes.begin() + 19, bytes.end());
         Bytes header = {'N','F','S','C','A','P','1'}; word(header, 1); word(header, uint32_t(payload.size())); word(header, crc(payload));
         header.insert(header.end(), payload.begin(), payload.end());

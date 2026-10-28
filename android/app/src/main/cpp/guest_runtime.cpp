@@ -186,6 +186,10 @@ struct ParkedGuest {
     nfs_capture::WaitKind wait=nfs_capture::WaitKind::Slice;
 };
 std::map<uint32_t,ParkedGuest> parkedThreads;
+// A load in progress: each parked worker, when it next gets the machine, abandons its wait and
+// rebuilds its stack from these registers and frames (guarded by the machine lock).
+struct PendingRewind {State cpu;std::vector<nfs_capture::Frame> frames;};
+std::map<uint32_t,PendingRewind> pendingRewinds;
 #endif
 std::vector<Import> imports;
 std::map<std::string,uint32_t> modules;
@@ -431,6 +435,7 @@ void publishPark(const char* label){
 }
 #ifdef NFS_RESUMABLE
 void maybeWriteCapture();
+void maybeLoadCapture();
 #endif
 struct HintStash { uint64_t busy=0; unsigned limit=0,refresh=0; bool pending=false; };
 HintStash hintStash;
@@ -442,6 +447,9 @@ void flushGuestPerformanceHint(){
 // Armed only for the frame-cap wait. Runs after the machine lock drops so the
 // hint's system call is not holding the guest thread's turn.
 thread_local void (*beforeGuestWait)()=nullptr;
+#ifdef NFS_RESUMABLE
+void takePendingRewind();
+#endif
 void yieldGuestMachine(unsigned milliseconds=0,std::chrono::steady_clock::time_point deadline={},const char* parkLabel=nullptr) {
     if(!machineLease||!machineLease->owns_lock())throw GuestStop("Guest scheduler ownership missing");
     {auto& trace=currentTrace();trace.func=g_cur_func;trace.esp=g_esp;}
@@ -451,6 +459,9 @@ void yieldGuestMachine(unsigned milliseconds=0,std::chrono::steady_clock::time_p
     if(deadline!=std::chrono::steady_clock::time_point{})std::this_thread::sleep_until(deadline);
     else if(milliseconds)std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));else std::this_thread::yield();
     machineLease->lock();saved.load();
+#ifdef NFS_RESUMABLE
+    if(!pendingRewinds.empty())takePendingRewind();
+#endif
 }
 thread_local bool renderThread=false;
 // Render-thread slice handovers and the time spent getting the machine back.
@@ -644,7 +655,7 @@ void d3dDispatch(){
 #ifdef NFS_RESUMABLE
     // Before Present runs, so a rebuild re-runs this same call. A rebuild throw
     // skips the capture; the capture runs only when the rebuild test returns.
-    if(d3dToken==0x7e002110u){maybeRebuildStack();maybeWriteCapture();}
+    if(d3dToken==0x7e002110u){maybeRebuildStack();maybeWriteCapture();maybeLoadCapture();}
 #endif
     // The arguments are read in place on the guest stack (one bounds check)
     // instead of copying 128 bytes for each of the ~40k calls of a race frame.
@@ -819,6 +830,28 @@ std::atomic<bool> lanBroadcastWanted{false};
 #ifndef NFS_GIT_IDENTITY
 #define NFS_GIT_IDENTITY "0000000000000000000000000000000000000000000000000000000000000000"
 #endif
+// Every other live thread parked at a resumable point (or idle outside guest code), and this
+// presenting thread resumable: the moment a capture is written or loaded. Null when ready.
+const char* quiesceProblem(std::vector<nfs_capture::ThreadView>& views,uint32_t& selfAt,uint32_t& blockedId){
+    views.clear();views.reserve(guestThreads.size()+1);
+    const char* selfBlocker=captureBlocker(selfAt);
+    nfs_capture::ThreadView self;
+    self.id=guestThreadId;self.alive=true;self.capturer=true;self.parked=true;
+    self.resumable=selfBlocker==nullptr;self.wait=nfs_capture::WaitKind::Present;self.blockedAt=selfAt;
+    views.push_back(self);
+    for(const auto& thread:guestThreads){
+        if(!thread->started||thread->done||thread->id==guestThreadId)continue;
+        nfs_capture::ThreadView view;view.id=thread->id;view.alive=true;
+        auto found=parkedThreads.find(thread->id);
+        if(found==parkedThreads.end())view.parked=false;
+        else{
+            const ParkedGuest& park=found->second;view.parked=true;view.outsideGuest=park.outsideGuest;
+            view.resumable=park.blocker==nullptr;view.wait=park.wait;view.blockedAt=park.blockedAt;
+        }
+        views.push_back(view);
+    }
+    return nfs_capture::quiesceBlocker(views.data(),views.size(),blockedId);
+}
 void maybeWriteCapture(){
 #ifdef __ANDROID__
     // One shot per 0->1 edge of debug.nfs.capture. Retries until every live
@@ -838,25 +871,8 @@ void maybeWriteCapture(){
     if(mode!=1||done||!memory)return;
     auto due=[&]{return now-lastLog>=std::chrono::seconds(2);};
     try{
-        std::vector<nfs_capture::ThreadView> views;views.reserve(guestThreads.size()+1);
-        uint32_t selfAt=0;const char* selfBlocker=captureBlocker(selfAt);
-        nfs_capture::ThreadView self;
-        self.id=guestThreadId;self.alive=true;self.capturer=true;self.parked=true;
-        self.resumable=selfBlocker==nullptr;self.wait=nfs_capture::WaitKind::Present;self.blockedAt=selfAt;
-        views.push_back(self);
-        for(const auto& thread:guestThreads){
-            if(!thread->started||thread->done||thread->id==guestThreadId)continue;
-            nfs_capture::ThreadView view;view.id=thread->id;view.alive=true;
-            auto found=parkedThreads.find(thread->id);
-            if(found==parkedThreads.end())view.parked=false;
-            else{
-                const ParkedGuest& park=found->second;view.parked=true;view.outsideGuest=park.outsideGuest;
-                view.resumable=park.blocker==nullptr;view.wait=park.wait;view.blockedAt=park.blockedAt;
-            }
-            views.push_back(view);
-        }
-        uint32_t blockedId=0;
-        if(const char* reason=nfs_capture::quiesceBlocker(views.data(),views.size(),blockedId)){
+        std::vector<nfs_capture::ThreadView> views;uint32_t selfAt=0,blockedId=0;
+        if(const char* reason=quiesceProblem(views,selfAt,blockedId)){
             if(due()){lastLog=now;uint32_t at=0;for(const auto& view:views)if(view.id==blockedId)at=view.blockedAt;
                 NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSCapture","not ready: thread %u %s @%08x",blockedId,reason,at);}
             return;
@@ -936,6 +952,7 @@ void maybeWriteCapture(){
         });
         nfs_capture::Inventory files;files.kind=1;files.count=uint32_t(fileHandles.size());capture.inventory.push_back(files);
         capture.graphics=d3d9ObjectList();
+        for(auto& entry:criticalSections)capture.criticalSections.push_back(entry.first);
         capture.sounds=captureSoundObjects();capture.omitted&=~nfs_capture::omitAudio;
         {auto state=heaps->exportState();capture.heapNext=state.next;
             for(auto& record:state.heaps){nfs_capture::HeapImage heap;heap.id=record.id;heap.options=record.options;heap.maximum=record.maximum;
@@ -958,6 +975,119 @@ void maybeWriteCapture(){
     }catch(const std::exception& error){
         if(due()){lastLog=now;NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSCapture","capture failed: %s",error.what());}
     }
+#endif
+}
+State stateFromImage(const nfs_capture::CpuImage& cpu){
+    State state;
+    state.eax=cpu.gpr[0];state.ecx=cpu.gpr[1];state.edx=cpu.gpr[2];state.esp=cpu.gpr[3];
+    state.ebx=cpu.gpr[4];state.esi=cpu.gpr[5];state.edi=cpu.gpr[6];state.ebp=cpu.gpr[7];
+    state.fs=cpu.fs;state.gs=cpu.gs;state.cur=cpu.cur;std::memcpy(state.flags,cpu.flags,sizeof state.flags);state.mxcsr=cpu.mxcsr;
+    std::memcpy(state.segments,cpu.segments,sizeof state.segments);state.cw=uint16_t(cpu.cw);state.top=int(cpu.top);
+    std::memcpy(state.st,cpu.st,sizeof state.st);std::memcpy(state.mm,cpu.mm,sizeof state.mm);
+    for(unsigned i=0;i<8;++i)std::memcpy(&state.xmm[i],cpu.xmm[i],16);
+    return state;
+}
+RebuildRequest rewindRequest(const PendingRewind& rewind){
+    RebuildRequest request;request.top=rewind.cpu;
+    for(const auto& frame:rewind.frames)request.frames.push_back({frame.function,frame.site,frame.target,frame.fpuCompare,frame.direction});
+    return request;
+}
+// Called by a parked worker when it gets the machine back during a load.
+void takePendingRewind(){
+    auto found=pendingRewinds.find(guestThreadId);if(found==pendingRewinds.end())return;
+    auto request=rewindRequest(found->second);pendingRewinds.erase(found);
+    {auto& trace=currentTrace();for(auto& slot:trace.held)slot=0;for(auto& slot:trace.heldAt)slot=0;}
+    throw request;
+}
+// Load within the same session: `adb shell setprop debug.nfs.load <capture path>`. Rewinds guest
+// memory, heaps, files, sounds, kernel objects and every thread to the capture. Graphics contents
+// are not in a capture, so the D3D9 objects must be exactly those it lists; otherwise nothing
+// changes. Career files are reopened as they are now, never rolled back. One shot per new path.
+void maybeLoadCapture(){
+#ifdef __ANDROID__
+    static std::string handled;static auto lastRead=std::chrono::steady_clock::time_point{};
+    auto now=std::chrono::steady_clock::now();
+    static std::string wanted;
+    if(now-lastRead>=std::chrono::seconds(1)){lastRead=now;char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.load",value);wanted=value;}
+    if(wanted.empty()||wanted==handled||!memory)return;
+    std::vector<nfs_capture::ThreadView> views;uint32_t selfAt=0,blockedId=0;
+    if(quiesceProblem(views,selfAt,blockedId))return; // try again next frame
+    handled=wanted;
+    nfs_capture::Capture capture;
+    try{
+        std::ifstream in(wanted,std::ios::binary);if(!in)throw std::runtime_error("cannot read the capture file");
+        nfs_capture::Bytes bytes((std::istreambuf_iterator<char>(in)),std::istreambuf_iterator<char>());
+        capture=nfs_capture::decode(bytes);
+        if(capture.build!=NFS_GIT_IDENTITY)throw std::runtime_error("capture is from another build");
+        if(capture.game!=nfs_capture::sha256File(guestExecutable))throw std::runtime_error("capture is from another game executable");
+        if(capture.graphics!=d3d9ObjectList())throw std::runtime_error("graphics objects changed since the capture");
+        std::map<uint32_t,const nfs_capture::ThreadImage*> captured;
+        for(const auto& thread:capture.threads)captured[thread.id]=&thread;
+        if(captured.size()!=views.size())throw std::runtime_error("the set of threads changed since the capture");
+        for(const auto& view:views){
+            auto image=captured.find(view.id);
+            if(image==captured.end())throw std::runtime_error("thread "+std::to_string(view.id)+" is not in the capture");
+            if(image->second->capturer!=view.capturer||image->second->outsideGuest!=view.outsideGuest)throw std::runtime_error("thread roles changed since the capture");
+            if(!view.capturer&&!view.outsideGuest){
+                const auto& now=parkedThreads.at(view.id).frames;const auto& then=image->second->frames;
+                if(now.empty()||then.empty()||now.front().function!=then.front().function)throw std::runtime_error("thread "+std::to_string(view.id)+" runs a different entry");
+            }
+        }
+        const nfs_capture::ThreadImage* self=captured.at(guestThreadId);
+        if(self->frames.empty()||nfs_frame_depth<=resumableBase||nfs_frames[resumableBase].function!=self->frames.front().function)
+            throw std::runtime_error("the presenting thread runs a different entry");
+    }catch(const std::exception& error){
+        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSCapture","load refused, nothing changed: %s",error.what());
+        return;
+    }
+    // From here the game state is replaced; a failure cannot be undone and stops the game.
+    try{
+        std::vector<std::pair<uint32_t,uint32_t>> opened;
+        memory->visitProtections([&](uint32_t address,uint32_t){opened.emplace_back(address,0);});
+        uint32_t previous=0;uint64_t page=memory->pageSize();
+        for(auto& item:opened)memory->protect(item.first,page,4,previous);
+        for(const auto& region:capture.regions){
+            memory->commit(region.address,region.bytes.size());
+            std::memcpy(memory->address(region.address,region.bytes.size()),region.bytes.data(),region.bytes.size());
+        }
+        for(const auto& protection:capture.protections)
+            if(memory->readable(protection.address,1)||protection.flags==1)memory->protect(protection.address,page,protection.flags,previous);
+        GuestHeaps::Snapshot heapState{capture.heapNext,{}};
+        for(const auto& heap:capture.heaps){GuestHeaps::HeapRecord record{heap.id,heap.options,heap.maximum,{}};
+            for(const auto& block:heap.blocks)record.blocks.push_back({block.address,block.capacity,block.requested});
+            heapState.heaps.push_back(std::move(record));}
+        if(!capture.heaps.empty())heaps->importState(heapState);
+        restoreFiles(capture.files);
+        if(!(capture.omitted&nfs_capture::omitAudio))restoreSoundObjects(capture.sounds);
+        {std::map<uint32_t,std::shared_ptr<GuestEvent>> events;namedEvents.clear();
+            for(const auto& image:capture.events){auto event=std::make_shared<GuestEvent>(GuestEvent{image.manual,image.signaled});
+                events[image.id]=event;if(!image.name.empty())namedEvents[image.name]=event;}
+            eventHandles.swap(events);}
+        {std::map<uint32_t,std::shared_ptr<GuestMutex>> mutexes;namedMutexes.clear();
+            for(const auto& image:capture.mutexes){auto mutex=std::make_shared<GuestMutex>();mutex->owner=image.owner;mutex->depth=image.depth;mutex->abandoned=image.abandoned;
+                mutexes[image.id]=mutex;if(!image.name.empty())namedMutexes[image.name]=mutex;}
+            mutexHandles.swap(mutexes);}
+        {auto clock=std::chrono::steady_clock::now();std::map<uint32_t,std::shared_ptr<GuestTimer>> timers;
+            for(const auto& image:capture.timers){auto timer=std::make_shared<GuestTimer>();
+                timer->id=image.id;timer->delay=image.delay;timer->callback=image.callback;timer->parameter=image.parameter;
+                timer->periodic=image.periodic;timer->cancelled=image.cancelled;timer->due=clock+std::chrono::milliseconds(std::max<int64_t>(image.dueMs,0));
+                timers[image.id]=timer;}
+            timerHandles.swap(timers);}
+        {std::map<uint32_t,std::shared_ptr<std::recursive_mutex>> sections;pendingCriticalDeletes.clear();
+            for(uint32_t address:capture.criticalSections)sections[address]=std::make_shared<std::recursive_mutex>();
+            criticalSections.swap(sections);}
+        pendingRewinds.clear();
+        for(const auto& thread:capture.threads){
+            if(thread.capturer||thread.outsideGuest)continue;
+            pendingRewinds[thread.id]=PendingRewind{stateFromImage(thread.cpu),thread.frames};
+        }
+        {std::lock_guard<std::mutex> lock(threadTracesMutex);for(auto& [id,trace]:threadTraces){for(auto& slot:trace->held)slot=0;for(auto& slot:trace->heldAt)slot=0;}}
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSCapture","loaded %s: %zu threads, %zu regions; rewinding",wanted.c_str(),capture.threads.size(),capture.regions.size());
+    }catch(const std::exception& error){
+        throw GuestStop(std::string("Load failed after the game state was replaced: ")+error.what());
+    }
+    const auto* self=&capture.threads.front();for(const auto& thread:capture.threads)if(thread.capturer)self=&thread;
+    throw rewindRequest(PendingRewind{stateFromImage(self->cpu),self->frames});
 #endif
 }
 #endif
