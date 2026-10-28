@@ -63,6 +63,29 @@ void createFile(){
     if(descriptor<0){lastError=fileError();ret(UINT32_MAX,7);return;}uint32_t handle=nextFileHandle++;fileHandles.emplace(handle,descriptor);
     fileOrigins[handle]=FileOrigin{path.lexically_relative(std::filesystem::weakly_canonical(hostGameRoot)).generic_string(),access};lastError=(disposition==2||disposition==4)&&existed?183:0;ret(handle,7);
 }
+#ifdef NFS_RESUMABLE
+// Restore: reopen each captured handle by path with its access, at its position. Never creates
+// or truncates, so a career or profile file keeps its newest contents (saves are not rolled back).
+// A missing file fails the restore rather than leaving the game a dead handle.
+[[maybe_unused]] void restoreFiles(const std::vector<nfs_capture::FileImage>& files){
+    for(auto& [handle,descriptor]:fileHandles)::close(descriptor);
+    fileHandles.clear();fileOrigins.clear();
+    uint32_t next=0xf0060000u;
+    for(const auto& file:files){
+        auto path=gamePath(file.path);
+        int options=file.access&0x40000000u?(file.access&0x80000000u?O_RDWR:O_WRONLY):O_RDONLY;
+        int descriptor=::open(path.c_str(),options|O_CLOEXEC);
+        if(descriptor<0)throw GuestStop("Restore could not reopen "+file.path);
+        off_t size=::lseek(descriptor,0,SEEK_END);
+        // A file that shrank since the capture (a save rewritten shorter) keeps its end, not a hole.
+        off_t target=off_t(std::min<uint64_t>(file.offset,uint64_t(size<0?0:size)));
+        if(::lseek(descriptor,target,SEEK_SET)<0){::close(descriptor);throw GuestStop("Restore could not seek "+file.path);}
+        fileHandles.emplace(file.handle,descriptor);fileOrigins[file.handle]=FileOrigin{file.path,file.access};
+        next=std::max(next,file.handle+1);
+    }
+    nextFileHandle=next;
+}
+#endif
 void readFile(){
     auto file=fileHandles.find(arg(0));if(file==fileHandles.end()){lastError=6;ret(0,5);return;}if(arg(4))throw GuestStop("Overlapped ReadFile pending");
     if(arg(3))write32(arg(3),0);ssize_t count;do{count=::read(file->second,ptr(arg(1),arg(2)),arg(2));}while(count<0&&errno==EINTR);
