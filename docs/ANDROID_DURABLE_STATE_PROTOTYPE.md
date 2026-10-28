@@ -300,3 +300,21 @@ objects restorable. Career and profile files are not opened. This file is not a 
 Host check: `tests/capture_quiesce.cpp`, run by `scripts/check_phone_source.py`. The runtime translation unit compiles with the
 NDK both with and without `NFS_RESUMABLE`. A phone file does not exist until a resumable build is installed and the property is
 set during play.
+
+### Restore inventory: host state behind guest handles (2026-10-28)
+
+A capture already holds guest memory, thread registers and frames, and the logical events, mutexes and timers. Everything else the guest refers to is a handle whose meaning lives in a host table, and a fresh process must rebuild each table:
+
+| Host table | Guest sees | Data lives | Restore |
+|---|---|---|---|
+| `GuestHeaps` (`guest_heap.h`) | heap pointers | host block maps | serialize the maps |
+| `fileHandles` (`guest_files.inc`) | `0xF006xxxx` handles | host fds; the path is not kept | keep path, access and offset at open; reopen (proved in `check_file_resources.py`); career files are never rolled back |
+| `soundObjects` (`guest_audio.inc`) | proxy objects with a 24-entry method table in guest memory | voice samples, position, volume, pan, frequency on the host | save voices (proved in `check_audio_state.py`) |
+| `objects` (`d3d9_bridge.cpp`) | proxy objects with method tables of `0x7E00xxxx` tokens in guest memory | native DXVK objects; contents mostly on the GPU | recreate each object with its creation parameters, then its contents |
+
+Direct3D is the open design question. Guest memory restores the proxies unchanged, so only the address-to-native map and the contents need rebuilding. Proposed split, to be checked against a race-time inventory:
+- managed and system-memory pool resources: read back through DXVK at capture time and store;
+- default-pool render targets, depth buffers and dynamic buffers: recreate empty, since the game rewrites them every frame;
+- default-pool static buffers, if any: shadow the bytes on Unlock.
+
+The device itself (render states, transforms, bound streams and textures, shaders) is replayed from a recorded state block (proved in `check_graphics_state.py`). Next measurement: object counts and bytes per kind and pool during a race.
