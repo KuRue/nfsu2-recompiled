@@ -31,7 +31,11 @@ namespace {
 constexpr uint32_t methodBase=0x7e000000;
 enum class Kind:uint32_t {D3D9=1,Device=2,Texture=3,Cube=4,Surface=5,VertexBuffer=6,IndexBuffer=7,
     VertexShader=8,PixelShader=9,Declaration=10,StateBlock=11,Query=12,SwapChain=13,VolumeTexture=14,Volume=15};
-struct Object {IUnknown* native;Kind kind;uint32_t references=1;CompressedView compressed;uint32_t parent=0;uint32_t children=0;};
+// creation: for objects the game created through the device, the Create method and its
+// arguments (blob: declaration elements or shader bytecode they point to). A restore recreates
+// the object from these; objects without one are derived (surface levels, back buffers).
+struct Creation {uint32_t method=0;std::vector<uint32_t> args;std::vector<uint8_t> blob;};
+struct Object {IUnknown* native;Kind kind;uint32_t references=1;CompressedView compressed;uint32_t parent=0;uint32_t children=0;std::shared_ptr<Creation> creation;};
 std::unordered_map<uint32_t,Object> objects;
 // Nearly every call of a frame targets the same object (the device). Element
 // pointers of an unordered_map survive rehashing; only erasing an object
@@ -100,7 +104,9 @@ std::string inventoryText(){
     }
     static const char* kinds[]={"?","D3D9","Device","Texture","Cube","Surface","VB","IB","VS","PS","Decl","StateBlock","Query","SwapChain","VolTex","Volume"};
     static const char* pools[]={"default","managed","system","scratch","?","?","?","?","?","-","default-dynamic","managed-dynamic","system-dynamic"};
+    unsigned recorded=0,derived=0;for(auto& [address,object]:objects)(object.creation?recorded:derived)++;
     std::string out;char item[96];
+    std::snprintf(item,sizeof item," recorded=%u derived=%u",recorded,derived);out+=item;
     for(auto& [key,row]:rows){std::snprintf(item,sizeof item," %s/%s=%u(%.1fMB)",kinds[key.first<16?key.first:0],pools[key.second<13?key.second:4],row.count,row.bytes/1048576);out+=item;}
     return out;
 }
@@ -217,7 +223,32 @@ void noteVertexDeclaration(const D3DVERTEXELEMENT9* elements){
 // crash (null dereference, Mali reports); until a Reset succeeds the device reads as
 // lost and needing a reset, which the game handles as on Windows.
 bool deviceResetPending=false;
+uint32_t dispatchGuestD3D9Call(uint32_t token,const uint32_t* args,uint32_t* argumentCount);
+// Device Create methods and the argument holding the new object's address.
+int creationOutput(uint32_t method){
+    switch(method){case 23:return 7;case 24:return 8;case 25:return 6;case 26:case 27:case 36:return 5;case 28:case 29:return 7;
+        case 59:case 86:case 91:case 106:case 118:return 2;default:return -1;}
+}
+void recordCreation(uint32_t method,const uint32_t* args,uint32_t count){
+    int output=creationOutput(method);if(output<0||!args[output])return;
+    uint32_t address;std::memcpy(&address,pointer(args[output]),4);
+    auto found=objects.find(address);if(found==objects.end()||found->second.creation)return;
+    auto creation=std::make_shared<Creation>();creation->method=method;creation->args.assign(args,args+count);
+    if(method==86&&args[1]){auto* elements=static_cast<const uint8_t*>(pointer(args[1]));
+        for(unsigned i=0;i<65;++i){creation->blob.insert(creation->blob.end(),elements+i*8,elements+i*8+8);if(elements[i*8]==0xff&&elements[i*8+1]==0)break;}}
+    if((method==91||method==106)&&args[1]){auto* tokens=static_cast<const uint32_t*>(pointer(args[1]));
+        for(unsigned i=0;i<65536;++i){auto* t=reinterpret_cast<const uint8_t*>(tokens+i);creation->blob.insert(creation->blob.end(),t,t+4);if(tokens[i]==0x0000ffffu)break;}}
+    found->second.creation=std::move(creation);
+}
 uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumentCount){
+    uint32_t result=dispatchGuestD3D9Call(token,args,argumentCount);
+    if((token-methodBase)/4096==2&&SUCCEEDED(static_cast<HRESULT>(result))){
+        uint32_t method=((token-methodBase)%4096)/16;
+        if(creationOutput(method)>=0)recordCreation(method,args,*argumentCount);
+    }
+    return result;
+}
+uint32_t dispatchGuestD3D9Call(uint32_t token,const uint32_t* args,uint32_t* argumentCount){
     uint32_t kind=(token-methodBase)/4096,method=((token-methodBase)%4096)/16;
     Object* entry=findObject(args[0]);
     if(!entry||static_cast<uint32_t>(entry->kind)!=kind){
