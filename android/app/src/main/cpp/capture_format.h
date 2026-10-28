@@ -18,7 +18,8 @@
 namespace nfs_capture {
 constexpr uint32_t schema = 2; // 2 adds open files; 1 is still read
 constexpr uint32_t omitGraphics = 1u, omitAudio = 2u, omitHeap = 4u, omitFileContents = 8u;
-constexpr uint32_t omitRequired = omitGraphics | omitAudio | omitHeap | omitFileContents;
+// Heap bookkeeping is stored from schema 2; omitHeap must then be clear, and set when it is not.
+constexpr uint32_t omitRequired = omitGraphics | omitAudio | omitFileContents;
 constexpr uint64_t maxBytes = 768ull << 20;
 constexpr size_t maxThreads = 64, maxFrames = 256, maxObjects = 4096, maxRegions = 4096, maxName = 260;
 
@@ -121,6 +122,8 @@ struct TimerImage {
 struct Region { uint32_t address = 0; std::vector<uint8_t> bytes; };
 // An open file: reopened by path at its position. Contents are not stored, and a career or
 // profile file (under the Windows profile folders) is reopened as it is now, never rolled back.
+struct HeapBlock { uint32_t address = 0, capacity = 0, requested = 0; };
+struct HeapImage { uint32_t id = 0, options = 0, maximum = 0; std::vector<HeapBlock> blocks; };
 struct FileImage { uint32_t handle = 0, access = 0; uint64_t offset = 0; bool career = false; std::string path; };
 inline bool careerPath(const std::string& path) {
     std::string lower = path; for (auto& c : lower) c = char(std::tolower(static_cast<unsigned char>(c)));
@@ -131,7 +134,7 @@ struct Inventory { uint32_t kind = 0, count = 0; };
 struct Capture {
     std::string build, game;
     uint32_t careerRollback = 0;
-    uint32_t omitted = omitRequired;
+    uint32_t omitted = omitRequired | omitHeap;
     uint32_t pageSize = 4096;
     std::vector<ThreadImage> threads;
     std::vector<EventImage> events;
@@ -141,6 +144,8 @@ struct Capture {
     std::vector<Protect> protections;
     std::vector<Inventory> inventory;
     std::vector<FileImage> files;
+    uint32_t heapNext = 0;
+    std::vector<HeapImage> heaps;
 };
 
 using Bytes = std::vector<uint8_t>;
@@ -191,6 +196,11 @@ inline void validate(const Capture& capture) {
     for (const auto& page : capture.protections) {
         require(page.address % capture.pageSize == 0 && allowedProtect(page.flags), "Invalid page protection");
     }
+    require(capture.heaps.empty() == bool(capture.omitted & omitHeap), "Capture heap flag does not match its heaps");
+    require(capture.heaps.size() <= maxObjects, "Too many heaps");
+    size_t blocks = 0;
+    for (const auto& heap : capture.heaps) blocks += heap.blocks.size();
+    require(blocks <= (size_t(1) << 22), "Too many heap blocks");
     require(capture.files.size() <= maxObjects, "Too many open files");
     for (size_t i = 0; i < capture.files.size(); ++i) {
         const auto& file = capture.files[i];
@@ -300,6 +310,11 @@ inline Bytes encode(const Capture& capture) {
     for (const auto& item : capture.files) {
         word(payload, item.handle); word(payload, item.access); qword(payload, item.offset); word(payload, item.career ? 1u : 0u); putName(payload, item.path);
     }
+    word(payload, capture.heapNext); word(payload, uint32_t(capture.heaps.size()));
+    for (const auto& heap : capture.heaps) {
+        word(payload, heap.id); word(payload, heap.options); word(payload, heap.maximum); word(payload, uint32_t(heap.blocks.size()));
+        for (const auto& block : heap.blocks) { word(payload, block.address); word(payload, block.capacity); word(payload, block.requested); }
+    }
     Bytes file = {'N','F','S','C','A','P','1'};
     word(file, schema); word(file, uint32_t(payload.size())); word(file, crc(payload));
     file.insert(file.end(), payload.begin(), payload.end());
@@ -374,6 +389,14 @@ inline Capture decode(const Bytes& file) {
         for (uint32_t i = 0; i < files; ++i) {
             FileImage item; item.handle = reader.word(); item.access = reader.word(); item.offset = reader.qword(); item.career = reader.word() != 0; item.path = reader.name();
             capture.files.push_back(std::move(item));
+        }
+        capture.heapNext = reader.word();
+        uint32_t heaps = reader.word(); require(heaps <= maxObjects, "Too many heaps");
+        for (uint32_t i = 0; i < heaps; ++i) {
+            HeapImage heap; heap.id = reader.word(); heap.options = reader.word(); heap.maximum = reader.word();
+            uint32_t count = reader.word(); require(count <= (1u << 22) && size_t(count) * 12 <= payload.size() - reader.offset, "Too many heap blocks");
+            for (uint32_t n = 0; n < count; ++n) { HeapBlock block; block.address = reader.word(); block.capacity = reader.word(); block.requested = reader.word(); heap.blocks.push_back(block); }
+            capture.heaps.push_back(std::move(heap));
         }
     }
     require(reader.offset == payload.size(), "Unexpected trailing capture");

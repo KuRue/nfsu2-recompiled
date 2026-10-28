@@ -3,6 +3,7 @@
 #include <map>
 #include <algorithm>
 #include <vector>
+#include <stdexcept>
 
 // Guest heap addresses and opaque handles never depend on host malloc pointers.
 // Calls are serialized by the guest machine lock.
@@ -38,6 +39,51 @@ private:
     }
 public:
     static constexpr uint32_t process=0xf0000100u;
+    // Bookkeeping for a capture: heaps and their blocks. The free list is everything else
+    // inside the arenas, so it is rebuilt rather than stored.
+    struct BlockRecord { uint32_t address, capacity, requested; };
+    struct HeapRecord { uint32_t id, options, maximum; std::vector<BlockRecord> blocks; };
+    struct Snapshot { uint32_t next; std::vector<HeapRecord> heaps; };
+    Snapshot exportState() const {
+        Snapshot out{next_,{}};
+        for (auto& [id,heap]:heaps_) {
+            HeapRecord record{id,heap.options,heap.maximum,{}};
+            for (auto& [address,block]:heap.blocks) record.blocks.push_back({address,block.capacity,block.requested});
+            out.heaps.push_back(std::move(record));
+        }
+        return out;
+    }
+    // Replaces all bookkeeping. Throws without changing anything if a block leaves the arenas,
+    // overlaps another, or the process heap is missing. Guest memory is restored separately.
+    void importState(const Snapshot& state) {
+        std::map<uint32_t,Heap> heaps; std::map<uint32_t,uint32_t> used;
+        for (auto& record:state.heaps) {
+            if (record.id<process || (record.id&3) || !heaps.emplace(record.id,Heap{record.options,record.maximum,0,{}}).second)
+                throw std::runtime_error("Invalid heap in capture");
+            auto& heap=heaps.at(record.id);
+            for (auto& block:record.blocks) {
+                bool first=block.address>=firstArena && uint64_t(block.address)+block.capacity<=firstArenaEnd;
+                bool second=block.address>=secondArena && uint64_t(block.address)+block.capacity<=uint64_t(secondArena)+secondArenaSize;
+                if (!block.capacity || (block.capacity&15) || (block.address&15) || block.requested>block.capacity || !(first||second))
+                    throw std::runtime_error("Invalid heap block in capture");
+                if (!used.emplace(block.address,block.capacity).second) throw std::runtime_error("Duplicate heap block in capture");
+                heap.blocks[block.address]={block.capacity,block.requested}; heap.live+=block.capacity;
+            }
+        }
+        if (!heaps.count(process) || state.next<process+4 || (state.next&3)) throw std::runtime_error("Capture heap list is incomplete");
+        for (auto& [id,heap]:heaps) if (id>=state.next) throw std::runtime_error("Capture heap id beyond the next id");
+        uint64_t end=0;
+        for (auto& [address,capacity]:used) { if (address<end) throw std::runtime_error("Overlapping heap blocks in capture"); end=uint64_t(address)+capacity; }
+        std::map<uint32_t,uint32_t> free{{firstArena,firstArenaEnd-firstArena},{secondArena,secondArenaSize}};
+        heaps_.swap(heaps); free_.swap(free); next_=state.next;
+        for (auto& [address,capacity]:used) {
+            auto slot=std::prev(free_.upper_bound(address));
+            uint32_t start=slot->first,size=slot->second; free_.erase(slot);
+            if (address>start) free_[start]=address-start;
+            uint64_t tail=uint64_t(start)+size-(uint64_t(address)+capacity);
+            if (tail) free_[address+capacity]=uint32_t(tail);
+        }
+    }
     explicit GuestHeaps(GuestMemory& memory):memory_(memory) { heaps_.emplace(process,Heap{0,0,0,{}}); }
     uint32_t create(uint32_t options,uint32_t initial,uint32_t maximum) {
         if (maximum && initial>maximum) return 0;
@@ -119,5 +165,13 @@ inline void testGuestHeaps(GuestMemory& memory) {
     if(!h.free(heap,b) || h.free(heap,b) || !h.free(heap,barrier) || !h.destroy(heap)) throw std::runtime_error("Heap free/destroy failed");
     auto reused=h.alloc(other,0,31);
     if(reused!=a) throw std::runtime_error("Heap freed range reuse failed");
+    // Export and import: a copy makes the same next allocation as the original.
+    auto gap=h.alloc(other,0,100),after=h.alloc(other,0,40);h.free(other,gap);
+    GuestHeaps copy(memory);copy.importState(h.exportState());
+    if(copy.size(other,after)!=h.size(other,after)||copy.alloc(other,0,90)!=h.alloc(other,0,90)||copy.alloc(other,0,5000)!=h.alloc(other,0,5000))
+        throw std::runtime_error("Heap bookkeeping export/import failed");
+    auto broken=h.exportState();broken.heaps.back().blocks.push_back(broken.heaps.back().blocks.front());
+    bool rejected=false;try{GuestHeaps bad(memory);bad.importState(broken);}catch(const std::runtime_error&){rejected=true;}
+    if(!rejected) throw std::runtime_error("Heap import accepted a duplicate block");
     h.destroy(other);
 }

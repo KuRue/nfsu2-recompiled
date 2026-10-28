@@ -16,6 +16,7 @@ void expectThrow(const char* what, const nfs_capture::Bytes& file) {
 std::string hex64(char fill) { return std::string(64, fill); }
 
 nfs_capture::Capture sample() {
+    using namespace nfs_capture;
     nfs_capture::Capture capture;
     capture.build = hex64('a');
     capture.game = hex64('b');
@@ -42,6 +43,9 @@ nfs_capture::Capture sample() {
     capture.inventory.push_back({1u, 2u});
     capture.files.push_back({0xf0060000u, 0x80000000u, 123456u, false, "TRACKS/STREAML4RA.BUN"});
     capture.files.push_back({0xf0060001u, 0xc0000000u, 64u, true, "Documents/NFS Underground 2/Profile/save"});
+    capture.omitted &= ~omitHeap; capture.heapNext = 0xf0000108u;
+    capture.heaps.push_back({0xf0000100u, 0u, 0u, {{0x10000000u, 32u, 31u}, {0x10000020u, 4096u, 4000u}}});
+    capture.heaps.push_back({0xf0000104u, 4u, 65536u, {}});
     return capture;
 }
 bool sameCpu(const nfs_capture::CpuImage& a, const nfs_capture::CpuImage& b) {
@@ -65,6 +69,13 @@ bool same(const nfs_capture::Capture& left, const nfs_capture::Capture& right) {
     for (size_t i = 0; i < left.files.size(); ++i) {
         const auto& a = left.files[i]; const auto& b = right.files[i];
         if (a.handle != b.handle || a.access != b.access || a.offset != b.offset || a.career != b.career || a.path != b.path) return false;
+    }
+    if (left.heapNext != right.heapNext || left.heaps.size() != right.heaps.size()) return false;
+    for (size_t i = 0; i < left.heaps.size(); ++i) {
+        const auto& a = left.heaps[i]; const auto& b = right.heaps[i];
+        if (a.id != b.id || a.options != b.options || a.maximum != b.maximum || a.blocks.size() != b.blocks.size()) return false;
+        for (size_t n = 0; n < a.blocks.size(); ++n)
+            if (a.blocks[n].address != b.blocks[n].address || a.blocks[n].capacity != b.blocks[n].capacity || a.blocks[n].requested != b.blocks[n].requested) return false;
     }
     for (size_t i = 0; i < left.threads.size(); ++i) {
         const auto& a = left.threads[i]; const auto& b = right.threads[i];
@@ -136,6 +147,9 @@ int main() {
         threw = false; try { encode(escaped); } catch (const std::runtime_error&) { threw = true; }
         expect(threw, "file path must stay inside the game folder");
     }
+    auto noHeaps = sample(); noHeaps.heaps.clear();
+    threw = false; try { encode(noHeaps); } catch (const std::runtime_error&) { threw = true; }
+    expect(threw, "a capture without heaps must say so");
     auto hidden = sample(); hidden.files[1].career = false;
     threw = false; try { encode(hidden); } catch (const std::runtime_error&) { threw = true; }
     expect(threw, "a profile file must be marked career");
@@ -145,8 +159,8 @@ int main() {
     expect(careerPath("appdata/Roaming/x") && careerPath("DOCUMENTS/a") && !careerPath("GLOBAL/documents"), "career paths");
     {
         // A schema 1 file has no files section: drop it, restamp the header and read it back.
-        auto older = sample(); older.files.clear();
-        auto bytes = encode(older); bytes.resize(bytes.size() - 4);
+        auto older = sample(); older.files.clear(); older.heaps.clear(); older.heapNext = 0; older.omitted |= omitHeap;
+        auto bytes = encode(older); bytes.resize(bytes.size() - 12); // file count, heap next, heap count
         Bytes payload(bytes.begin() + 19, bytes.end());
         Bytes header = {'N','F','S','C','A','P','1'}; word(header, 1); word(header, uint32_t(payload.size())); word(header, crc(payload));
         header.insert(header.end(), payload.begin(), payload.end());
