@@ -860,3 +860,30 @@ Textures and cube maps now follow the VB/IB pattern: guest-format shadows at Unl
 
 ## 2026-10-28: device state captured and replayed, schema 7 (offline)
 Logs show the game uses no volume textures, offscreen/render-target surfaces or copy calls, so those are left out (a capture refuses unknown kinds through validation). Device state (render/stage/sampler states, textures, transforms, viewport, material, lights, clip planes, scissor, streams, indices, declaration/FVF, shaders, all constants, render targets, depth) is read at Present through the device getters and replayed through the setters on load, mapping HD-pack replacements back to the game's textures. Schema 7 adds it with a presence word; runtime captures always include it. Passed: new device_state mock test (also ASan/UBSan), format tests (also ASan/UBSan), all graphics checks, source checks, host startup, both APK builds. No phone run. Remaining for cross-session restore: recreate the whole graphics graph in a fresh process (device, programs, buffers, textures, derived surfaces, state blocks) and rebind guest proxies to the new natives.
+
+## 2026-10-28: release candidate 0.14.13 prepared (offline)
+
+Normal builds again use the long-tested host-mutex critical sections; only
+`-Pnfs.resumable=ON` builds lock on the guest fields that save states need
+(8b65a05). Phone source checks, the snapshot prototype and the graphics state
+proof pass locally; CI on 8b65a05 was still running when recorded. Both normal
+and resumable APKs build.
+
+Release candidate (normal build, save states not included):
+android/app/build/outputs/apk/debug/app-debug.apk
+versionCode 28, versionName 0.14.13-phone-dev-physics,
+SHA-256 9f1e9c1a227ecb77091e9f5927cd84c56ffb2a85846f8c37c600174061f54746.
+
+Draft changelog (first fork release; trim before publishing):
+- Controller defaults: Backbone Start/Select mapped (pause and world map)
+- Skip intro: movies auto-skip on resume
+- Self-driving benchmark with opponents
+- Frame pacing improvements
+- Deadlock recovery: a rare maxed-settings free-roam lockup now exits cleanly
+  to the launcher instead of hanging
+- Status box fix
+- Earlier fork work: phone presets, English launcher, save backup/restore,
+  themed option menus, pause-on-app-switch and RESUME split button
+
+Before release: install the RC on the phone, play one normal race and one
+benchmark run, then publish (ask the user first).
