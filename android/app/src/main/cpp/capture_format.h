@@ -3,6 +3,7 @@
 // audio, heap metadata and file contents are recorded as omitted on purpose,
 // and careerRollback must be zero so a later restore cannot roll career files back.
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -18,8 +19,9 @@
 namespace nfs_capture {
 constexpr uint32_t schema = 2; // 2 adds open files; 1 is still read
 constexpr uint32_t omitGraphics = 1u, omitAudio = 2u, omitHeap = 4u, omitFileContents = 8u;
-// Heap bookkeeping is stored from schema 2; omitHeap must then be clear, and set when it is not.
-constexpr uint32_t omitRequired = omitGraphics | omitAudio | omitFileContents;
+// Heap bookkeeping and sound objects are stored from schema 2; omitHeap and omitAudio are clear
+// only when they are.
+constexpr uint32_t omitRequired = omitGraphics | omitFileContents;
 constexpr uint64_t maxBytes = 768ull << 20;
 constexpr size_t maxThreads = 64, maxFrames = 256, maxObjects = 4096, maxRegions = 4096, maxName = 260;
 
@@ -122,6 +124,14 @@ struct TimerImage {
 struct Region { uint32_t address = 0; std::vector<uint8_t> bytes; };
 // An open file: reopened by path at its position. Contents are not stored, and a career or
 // profile file (under the Windows profile folders) is reopened as it is now, never rolled back.
+// A DirectSound object. Buffer samples are not stored: the guest copy at guestSamples is in
+// guest memory and the host voice is rebuilt from it. kind 1 is the device, 2 a buffer.
+struct SoundImage {
+    uint32_t address = 0, kind = 0, table = 0, references = 0, flags = 0, guestSamples = 0, volume = 0, pan = 0;
+    bool locked = false; uint32_t lockOffset = 0, lockBytes = 0;
+    bool voice = false; uint32_t sampleBytes = 0, channels = 0, bits = 0, rate = 0, frequency = 0, publishes = 0;
+    double position = 0, staleFrames = 0; float left = 1, right = 1; bool playing = false, loop = false;
+};
 struct HeapBlock { uint32_t address = 0, capacity = 0, requested = 0; };
 struct HeapImage { uint32_t id = 0, options = 0, maximum = 0; std::vector<HeapBlock> blocks; };
 struct FileImage { uint32_t handle = 0, access = 0; uint64_t offset = 0; bool career = false; std::string path; };
@@ -134,7 +144,7 @@ struct Inventory { uint32_t kind = 0, count = 0; };
 struct Capture {
     std::string build, game;
     uint32_t careerRollback = 0;
-    uint32_t omitted = omitRequired | omitHeap;
+    uint32_t omitted = omitRequired | omitHeap | omitAudio;
     uint32_t pageSize = 4096;
     std::vector<ThreadImage> threads;
     std::vector<EventImage> events;
@@ -146,6 +156,7 @@ struct Capture {
     std::vector<FileImage> files;
     uint32_t heapNext = 0;
     std::vector<HeapImage> heaps;
+    std::vector<SoundImage> sounds;
 };
 
 using Bytes = std::vector<uint8_t>;
@@ -201,6 +212,21 @@ inline void validate(const Capture& capture) {
     size_t blocks = 0;
     for (const auto& heap : capture.heaps) blocks += heap.blocks.size();
     require(blocks <= (size_t(1) << 22), "Too many heap blocks");
+    require(!(capture.omitted & omitAudio) || capture.sounds.empty(), "Capture marks audio omitted but lists sounds");
+    require(capture.sounds.size() <= maxObjects, "Too many sounds");
+    for (size_t i = 0; i < capture.sounds.size(); ++i) {
+        const auto& sound = capture.sounds[i];
+        require((sound.kind == 1 || sound.kind == 2) && sound.address && sound.table && sound.references, "Invalid capture sound");
+        for (size_t j = 0; j < i; ++j) require(capture.sounds[j].address != sound.address, "Duplicate capture sound");
+        if (!sound.voice) { require(!sound.sampleBytes && !sound.guestSamples && !sound.locked, "Sound without a voice has samples"); continue; }
+        require(sound.kind == 2 && (sound.channels == 1 || sound.channels == 2) && (sound.bits == 8 || sound.bits == 16), "Invalid capture voice format");
+        uint32_t block = sound.channels * (sound.bits / 8);
+        require(sound.rate >= 100 && sound.rate <= 200000 && sound.frequency >= 100 && sound.frequency <= 200000, "Invalid capture voice rate");
+        require(sound.sampleBytes && sound.sampleBytes <= (16u << 20) && sound.sampleBytes % block == 0 && sound.guestSamples, "Invalid capture voice samples");
+        require(std::isfinite(sound.position) && sound.position >= 0 && sound.position < double(sound.sampleBytes / block) + 1, "Invalid capture voice position");
+        require(std::isfinite(sound.staleFrames) && std::isfinite(sound.left) && std::isfinite(sound.right), "Invalid capture voice levels");
+        require(!sound.locked || (sound.lockOffset < sound.sampleBytes && sound.lockBytes <= sound.sampleBytes), "Invalid capture sound lock");
+    }
     require(capture.files.size() <= maxObjects, "Too many open files");
     for (size_t i = 0; i < capture.files.size(); ++i) {
         const auto& file = capture.files[i];
@@ -310,6 +336,14 @@ inline Bytes encode(const Capture& capture) {
     for (const auto& item : capture.files) {
         word(payload, item.handle); word(payload, item.access); qword(payload, item.offset); word(payload, item.career ? 1u : 0u); putName(payload, item.path);
     }
+    word(payload, uint32_t(capture.sounds.size()));
+    for (const auto& s : capture.sounds) {
+        for (uint32_t v : {s.address, s.kind, s.table, s.references, s.flags, s.guestSamples, s.volume, s.pan, s.lockOffset, s.lockBytes,
+                           s.sampleBytes, s.channels, s.bits, s.rate, s.frequency, s.publishes}) word(payload, v);
+        word(payload, (s.locked ? 1u : 0u) | (s.voice ? 2u : 0u) | (s.playing ? 4u : 0u) | (s.loop ? 8u : 0u));
+        uint64_t bits; std::memcpy(&bits, &s.position, 8); qword(payload, bits); std::memcpy(&bits, &s.staleFrames, 8); qword(payload, bits);
+        uint32_t level; std::memcpy(&level, &s.left, 4); word(payload, level); std::memcpy(&level, &s.right, 4); word(payload, level);
+    }
     word(payload, capture.heapNext); word(payload, uint32_t(capture.heaps.size()));
     for (const auto& heap : capture.heaps) {
         word(payload, heap.id); word(payload, heap.options); word(payload, heap.maximum); word(payload, uint32_t(heap.blocks.size()));
@@ -389,6 +423,16 @@ inline Capture decode(const Bytes& file) {
         for (uint32_t i = 0; i < files; ++i) {
             FileImage item; item.handle = reader.word(); item.access = reader.word(); item.offset = reader.qword(); item.career = reader.word() != 0; item.path = reader.name();
             capture.files.push_back(std::move(item));
+        }
+        uint32_t sounds = reader.word(); require(sounds <= maxObjects, "Too many sounds");
+        for (uint32_t i = 0; i < sounds; ++i) {
+            SoundImage s;
+            for (uint32_t* v : {&s.address, &s.kind, &s.table, &s.references, &s.flags, &s.guestSamples, &s.volume, &s.pan, &s.lockOffset, &s.lockBytes,
+                                &s.sampleBytes, &s.channels, &s.bits, &s.rate, &s.frequency, &s.publishes}) *v = reader.word();
+            uint32_t flags = reader.word(); s.locked = flags & 1u; s.voice = flags & 2u; s.playing = flags & 4u; s.loop = flags & 8u;
+            uint64_t bits = reader.qword(); std::memcpy(&s.position, &bits, 8); bits = reader.qword(); std::memcpy(&s.staleFrames, &bits, 8);
+            uint32_t level = reader.word(); std::memcpy(&s.left, &level, 4); level = reader.word(); std::memcpy(&s.right, &level, 4);
+            capture.sounds.push_back(s);
         }
         capture.heapNext = reader.word();
         uint32_t heaps = reader.word(); require(heaps <= maxObjects, "Too many heaps");

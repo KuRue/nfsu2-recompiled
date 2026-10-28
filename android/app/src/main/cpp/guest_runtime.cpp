@@ -872,7 +872,7 @@ void maybeWriteCapture(){
         };
         nfs_capture::Capture capture;
         capture.build=NFS_GIT_IDENTITY;capture.game=nfs_capture::sha256File(guestExecutable);
-        capture.careerRollback=0;capture.omitted=nfs_capture::omitRequired|nfs_capture::omitHeap;capture.pageSize=uint32_t(memory->pageSize());
+        capture.careerRollback=0;capture.omitted=nfs_capture::omitRequired|nfs_capture::omitHeap|nfs_capture::omitAudio;capture.pageSize=uint32_t(memory->pageSize());
         auto addThread=[&](uint32_t id,bool capturer,bool outsideGuest,bool resumable,nfs_capture::WaitKind wait,uint32_t handle,uint32_t blockedAt,const State& cpu,const std::vector<nfs_capture::Frame>& frames){
             nfs_capture::ThreadImage image;image.id=id;image.capturer=capturer;image.outsideGuest=outsideGuest;image.resumable=resumable;
             image.wait=wait;image.waitHandle=handle;image.blockedAt=blockedAt;storeCpu(image.cpu,cpu);image.frames=frames;
@@ -935,6 +935,7 @@ void maybeWriteCapture(){
             }
         });
         nfs_capture::Inventory files;files.kind=1;files.count=uint32_t(fileHandles.size());capture.inventory.push_back(files);
+        capture.sounds=captureSoundObjects();capture.omitted&=~nfs_capture::omitAudio;
         {auto state=heaps->exportState();capture.heapNext=state.next;
             for(auto& record:state.heaps){nfs_capture::HeapImage heap;heap.id=record.id;heap.options=record.options;heap.maximum=record.maximum;
                 for(auto& block:record.blocks)heap.blocks.push_back({block.address,block.capacity,block.requested});

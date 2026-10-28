@@ -43,6 +43,13 @@ nfs_capture::Capture sample() {
     capture.inventory.push_back({1u, 2u});
     capture.files.push_back({0xf0060000u, 0x80000000u, 123456u, false, "TRACKS/STREAML4RA.BUN"});
     capture.files.push_back({0xf0060001u, 0xc0000000u, 64u, true, "Documents/NFS Underground 2/Profile/save"});
+    capture.omitted &= ~omitAudio;
+    SoundImage device; device.address = 0x10000100u; device.kind = 1; device.table = 0x10000110u; device.references = 1;
+    SoundImage buffer; buffer.address = 0x10000200u; buffer.kind = 2; buffer.table = 0x10000210u; buffer.references = 2; buffer.guestSamples = 0x10001000u;
+    buffer.voice = true; buffer.sampleBytes = 8192; buffer.channels = 2; buffer.bits = 16; buffer.rate = 22050; buffer.frequency = 24000;
+    buffer.position = 1234.5; buffer.staleFrames = 3.25; buffer.left = 0.5f; buffer.right = 0.75f; buffer.playing = true; buffer.loop = true;
+    buffer.publishes = 6; buffer.locked = true; buffer.lockOffset = 4096; buffer.lockBytes = 2048; buffer.volume = 0xfffffc18u;
+    capture.sounds = {device, buffer};
     capture.omitted &= ~omitHeap; capture.heapNext = 0xf0000108u;
     capture.heaps.push_back({0xf0000100u, 0u, 0u, {{0x10000000u, 32u, 31u}, {0x10000020u, 4096u, 4000u}}});
     capture.heaps.push_back({0xf0000104u, 4u, 65536u, {}});
@@ -69,6 +76,15 @@ bool same(const nfs_capture::Capture& left, const nfs_capture::Capture& right) {
     for (size_t i = 0; i < left.files.size(); ++i) {
         const auto& a = left.files[i]; const auto& b = right.files[i];
         if (a.handle != b.handle || a.access != b.access || a.offset != b.offset || a.career != b.career || a.path != b.path) return false;
+    }
+    if (left.sounds.size() != right.sounds.size()) return false;
+    for (size_t i = 0; i < left.sounds.size(); ++i) {
+        const auto& a = left.sounds[i]; const auto& b = right.sounds[i];
+        if (a.address != b.address || a.kind != b.kind || a.table != b.table || a.references != b.references || a.guestSamples != b.guestSamples) return false;
+        if (a.volume != b.volume || a.locked != b.locked || a.lockOffset != b.lockOffset || a.lockBytes != b.lockBytes || a.voice != b.voice) return false;
+        if (a.sampleBytes != b.sampleBytes || a.channels != b.channels || a.bits != b.bits || a.rate != b.rate || a.frequency != b.frequency) return false;
+        if (a.position != b.position || a.staleFrames != b.staleFrames || a.left != b.left || a.right != b.right) return false;
+        if (a.playing != b.playing || a.loop != b.loop || a.publishes != b.publishes) return false;
     }
     if (left.heapNext != right.heapNext || left.heaps.size() != right.heaps.size()) return false;
     for (size_t i = 0; i < left.heaps.size(); ++i) {
@@ -147,6 +163,15 @@ int main() {
         threw = false; try { encode(escaped); } catch (const std::runtime_error&) { threw = true; }
         expect(threw, "file path must stay inside the game folder");
     }
+    for (int bad = 0; bad < 4; ++bad) {
+        auto broken = sample(); auto& s = broken.sounds[1];
+        if (bad == 0) s.bits = 12; else if (bad == 1) s.sampleBytes = 8191; else if (bad == 2) s.position = 1e9; else broken.sounds[0].address = s.address;
+        threw = false; try { encode(broken); } catch (const std::runtime_error&) { threw = true; }
+        expect(threw, "invalid sound rejected");
+    }
+    auto quiet = sample(); quiet.omitted |= omitAudio;
+    threw = false; try { encode(quiet); } catch (const std::runtime_error&) { threw = true; }
+    expect(threw, "audio marked omitted with sounds listed");
     auto noHeaps = sample(); noHeaps.heaps.clear();
     threw = false; try { encode(noHeaps); } catch (const std::runtime_error&) { threw = true; }
     expect(threw, "a capture without heaps must say so");
@@ -159,8 +184,8 @@ int main() {
     expect(careerPath("appdata/Roaming/x") && careerPath("DOCUMENTS/a") && !careerPath("GLOBAL/documents"), "career paths");
     {
         // A schema 1 file has no files section: drop it, restamp the header and read it back.
-        auto older = sample(); older.files.clear(); older.heaps.clear(); older.heapNext = 0; older.omitted |= omitHeap;
-        auto bytes = encode(older); bytes.resize(bytes.size() - 12); // file count, heap next, heap count
+        auto older = sample(); older.files.clear(); older.heaps.clear(); older.heapNext = 0; older.omitted |= omitHeap | omitAudio; older.sounds.clear();
+        auto bytes = encode(older); bytes.resize(bytes.size() - 16); // file count, sound count, heap next, heap count
         Bytes payload(bytes.begin() + 19, bytes.end());
         Bytes header = {'N','F','S','C','A','P','1'}; word(header, 1); word(header, uint32_t(payload.size())); word(header, crc(payload));
         header.insert(header.end(), payload.begin(), payload.end());

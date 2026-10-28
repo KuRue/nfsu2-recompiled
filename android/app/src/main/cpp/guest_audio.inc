@@ -105,6 +105,45 @@ void shutdownGuestSound(){
         heaps->free(GuestHeaps::process,object.table);heaps->free(GuestHeaps::process,item.first);}
     soundObjects.clear();
 }
+// Capture and restore. Samples are not copied: a buffer's guest copy is in guest memory and the
+// host voice is rebuilt from it (Unlock publishes guest bytes to the voice, so the guest copy is
+// the newer one). Restore runs after guest memory is back and replaces every sound object.
+#ifdef NFS_RESUMABLE
+std::vector<nfs_capture::SoundImage> captureSoundObjects(){
+    std::vector<nfs_capture::SoundImage> out;std::lock_guard<std::mutex> lock(soundMixer.mutex);
+    for(auto& [address,object]:soundObjects){
+        nfs_capture::SoundImage s;s.address=address;s.kind=object.kind;s.table=object.table;s.references=object.references;s.flags=object.flags;
+        s.guestSamples=object.guestSamples;s.volume=object.volume;s.pan=object.pan;s.locked=object.locked;s.lockOffset=object.lockOffset;s.lockBytes=object.lockBytes;
+        if(auto& v=object.voice;v&&!v->samples.empty()){
+            s.voice=true;s.sampleBytes=uint32_t(v->samples.size());s.channels=v->channels;s.bits=v->bits;s.rate=v->rate;s.frequency=v->frequency;
+            s.publishes=v->publishes;s.position=v->position;s.staleFrames=v->staleFrames;s.left=v->left;s.right=v->right;s.playing=v->playing;s.loop=v->loop;
+        }
+        out.push_back(s);
+    }
+    return out;
+}
+[[maybe_unused]] void restoreSoundObjects(const std::vector<nfs_capture::SoundImage>& images){
+    {std::lock_guard<std::mutex> lock(soundMixer.mutex);for(auto& slot:soundMixer.voices)slot.reset();}
+    soundObjects.clear();
+    bool device=false;
+    for(const auto& s:images){
+        SoundObject object{s.kind,s.table,s.references,s.flags,s.guestSamples,s.volume,s.pan};
+        object.locked=s.locked;object.lockOffset=s.lockOffset;object.lockBytes=s.lockBytes;
+        if(s.voice){
+            if(!memory->readable(s.guestSamples,s.sampleBytes))throw GuestStop("Restored sound samples are not in guest memory");
+            auto voice=std::make_shared<PcmVoice>();
+            voice->samples.assign(static_cast<const uint8_t*>(ptr(s.guestSamples,s.sampleBytes)),static_cast<const uint8_t*>(ptr(s.guestSamples,s.sampleBytes))+s.sampleBytes);
+            voice->channels=s.channels;voice->bits=s.bits;voice->rate=s.rate;voice->frequency=s.frequency;voice->publishes=s.publishes;
+            voice->position=s.position;voice->staleFrames=s.staleFrames;voice->left=s.left;voice->right=s.right;voice->playing=s.playing;voice->loop=s.loop;
+            if(!soundMixer.add(voice))throw GuestStop("Too many restored sound voices");
+            object.voice=voice;
+        }else if(s.kind==2)object.voice=std::make_shared<PcmVoice>(); // primary buffer: no samples
+        device|=s.kind==1;
+        soundObjects.emplace(s.address,std::move(object));
+    }
+    if(device&&!startSoundStream())throw GuestStop("Audio output did not start after restore");
+}
+#endif
 uint32_t createSoundObject(uint32_t kind,uint32_t flags=0){
     uint32_t address=allocate(4),table=allocate(24*4);
     for(uint32_t slot=0;slot<24;++slot)write32(table+4*slot,soundMethodBase+kind*0x1000+slot*16);
