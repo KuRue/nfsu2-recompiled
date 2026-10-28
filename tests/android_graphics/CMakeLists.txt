@@ -22,3 +22,12 @@ target_compile_options(graphics_program_check PRIVATE -Wall -Wextra -Werror -Wno
 if(ANDROID)
   target_link_libraries(graphics_program_check PRIVATE log)
 endif()
+
+add_executable(graphics_buffer_check buffer_state.cpp)
+target_compile_features(graphics_buffer_check PRIVATE cxx_std_17)
+target_include_directories(graphics_buffer_check SYSTEM PRIVATE "${NFS_ROOT}/build/dxvk-source/include/native/windows"
+  "${NFS_ROOT}/build/dxvk-source/include/native/directx")
+target_compile_options(graphics_buffer_check PRIVATE -Wall -Wextra -Werror -Wno-missing-field-initializers)
+if(ANDROID)
+  target_link_libraries(graphics_buffer_check PRIVATE log)
+endif()

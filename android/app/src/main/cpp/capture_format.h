@@ -3,6 +3,7 @@
 // audio and heap metadata carry explicit omission flags when unavailable.
 // careerRollback must be zero so loading cannot roll career files back.
 #include "graphics_program.h"
+#include "graphics_buffer.h"
 #include <array>
 #include <cctype>
 #include <cmath>
@@ -19,7 +20,7 @@
 #include <unistd.h>
 
 namespace nfs_capture {
-constexpr uint32_t schema = 4; // 4 adds immutable graphics programs and proxy metadata
+constexpr uint32_t schema = 5; // 5 adds vertex/index buffer contents and proxy metadata
 constexpr uint32_t omitGraphics = 1u, omitAudio = 2u, omitHeap = 4u, omitFileContents = 8u;
 // Heap bookkeeping and sound objects are stored from schema 2; omitHeap and omitAudio are clear
 // only when they are.
@@ -153,6 +154,8 @@ struct Capture {
     std::string build, game;
     bool hasThreadLocals = true;
     bool hasPrograms = true;
+    bool hasBuffers = true;
+    std::vector<nfs_d3d9::BufferRecord> buffers;
     std::vector<nfs_d3d9::ProgramRecord> programs;
     std::array<bool, tlsSlots> tlsUsed{};
     uint32_t careerRollback = 0;
@@ -263,6 +266,22 @@ inline void validate(const Capture& capture) {
         programBytes += program.definition.bytes.size(); require(programBytes <= (64u << 20), "Graphics programs too large");
     }
     require(programIndex == capture.programs.size(), "Unexpected graphics program definitions");
+    require(capture.buffers.size() <= maxObjects, "Too many graphics buffers");
+    size_t bufferIndex = 0, bufferBytes = 0;
+    for (const auto& object : capture.graphics) {
+        if ((object.second != 6 && object.second != 7) || !capture.hasBuffers) continue;
+        require(bufferIndex < capture.buffers.size(), "Missing graphics buffer contents");
+        const auto& buffer = capture.buffers[bufferIndex++];
+        require(buffer.address == object.first && buffer.definition.kind == object.second, "Buffer identity/kind mismatch");
+        require(buffer.address >= capture.pageSize && !(buffer.address & 3) && buffer.table >= capture.pageSize && !(buffer.table & 3)
+            && uint64_t(buffer.table) + 56 <= 0x100000000ull && buffer.device >= capture.pageSize && !(buffer.device & 3)
+            && buffer.references > 0, "Invalid buffer proxy metadata");
+        auto device = std::lower_bound(capture.graphics.begin(), capture.graphics.end(), std::make_pair(buffer.device, 0u));
+        require(device != capture.graphics.end() && device->first == buffer.device && device->second == 2, "Missing graphics buffer device");
+        nfs_d3d9::validate(buffer.definition);bufferBytes += buffer.definition.bytes.size();
+        require(bufferBytes <= (256u << 20), "Graphics buffers too large");
+    }
+    require(bufferIndex == capture.buffers.size(), "Unexpected graphics buffer records");
     require(capture.criticalSections.size() <= maxObjects * 4, "Too many critical sections");
     for (size_t i = 0; i < capture.criticalSections.size(); ++i)
         require(capture.criticalSections[i] >= capture.pageSize && (!i || capture.criticalSections[i - 1] < capture.criticalSections[i]), "Critical sections must be sorted and unique");
@@ -404,6 +423,13 @@ inline Bytes encode(const Capture& capture) {
         for (uint32_t value : {program.address, program.table, program.device, program.references, uint32_t(program.definition.kind), uint32_t(program.definition.bytes.size())}) word(payload, value);
         payload.insert(payload.end(), program.definition.bytes.begin(), program.definition.bytes.end());
     }
+    require(capture.hasBuffers, "Cannot encode capture without graphics buffer contents");
+    word(payload, uint32_t(capture.buffers.size()));
+    for (const auto& buffer : capture.buffers) {
+        const auto& d = buffer.definition;
+        for (uint32_t value : {buffer.address, buffer.table, buffer.device, buffer.references, d.kind, d.usage, d.format, d.pool, d.fvf, uint32_t(d.bytes.size())}) word(payload, value);
+        payload.insert(payload.end(), d.bytes.begin(), d.bytes.end());
+    }
     Bytes file = {'N','F','S','C','A','P','1'};
     word(file, schema); word(file, uint32_t(payload.size())); word(file, crc(payload));
     file.insert(file.end(), payload.begin(), payload.end());
@@ -523,6 +549,18 @@ inline Capture decode(const Bytes& file) {
             require(size && size <= nfs_d3d9::maxProgramBytes, "Invalid graphics program size");
             total += size; require(total <= (64u << 20), "Graphics programs too large");
             program.definition.bytes = reader.take(size); capture.programs.push_back(std::move(program));
+        }
+    }
+    capture.hasBuffers = version >= 5;
+    if (capture.hasBuffers) {
+        uint32_t count = reader.word(); require(count <= maxObjects, "Too many graphics buffers");size_t total = 0;
+        for (uint32_t i = 0; i < count; ++i) {
+            nfs_d3d9::BufferRecord buffer;auto& d = buffer.definition;
+            buffer.address = reader.word();buffer.table = reader.word();buffer.device = reader.word();buffer.references = reader.word();
+            d.kind = reader.word();d.usage = reader.word();d.format = reader.word();d.pool = reader.word();d.fvf = reader.word();uint32_t size = reader.word();
+            require(size && size <= nfs_d3d9::maxBufferBytes, "Invalid graphics buffer size");
+            total += size;require(total <= (256u << 20), "Graphics buffers too large");
+            d.bytes = reader.take(size);capture.buffers.push_back(std::move(buffer));
         }
     }
     require(reader.offset == payload.size(), "Unexpected trailing capture");

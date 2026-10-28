@@ -827,3 +827,30 @@ process; ASan/UBSan runs pass. Format ASan/UBSan, phone source checks, real-CRT 
 real GPU recreation or race capture/load performed. Next: texture/buffer content capture and
 recreation, derived surfaces and device state, then commit the complete native object graph
 while retaining captured guest proxies. Exact cross-session Resume remains unfinished.
+
+## 2026-10-28: VB/IB contents captured and restored, schema 5 (offline)
+
+The resumable bridge shadows successful writable buffer uploads, merges partial ranges and
+invalidates old contents on DISCARD. Failed Unlock, GPU ProcessVertices writes and default-pool
+Reset invalidate shadows; retirement frees them. Normal builds retain no shadows. Capture
+refuses active locks and write-only buffers without complete initialized bytes; readable
+buffers use a READONLY fallback. This conservative full-allocation rule can block captures
+of partially filled dynamic buffers; phone measurement is still needed. Limits are 64 MiB per
+buffer and 256 MiB aggregate contents/shadows; the overall capture size cap still applies.
+
+Schema 5 stores all vertex/index buffer metadata, guest identities/references and bytes.
+Legacy schemas decode for inspection but cannot live-load without buffer data. Live-load
+preflight checks native descriptors, identities/references and active locks before replacement;
+then restore uploads captured bytes and restores shadows. A failed upload after replacement
+begins stops the runtime, with no partial-load rollback. Fresh-native recreation is also
+implemented with staged ownership, but not wired into cross-session object-map replacement.
+
+Passed: graphics memory/COM/program/buffer checks; schema round trips and 1–4 compatibility;
+valid-checksum malformed buffer metadata/counts/sizes/truncation; fresh-process mock VB/IB
+archive reconstruction; ASan/UBSan for format and writer/reader graphics tests; source checks;
+actual lifted CRT host startup; resumable debug APK build (8s final run). Buffer tests cover
+write-only no-readback, DISCARD/NOOVERWRITE, same-session bytes, failed Unlock, active locks,
+GPU-write/reset invalidation, failed recreation/upload cleanup and reference mismatches.
+No phone install, real-DXVK buffer restoration or race capture/load performed. Next: texture
+contents, derived surfaces and device state, then staged reconstruction of the whole graphics
+graph. Cross-session exact Resume remains unfinished.

@@ -1,4 +1,4 @@
-struct ResourceLock {void* native;uint32_t guest,size,pitch,rowBytes,rows,flags;CompressedView compressed{};RECT rectangle{};uint32_t nativePitch{};};
+struct ResourceLock {void* native;uint32_t guest,size,pitch,rowBytes,rows,flags;CompressedView compressed{};RECT rectangle{};uint32_t nativePitch{};uint32_t bufferOffset=0,bufferSize=0;};
 std::map<uint64_t,ResourceLock> resourceLocks;
 uint64_t lockKey(uint32_t object,uint32_t subresource){return (uint64_t(object)<<32)|subresource;}
 uint32_t rowBytes(D3DFORMAT format,uint32_t width){
@@ -80,8 +80,28 @@ HRESULT lockSurface(uint32_t address,uint32_t output,const RECT* rect,uint32_t f
 template<class Buffer,class Desc>HRESULT lockBuffer(uint32_t address,uint32_t offset,uint32_t size,uint32_t output,uint32_t flags){
     if(!output||resourceLocks.count(lockKey(address,0)))return D3DERR_INVALIDCALL;
     auto buffer=nativeObject<Buffer>(address);Desc desc{};HRESULT status=buffer->GetDesc(&desc);if(FAILED(status))return status;
+    if(offset>=desc.Size||(size&&size>desc.Size-offset))return D3DERR_INVALIDCALL;
     void* native=nullptr;status=buffer->Lock(offset,size,&native,flags);if(FAILED(status))return status;
     if(!size)size=desc.Size-offset;uint32_t temporary=allocateGuest(size);
     if(!(flags&D3DLOCK_DISCARD))std::memcpy(pointer(temporary),native,size);
-    resourceLocks.emplace(lockKey(address,0),ResourceLock{native,temporary,size,size,size,1,flags});write(output,temporary);return D3D_OK;
+    resourceLocks.emplace(lockKey(address,0),ResourceLock{native,temporary,size,size,size,1,flags,{}, {},0,offset,desc.Size});write(output,temporary);return D3D_OK;
+}
+
+[[maybe_unused]] void recordBufferUnlock(uint32_t address,HRESULT status){
+#ifdef NFS_RESUMABLE
+    auto found=resourceLocks.find(lockKey(address,0));if(found==resourceLocks.end())return;
+    const auto& lock=found->second;
+    if(FAILED(status)){bufferShadows.erase(address);return;}
+    if(lock.flags&D3DLOCK_READONLY)return;
+    try{
+        if(!bufferShadows.count(address)){
+            size_t total=lock.bufferSize;for(const auto& entry:bufferShadows)total+=entry.second.size();
+            nfs_d3d9::check(total<=(256u<<20),"D3D9 buffer shadows too large");
+        }
+        auto& shadow=bufferShadows.try_emplace(address,lock.bufferSize).first->second;
+        shadow.update(lock.bufferOffset,static_cast<const uint8_t*>(pointer(lock.guest)),lock.size,bool(lock.flags&D3DLOCK_DISCARD));
+    }catch(const std::exception& error){bufferShadows.erase(address);NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSCapture","Buffer shadow unavailable: %s",error.what());}
+#else
+    (void)address;(void)status;
+#endif
 }

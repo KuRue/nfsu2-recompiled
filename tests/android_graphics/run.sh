@@ -14,3 +14,11 @@ with tempfile.TemporaryDirectory(prefix="nfs-program-archive-") as directory:
     subprocess.run([sys.argv[1], "--write", directory], check=True)
     subprocess.run([sys.argv[1], "--read", directory], check=True)
 PYTEST
+python3 - "$task_build/graphics_buffer_check" <<'PYTEST'
+import subprocess
+import sys
+import tempfile
+with tempfile.TemporaryDirectory(prefix="nfs-buffer-archive-") as directory:
+    subprocess.run([sys.argv[1], "--write", directory], check=True)
+    subprocess.run([sys.argv[1], "--read", directory], check=True)
+PYTEST

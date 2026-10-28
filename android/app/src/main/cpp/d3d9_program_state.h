@@ -18,19 +18,20 @@ inline Program captureDeclaration(IDirect3DVertexDeclaration9* declaration) {
     Program program{ProgramKind::Declaration, std::vector<uint8_t>(count * sizeof(D3DVERTEXELEMENT9))};
     std::memcpy(program.bytes.data(), elements.data(), program.bytes.size()); validate(program); return program;
 }
-class StagedProgram {
+class StagedResource {
     IUnknown* object = nullptr;
 public:
-    explicit StagedProgram(IUnknown* value = nullptr): object(value) {}
-    ~StagedProgram() { if (object) object->Release(); }
-    StagedProgram(const StagedProgram&) = delete;
-    StagedProgram& operator=(const StagedProgram&) = delete;
-    StagedProgram(StagedProgram&& other) noexcept: object(other.release()) {}
+    explicit StagedResource(IUnknown* value = nullptr): object(value) {}
+    ~StagedResource() { if (object) object->Release(); }
+    StagedResource(const StagedResource&) = delete;
+    StagedResource& operator=(const StagedResource&) = delete;
+    StagedResource(StagedResource&& other) noexcept: object(other.release()) {}
     IUnknown* get() const { return object; }
     IUnknown* release() { auto value = object; object = nullptr; return value; }
 };
+using StagedProgram = StagedResource;
 // Device is templated so the production path can be tested without a GPU or Android surface.
-template<class Device> StagedProgram recreateProgram(Device* device, const Program& program) {
+template<class Device> StagedResource recreateProgram(Device* device, const Program& program) {
     validate(program); check(device != nullptr, "Missing D3D9 recreation device");
     IUnknown* output = nullptr; HRESULT status;
     if (program.kind == ProgramKind::Declaration) {
@@ -46,6 +47,6 @@ template<class Device> StagedProgram recreateProgram(Device* device, const Progr
             IDirect3DPixelShader9* result = nullptr; status = device->CreatePixelShader(tokens.data(), &result); output = result;
         }
     }
-    StagedProgram staged(output); check(SUCCEEDED(status) && output, "Cannot recreate D3D9 program"); return staged;
+    StagedResource staged(output); check(SUCCEEDED(status) && output, "Cannot recreate D3D9 program"); return staged;
 }
 }

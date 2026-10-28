@@ -1,5 +1,6 @@
 #include "d3d9_bridge.h"
 #include "d3d9_program_state.h"
+#include "d3d9_buffer_state.h"
 #include "runtime_log.h"
 #include "dxt_shadow.h"
 #include "texture_pack.h"
@@ -38,6 +39,9 @@ enum class Kind:uint32_t {D3D9=1,Device=2,Texture=3,Cube=4,Surface=5,VertexBuffe
 struct Creation {uint32_t method=0;std::vector<uint32_t> args;std::vector<uint8_t> blob;};
 struct Object {IUnknown* native;Kind kind;uint32_t references=1;CompressedView compressed;uint32_t parent=0;uint32_t children=0;std::shared_ptr<Creation> creation;};
 std::unordered_map<uint32_t,Object> objects;
+#ifdef NFS_RESUMABLE
+std::map<uint32_t,nfs_d3d9::BufferShadow> bufferShadows;
+#endif
 // Nearly every call of a frame targets the same object (the device). Element
 // pointers of an unordered_map survive rehashing; only erasing an object
 // invalidates them, so retireGuestObject/shutdown drop this one-entry cache.
@@ -112,6 +116,9 @@ std::string inventoryText(){
     return out;
 }
 void retireGuestObject(uint32_t address){
+#ifdef NFS_RESUMABLE
+    bufferShadows.erase(address);
+#endif
     cachedObjectAddress=0;cachedObject=nullptr;
     auto found=objects.find(address);if(found==objects.end())return;
     uint32_t table;std::memcpy(&table,pointer(address),4);
@@ -186,6 +193,9 @@ void configureD3D9Bridge(void* base,uint32_t (*allocator)(uint32_t),void (*deall
 #endif
 }
 void shutdownD3D9Bridge(){
+#ifdef NFS_RESUMABLE
+    bufferShadows.clear();
+#endif
     clearTexturePacks();
     for(auto& lock:resourceLocks)freeGuest(lock.second.guest);resourceLocks.clear();
     for(uint32_t kind=15;kind;--kind)for(auto it=objects.begin();it!=objects.end();){
@@ -243,7 +253,21 @@ void recordCreation(uint32_t method,const uint32_t* args,uint32_t count){
     if(method==86||method==91||method==106){creation->args[1]=0;creation->args[2]=0;}
     found->second.creation=std::move(creation);
 }
+#ifdef NFS_RESUMABLE
+void invalidateBufferShadowsForDeviceCall(uint32_t method,const uint32_t* args){
+    if(method==85)bufferShadows.erase(args[4]); // ProcessVertices may modify its destination even on failure.
+    if(method==16)for(auto it=bufferShadows.begin();it!=bufferShadows.end();){
+        auto object=objects.find(it->first);
+        if(object==objects.end()||!object->second.creation||object->second.creation->args.size()<5)it=bufferShadows.erase(it);
+        else if(object->second.creation->args[0]==args[0]&&object->second.creation->args[4]==D3DPOOL_DEFAULT)it=bufferShadows.erase(it);
+        else ++it;
+    }
+}
+#endif
 uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumentCount){
+#ifdef NFS_RESUMABLE
+    if((token-methodBase)/4096==2)invalidateBufferShadowsForDeviceCall(((token-methodBase)%4096)/16,args);
+#endif
     uint32_t result=dispatchGuestD3D9Call(token,args,argumentCount);
     if((token-methodBase)/4096==2&&SUCCEEDED(static_cast<HRESULT>(result))){
         uint32_t method=((token-methodBase)%4096)/16;
@@ -391,7 +415,7 @@ uint32_t dispatchGuestD3D9Call(uint32_t token,const uint32_t* args,uint32_t* arg
         if(method==14){*argumentCount=1;copyLockBack(args[0],0);disablePackedTexture(args[0]);HRESULT status=surface->UnlockRect();releaseLock(args[0],0);return status;}}
     if(kind==6||kind==7){
         if(method==11){*argumentCount=5;return kind==6?lockBuffer<IDirect3DVertexBuffer9,D3DVERTEXBUFFER_DESC>(args[0],args[1],args[2],args[3],args[4]):lockBuffer<IDirect3DIndexBuffer9,D3DINDEXBUFFER_DESC>(args[0],args[1],args[2],args[3],args[4]);}
-        if(method==12){*argumentCount=1;copyLockBack(args[0],0);HRESULT status=kind==6?static_cast<IDirect3DVertexBuffer9*>(object)->Unlock():static_cast<IDirect3DIndexBuffer9*>(object)->Unlock();releaseLock(args[0],0);return status;}}
+        if(method==12){*argumentCount=1;copyLockBack(args[0],0);HRESULT status=kind==6?static_cast<IDirect3DVertexBuffer9*>(object)->Unlock():static_cast<IDirect3DIndexBuffer9*>(object)->Unlock();recordBufferUnlock(args[0],status);releaseLock(args[0],0);return status;}}
 #include "d3d9_resource_methods.inc"
     throw std::runtime_error("D3D9 guest method pending: kind="+std::to_string(kind)+" slot="+std::to_string(method));
 }
@@ -417,4 +441,57 @@ std::vector<nfs_d3d9::ProgramRecord> d3d9ProgramList(){
         nfs_d3d9::validate(record.definition);out.push_back(std::move(record));
     }
     std::sort(out.begin(),out.end(),[](const auto& a,const auto& b){return a.address<b.address;});return out;
+}
+
+namespace {
+nfs_d3d9::BufferRecord describeBuffer(uint32_t address,const Object& object){
+    if(!object.creation||object.creation->args.empty())throw std::runtime_error("D3D9 buffer recipe missing");
+    uint32_t table;std::memcpy(&table,pointer(address),4);
+    nfs_d3d9::BufferRecord record{address,table,object.creation->args[0],object.references,{}};
+    if(object.kind==Kind::VertexBuffer){D3DVERTEXBUFFER_DESC desc{};nfs_d3d9::check(SUCCEEDED(static_cast<IDirect3DVertexBuffer9*>(object.native)->GetDesc(&desc)),"Cannot describe VB");
+        nfs_d3d9::check(desc.Size&&desc.Size<=nfs_d3d9::maxBufferBytes,"Invalid VB size");record.definition={6,desc.Usage,uint32_t(desc.Format),uint32_t(desc.Pool),desc.FVF,std::vector<uint8_t>(desc.Size)};
+    }else{D3DINDEXBUFFER_DESC desc{};nfs_d3d9::check(SUCCEEDED(static_cast<IDirect3DIndexBuffer9*>(object.native)->GetDesc(&desc)),"Cannot describe IB");
+        nfs_d3d9::check(desc.Size&&desc.Size<=nfs_d3d9::maxBufferBytes,"Invalid IB size");record.definition={7,desc.Usage,uint32_t(desc.Format),uint32_t(desc.Pool),0,std::vector<uint8_t>(desc.Size)};}
+    return record;
+}
+}
+std::vector<nfs_d3d9::BufferRecord> d3d9BufferList(){
+    std::vector<nfs_d3d9::BufferRecord> out;size_t total=0;
+    for(const auto& [address,object]:objects){
+        if(object.kind!=Kind::VertexBuffer&&object.kind!=Kind::IndexBuffer)continue;
+        if(resourceLocks.count(lockKey(address,0)))throw std::runtime_error("D3D9 buffer is locked");
+        auto record=describeBuffer(address,object);total+=record.definition.bytes.size();nfs_d3d9::check(total<=(256u<<20),"D3D9 buffers too large");
+        const nfs_d3d9::BufferShadow* shadow=nullptr;
+#ifdef NFS_RESUMABLE
+        auto found=bufferShadows.find(address);if(found!=bufferShadows.end())shadow=&found->second;
+#endif
+        record.definition=object.kind==Kind::VertexBuffer
+            ?nfs_d3d9::captureBuffer<IDirect3DVertexBuffer9,D3DVERTEXBUFFER_DESC>(static_cast<IDirect3DVertexBuffer9*>(object.native),6,shadow)
+            :nfs_d3d9::captureBuffer<IDirect3DIndexBuffer9,D3DINDEXBUFFER_DESC>(static_cast<IDirect3DIndexBuffer9*>(object.native),7,shadow);
+        out.push_back(std::move(record));
+    }
+    std::sort(out.begin(),out.end(),[](const auto& a,const auto& b){return a.address<b.address;});return out;
+}
+void validateD3D9Buffers(const std::vector<nfs_d3d9::BufferRecord>& records){
+    size_t count=0;for(const auto& [address,object]:objects)if(object.kind==Kind::VertexBuffer||object.kind==Kind::IndexBuffer)++count;
+    nfs_d3d9::check(count==records.size(),"D3D9 buffer set changed");
+    uint32_t previous=0;
+    for(const auto& record:records){
+        nfs_d3d9::check(record.address>previous,"D3D9 buffers must be sorted and unique");previous=record.address;
+        nfs_d3d9::validate(record.definition);auto found=objects.find(record.address);
+        nfs_d3d9::check(found!=objects.end()&&uint32_t(found->second.kind)==record.definition.kind,"D3D9 buffer identity changed");
+        nfs_d3d9::check(!resourceLocks.count(lockKey(record.address,0)),"D3D9 buffer is locked");
+        nfs_d3d9::check(nfs_d3d9::sameMetadata(record,describeBuffer(record.address,found->second)),"D3D9 buffer metadata/references changed");
+    }
+}
+void restoreD3D9Buffers(const std::vector<nfs_d3d9::BufferRecord>& records){
+    validateD3D9Buffers(records);
+    for(const auto& record:records){auto native=objects.at(record.address).native;
+        if(record.definition.kind==6)nfs_d3d9::uploadBuffer(static_cast<IDirect3DVertexBuffer9*>(native),record.definition);
+        else nfs_d3d9::uploadBuffer(static_cast<IDirect3DIndexBuffer9*>(native),record.definition);
+#ifdef NFS_RESUMABLE
+        bufferShadows.erase(record.address);auto& shadow=bufferShadows.try_emplace(record.address,record.definition.bytes.size()).first->second;
+        shadow.update(0,record.definition.bytes.data(),record.definition.bytes.size(),true);
+#endif
+    }
 }

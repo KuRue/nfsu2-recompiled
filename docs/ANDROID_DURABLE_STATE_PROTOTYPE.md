@@ -394,3 +394,35 @@ capture files, exits the writer, and starts a fresh reader process that recreate
 this also runs under ASan/UBSan. The real graphics capture/load
 path still needs a phone run. Next: texture/buffer contents, derived surfaces, full proxy
 reference ownership and device state, with staged commit of the complete graphics graph.
+
+### Vertex/index buffers, schema 5 (offline, 2026-10-28)
+
+The resumable build retains CPU shadows from successful writable buffer Unlocks. It merges
+initialized ranges, preserves other bytes on partial/NOOVERWRITE uploads and invalidates the
+entire prior contents on DISCARD. Failed Unlocks and ProcessVertices destinations lose their
+shadows; Reset invalidates default-pool shadows for that device while managed buffers survive.
+Retiring a proxy drops its shadow. Normal builds do not retain these CPU copies.
+
+Capture refuses locked buffers. A complete shadow supplies write-only bytes without illegal
+readback; readable buffers can fall back to a READONLY native lock. Missing write-only ranges
+refuse capture, including dynamic buffers whose DISCARD only initialized part of the allocation.
+This strict rule may block race captures until a more precise used-range strategy is measured
+on the phone. No unwritten ranges are fabricated. Limits: 64 MiB per buffer, 256 MiB each for
+aggregate buffer contents and shadow storage, within the capture file's existing overall limit.
+
+Schema 5 stores each VB/IB's guest proxy/table/device/reference metadata, kind, usage, format,
+pool, FVF and contents. The validator requires complete matching records and valid dependencies.
+Schemas 1–4 still decode for inspection; live loading requires buffer contents. Before changing
+anything, loading checks current buffer descriptors, identities/references and lack of active
+locks. Same-session loading then uploads captured buffer bytes and resets their CPU shadows.
+Upload failure after replacement has begun stops the runtime under the existing load-failure
+rule; there is no rollback of a partially applied debug load.
+
+The recreation helper stages a fresh buffer through CreateVertexBuffer/CreateIndexBuffer,
+uploads all captured bytes and releases it on failed creation, Lock or Unlock. This is not yet
+connected to cross-session object-map reconstruction. Graphics tests use mock COM buffers and
+verify guest Lock/Unlock shadowing, same-session uploads, capture encode/decode, new-process
+recreation, DISCARD/NOOVERWRITE, failed uploads, locked/incomplete capture refusals, reset/GPU
+write invalidation, descriptor/reference checks and ownership. ASan/UBSan also exercises the
+writer/reader tests. Real DXVK buffer restore, race captures and phone behavior remain untested.
+Textures, derived surfaces and device bindings/state are still needed for cross-session Resume.
