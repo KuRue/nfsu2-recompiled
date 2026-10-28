@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <utility>
+#include <vector>
 struct ANativeWindow;
 void configureD3D9Bridge(void* guestBase,uint32_t (*allocator)(uint32_t),void (*deallocator)(uint32_t));
 void shutdownD3D9Bridge();
@@ -12,5 +14,6 @@ bool d3d9RequestsSurface();
 void acknowledgeD3D9Surface(bool available);
 uint32_t createGuestD3D9(uint32_t sdk);
 std::string d3d9Inventory();
+std::vector<std::pair<uint32_t,uint32_t>> d3d9ObjectList();
 uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumentCount);
 uint32_t guestD3DObjectCount();

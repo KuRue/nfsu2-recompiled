@@ -157,6 +157,9 @@ struct Capture {
     uint32_t heapNext = 0;
     std::vector<HeapImage> heaps;
     std::vector<SoundImage> sounds;
+    // Graphics objects as (guest address, kind): contents are not stored, so this capture can only
+    // be loaded into the session that still holds exactly these objects.
+    std::vector<std::pair<uint32_t, uint32_t>> graphics;
 };
 
 using Bytes = std::vector<uint8_t>;
@@ -227,6 +230,8 @@ inline void validate(const Capture& capture) {
         require(std::isfinite(sound.staleFrames) && std::isfinite(sound.left) && std::isfinite(sound.right), "Invalid capture voice levels");
         require(!sound.locked || (sound.lockOffset < sound.sampleBytes && sound.lockBytes <= sound.sampleBytes), "Invalid capture sound lock");
     }
+    require(capture.graphics.size() <= (size_t(1) << 20), "Too many graphics objects");
+    for (size_t i = 1; i < capture.graphics.size(); ++i) require(capture.graphics[i - 1].first < capture.graphics[i].first, "Graphics objects must be sorted and unique");
     require(capture.files.size() <= maxObjects, "Too many open files");
     for (size_t i = 0; i < capture.files.size(); ++i) {
         const auto& file = capture.files[i];
@@ -344,6 +349,8 @@ inline Bytes encode(const Capture& capture) {
         uint64_t bits; std::memcpy(&bits, &s.position, 8); qword(payload, bits); std::memcpy(&bits, &s.staleFrames, 8); qword(payload, bits);
         uint32_t level; std::memcpy(&level, &s.left, 4); word(payload, level); std::memcpy(&level, &s.right, 4); word(payload, level);
     }
+    word(payload, uint32_t(capture.graphics.size()));
+    for (const auto& item : capture.graphics) { word(payload, item.first); word(payload, item.second); }
     word(payload, capture.heapNext); word(payload, uint32_t(capture.heaps.size()));
     for (const auto& heap : capture.heaps) {
         word(payload, heap.id); word(payload, heap.options); word(payload, heap.maximum); word(payload, uint32_t(heap.blocks.size()));
@@ -434,6 +441,8 @@ inline Capture decode(const Bytes& file) {
             uint32_t level = reader.word(); std::memcpy(&s.left, &level, 4); level = reader.word(); std::memcpy(&s.right, &level, 4);
             capture.sounds.push_back(s);
         }
+        uint32_t graphics = reader.word(); require(graphics <= (1u << 20) && size_t(graphics) * 8 <= payload.size() - reader.offset, "Too many graphics objects");
+        for (uint32_t i = 0; i < graphics; ++i) { uint32_t address = reader.word(); capture.graphics.emplace_back(address, reader.word()); }
         capture.heapNext = reader.word();
         uint32_t heaps = reader.word(); require(heaps <= maxObjects, "Too many heaps");
         for (uint32_t i = 0; i < heaps; ++i) {

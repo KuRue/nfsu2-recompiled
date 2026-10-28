@@ -935,6 +935,7 @@ void maybeWriteCapture(){
             }
         });
         nfs_capture::Inventory files;files.kind=1;files.count=uint32_t(fileHandles.size());capture.inventory.push_back(files);
+        capture.graphics=d3d9ObjectList();
         capture.sounds=captureSoundObjects();capture.omitted&=~nfs_capture::omitAudio;
         {auto state=heaps->exportState();capture.heapNext=state.next;
             for(auto& record:state.heaps){nfs_capture::HeapImage heap;heap.id=record.id;heap.options=record.options;heap.maximum=record.maximum;

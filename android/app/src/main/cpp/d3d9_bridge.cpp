@@ -389,3 +389,10 @@ uint32_t dispatchGuestD3D9Call(uint32_t token,const uint32_t* args,uint32_t* arg
     throw std::runtime_error("D3D9 guest method pending: kind="+std::to_string(kind)+" slot="+std::to_string(method));
 }
 std::string d3d9Inventory(){return inventoryText();}
+// Live objects as (guest address, kind), sorted: a load within the same session checks that the
+// set is unchanged, so every guest handle still names the same native object and contents.
+std::vector<std::pair<uint32_t,uint32_t>> d3d9ObjectList(){
+    std::vector<std::pair<uint32_t,uint32_t>> out;out.reserve(objects.size());
+    for(auto& [address,object]:objects)out.emplace_back(address,static_cast<uint32_t>(object.kind));
+    std::sort(out.begin(),out.end());return out;
+}
