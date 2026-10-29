@@ -966,3 +966,23 @@ sha256 6ec21f90ccbf54a725c0f94d48e90dc76126c49c3557cb589bfc730b4d2696d3
 (digest matches the tested APK; download URL returns HTTP 200).
 First fork release, debug-signed dev build (com.nfsu2.androidevolved.dev),
 installs beside upstream.
+
+## 2026-10-29: presentation effects — look presets, bloom, dither (branch android/visual-effects)
+
+The final DXVK swap-chain blit now implements four look presets (0 Original,
+1 Night balanced, 2 Neon, 3 Filmic), an eight-tap bright-pass bloom (Off /
+Subtle / Strong) and ordered dithering, with per-look vignette. All of it is
+display-referred and runs after the game's gamma ramp; the game-side night
+lighting still follows NFSU2_NATIVE_LOOK > 0.
+
+Plumbing: `native_visual` slots x = sharpen, y = look preset, z = bloom
+strength; `NFSU2_NATIVE_BLOOM` sets the new option, and `NFSU2_NATIVE_LOOK`
+now carries 0..3 instead of a boolean. Launcher gains "Bloom and glow" and two
+more look presets automatically through GameOptions.ALL.
+
+Validation: `prepare.py` re-run against the pinned DXVK native-1.9.2b checkout
+(c8dc91f); all 54 built-in shaders regenerate and pass spirv-val for Vulkan 1.1;
+phone source checks pass; APK builds (68.6 MB after the packaging repack).
+
+Pending: on-device A/B screenshots and a benchmark delta for Subtle/Strong
+bloom. Commit branch android/visual-effects before any merge.

@@ -65,3 +65,30 @@ index/payload bounds. Existing graphics-memory and COM lifetime checks cover the
 bridge's guest/native memory and ownership behavior. All 54 DXVK shader variants
 are compiled and validated for Vulkan 1.1 during preparation. Device smoke-test
 results are recorded in HANDOFF.md. No controlled long-race benchmark is implied.
+
+## Look presets, bloom and dithering (2026-10-29)
+
+The final presentation pass now carries the full display-referred look, all
+after the game's gamma ramp, so nothing here changes scene rendering:
+
+- `Lighting look`: **Original**, **Night lighting + balanced color**, **Neon
+  night** (cooler shadows, warmer highlights, a little more contrast and
+  colour) and **Filmic night** (lifted blacks, soft highlight shoulder, gentle
+  desaturation). Every look except Original also enables the game-side night
+  lighting (car lights, headlights, car shadows, glow).
+- `Bloom and glow`: Off / Subtle / Strong. An eight-tap bright-pass glow in the
+  same final pass — neon signs, headlights and bright HUD elements bleed a
+  little light. It is not a physical bloom chain (no extra render targets) and
+  it affects the HUD because the pass sees the finished frame. It is the first
+  option to drop if thermals or frame rate matter.
+- Ordered 4×4 dithering runs whenever any effect is enabled; it removes
+  banding in the night sky on the 8-bit swap chain without visible noise.
+- Vignette strength follows the look (none / 5% / 11% / 16%).
+
+Recommended S25 Ultra starting point: HD packs on, 8× anisotropic filtering,
+Subtle sharpening, **Neon night** or Night lighting, Subtle bloom, high
+reflections. Bloom adds fill-rate cost per pixel; measure with the built-in
+benchmark before keeping Strong.
+
+These are display-referred grading effects, not new light sources, shadow maps,
+ambient occlusion or a physical lighting overhaul.

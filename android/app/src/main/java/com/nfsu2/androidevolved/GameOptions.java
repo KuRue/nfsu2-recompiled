@@ -21,7 +21,7 @@ final class GameOptions {
     }
 
     static final String RESOLUTION = "resolution", FPS = "fps", FRAME_PACE = "frame_pace", WIDESCREEN = "widescreen", LATENCY = "latency",
-            FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", LOOK = "lighting_look", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", INTRO = "intro", LANGUAGE = "language";
+            FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", BLOOM = "bloom", LOOK = "lighting_look", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", INTRO = "intro", LANGUAGE = "language";
 
     static final Option[] ALL = {
             new Option(FEEDBACK_SOURCE, "Phone feedback source", "physics",
@@ -36,8 +36,12 @@ final class GameOptions {
                     new String[] {"0", "4", "8", "16"}, new String[] {"Game default", "4× anisotropic", "8× anisotropic", "16× anisotropic"}),
             new Option(SHARPEN, "Sharpening", "0",
                     new String[] {"0", "15", "30"}, new String[] {"Off", "Subtle", "Crisp"}),
+            new Option(BLOOM, "Bloom and glow", "0",
+                    new String[] {"0", "1", "2"}, new String[] {"Off", "Subtle", "Strong"}),
             new Option(LOOK, "Lighting look", "0",
-                    new String[] {"0", "1"}, new String[] {"Original", "Night lighting + balanced color"}),
+                    new String[] {"0", "1", "2", "3"},
+                    new String[] {"Original", "Night lighting + balanced color", "Neon night · cool shadows",
+                            "Filmic night · soft highlights"}),
             new Option(REFLECTIONS, "Reflections", "0",
                     new String[] {"0", "1"}, new String[] {"Original resolution", "On · 2× mirror and car resolution"}),
             new Option(RESOLUTION, "Internal resolution", "75",
