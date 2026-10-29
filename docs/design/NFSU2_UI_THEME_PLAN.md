@@ -5,6 +5,14 @@ and saved phone screenshots from the preceding run: phone_home_after_tablet.png,
 dialog_polish.png and dock_editor.png. These are not fresh device verification.
 Scope: app-owned launcher, menus, dialogs, overlays and controls. No app changes in this pass.
 
+## Current accepted palette and divider rule (2026-10-29)
+
+User refinement supersedes the pale silver-sheet proposal: the launcher background and menu
+sheets are neutral dark gray, body/value text is light gray, and headings/selections/status
+use green/lime. Darker title bands and outlined actions retain the game's component structure.
+Header/section divider bars have no marker dot. Dots are reserved for actual interactive
+slider thumbs; do not reintroduce decorative position dots in static headers.
+
 ## Findings
 
 - Launcher: lime and dark green are established, but large rounded cards and a green gradient

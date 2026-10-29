@@ -1192,3 +1192,16 @@ Build/source checks pass; fonts/license checked in APK; body/status contrast adj
 options changed. No tablet/large-font or full physical Backbone traversal performed this pass.
 Remaining theme work: category-icon navigation/backdrop/logotype, shared framework dialog
 migration, touch dock/editor and HUD/benchmark roles. See docs/design/NFSU2_UI_THEME_PLAN.md.
+
+## 2026-10-29: user-refined dark-gray menu palette
+
+User prefers neutral dark-gray background/panels with light-gray copy and green/lime accents,
+superseding the previous pale silver-sheet palette. Applied across launcher, shared rows,
+headers/actions and value picker resources; warning/error colors remain readable. Removed
+all static header/section dots and replaced the custom rail painter with a plain divider.
+Dots belong on interactive sliders; existing native SeekBar thumbs remain circular.
+
+Debug build passed and installed on 192.168.1.169:40615. Home screenshot visually checked:
+/tmp/nfsu2-dark-gray-launcher.png. Body/status contrast against #343434 is 5.43–9.25:1;
+secondary text is 6.70:1. No settings, game logic or slider behavior changed. Palette and
+no-header-dot rule are recorded at the top of docs/design/NFSU2_UI_THEME_PLAN.md.

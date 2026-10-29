@@ -2,10 +2,6 @@ package com.nfsu2.androidevolved;
 
 import android.content.Context;
 import android.content.res.ColorStateList;
-import android.graphics.Canvas;
-import android.graphics.ColorFilter;
-import android.graphics.Paint;
-import android.graphics.PixelFormat;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -13,7 +9,7 @@ import android.graphics.drawable.StateListDrawable;
 import android.view.View;
 import android.widget.TextView;
 
-/** App-owned adaptation of the game's silver menu sheets, oblique type and lime focus frame. */
+/** App-owned adaptation of the game's menu structure with dark-gray sheets, oblique type and lime focus frame. */
 final class MenuTheme {
     private static Typeface oblique, body;
     static int color(Context c, int id) { return c.getColor(id); }
@@ -37,9 +33,9 @@ final class MenuTheme {
         StateListDrawable d=new StateListDrawable();int lime=color(c,R.color.menu_lime);
         d.addState(new int[]{-android.R.attr.state_enabled},surface(c,0x18606060,0,0));
         // White inner/action focus remains distinguishable from the persistent lime selection.
-        d.addState(new int[]{android.R.attr.state_focused},surface(c,0xE0394034,color(c,R.color.menu_white),2));
-        d.addState(new int[]{android.R.attr.state_pressed},surface(c,0xE0394034,lime,2));
-        d.addState(new int[]{},surface(c,selected?0xD0394034:0x16FFFFFF,selected?lime:0,selected?2:0));
+        d.addState(new int[]{android.R.attr.state_focused},surface(c,0xFF41463B,color(c,R.color.menu_white),2));
+        d.addState(new int[]{android.R.attr.state_pressed},surface(c,0xFF41463B,lime,2));
+        d.addState(new int[]{},surface(c,selected?0xFF41463B:0x163F3F3F,selected?lime:0,selected?2:0));
         return d;
     }
     static ColorStateList rowText(Context c,boolean selected) {
@@ -49,25 +45,20 @@ final class MenuTheme {
     static Drawable action(Context c,boolean primary) {
         StateListDrawable d=new StateListDrawable();int lime=color(c,R.color.menu_lime),white=color(c,R.color.menu_white);
         d.addState(new int[]{-android.R.attr.state_enabled},surface(c,0x44101010,color(c,R.color.menu_disabled),1));
-        d.addState(new int[]{android.R.attr.state_focused},surface(c,0xE02C3229,white,3));
-        d.addState(new int[]{android.R.attr.state_pressed},surface(c,0xE0394034,lime,2));
-        d.addState(new int[]{},surface(c,0xB50B0D0C,primary?lime:white,primary?2:1));return d;
+        d.addState(new int[]{android.R.attr.state_focused},surface(c,0xFF414141,white,3));
+        d.addState(new int[]{android.R.attr.state_pressed},surface(c,0xFF41463B,lime,2));
+        d.addState(new int[]{},surface(c,0xFF292929,primary?lime:white,primary?2:1));return d;
     }
     static void heading(TextView text) {
         Context c=text.getContext();text.setTypeface(font(c,true));text.setTextSize(20);
         text.setTextColor(color(c,R.color.menu_lime));text.setLetterSpacing(0);
-        text.setPadding(dp(c,10),dp(c,4),dp(c,10),dp(c,5));text.setBackgroundColor(0xDF070908);
+        text.setPadding(dp(c,10),dp(c,4),dp(c,10),dp(c,5));text.setBackgroundColor(0xFF292929);
     }
-    static View rail(Context c) {
-        View v=new View(c);v.setBackground(new Drawable(){
-            final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
-            public void draw(Canvas canvas){float y=getBounds().exactCenterY(),h=dp(c,3);
-                p.setColor(0xFF5B6359);canvas.drawRoundRect(0,y-h/2,getBounds().width(),y+h/2,h,h,p);
-                p.setColor(0xFF555A53);canvas.drawCircle(dp(c,12),y,dp(c,4),p);
-                p.setColor(0xFFE1E3D8);canvas.drawCircle(dp(c,12),y,dp(c,2),p);}
-            public void setAlpha(int alpha) {p.setAlpha(alpha);invalidateSelf();}
-            public void setColorFilter(ColorFilter f) {p.setColorFilter(f);invalidateSelf();}
-            public int getOpacity(){return PixelFormat.TRANSLUCENT;}
-        });return v;
+    /** A static header divider. Position markers belong on interactive sliders only. */
+    static View divider(Context c) {
+        View view=new View(c);GradientDrawable line=new GradientDrawable();
+        line.setColor(0xFF777777);line.setCornerRadius(dp(c,2));
+        android.graphics.drawable.InsetDrawable inset=new android.graphics.drawable.InsetDrawable(line,0,dp(c,3),0,dp(c,3));
+        view.setBackground(inset);return view;
     }
 }

@@ -171,8 +171,7 @@ public final class LauncherActivity extends Activity {
 
     private View buildScreen() {
         FrameLayout screen = new FrameLayout(this);
-        screen.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {0xFF080C0C, getColor(R.color.menu_background), 0xFF272D2A}));
+        screen.setBackgroundColor(getColor(R.color.menu_background));
         LinearLayout columns = new LinearLayout(this);
         columns.setPadding(dp(24), dp(10), dp(24), dp(10));
         // Phones use the full width; tablets centre a readable two-pane block
@@ -217,7 +216,7 @@ public final class LauncherActivity extends Activity {
         cardParams.topMargin = dp(8);
         leftHome.addView(card, cardParams);
         card.addView(menuHeading("Game Files"));
-        card.addView(MenuTheme.rail(this),new LinearLayout.LayoutParams(-1,dp(10)));
+        card.addView(MenuTheme.divider(this),new LinearLayout.LayoutParams(-1,dp(10)));
         status = label("", 13, TEXT, false);
         status.setPadding(0, dp(4), 0, dp(6));
         card.addView(status);
@@ -252,7 +251,7 @@ public final class LauncherActivity extends Activity {
         rightParams.leftMargin = dp(24);
         columns.addView(right, rightParams);
         right.addView(menuHeading("Options"));
-        right.addView(MenuTheme.rail(this),new LinearLayout.LayoutParams(-1,dp(10)));
+        right.addView(MenuTheme.divider(this),new LinearLayout.LayoutParams(-1,dp(10)));
         TextView note = label("Applied the next time you press PLAY.", 13, MUTED, false);
         note.setPadding(0, dp(2), 0, dp(4));
         right.addView(note);
@@ -912,7 +911,7 @@ public final class LauncherActivity extends Activity {
         LinearLayout block = new LinearLayout(this);
         block.setOrientation(LinearLayout.VERTICAL);
         block.setPadding(0, dp(14), 0, dp(2));
-        block.addView(MenuTheme.rail(this), new LinearLayout.LayoutParams(-1, dp(9)));
+        block.addView(MenuTheme.divider(this), new LinearLayout.LayoutParams(-1, dp(9)));
         TextView title = label(text, 10, MUTED, true);
         title.setLetterSpacing(.14f);
         title.setPadding(dp(2), dp(8), 0, dp(2));
