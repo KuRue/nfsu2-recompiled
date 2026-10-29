@@ -24,45 +24,70 @@ Scope: app-owned launcher, menus, dialogs, overlays and controls. No app changes
   submenus, tilt and frame-limit forms, named-layout dialogs, update/crash/storage flows,
   benchmark results, driver probe, startup/failure overlay, editor toolbar and text entry.
 
-## Proposed visual direction
+## Revised direction: reproduce the actual menu and HUD vocabulary
 
-An interpretation of Underground 2's nighttime garage/menu character, not a claim that the
-suggested colors or font are extracted originals. Use dark charcoal/blue-black surfaces,
-white text, lime selection strips, angular/clipped panel details, restrained amber warnings
-and condensed italic display headings. Avoid heavy glow, continuous animation and faux chrome
-around ordinary settings. Keep body copy upright and readable. Bundle a redistribution-cleared
-font after comparing it with actual game-menu references; do not label a generic Android
-condensed font as the original. Use local font files so OEM font substitutions cannot alter it.
+This revision supersedes the earlier generic charcoal/lime/angular mockup. The game references
+show rounded selection frames and translucent silver panels; clipped corners, saturated lime
+fills, all-caps block headings and solid dark settings cards should not define the theme.
 
-Provisional tokens for visual review:
-background #090C10; panel #141A21; raised #202A32; lime #B5EA38;
-text #EEF1E6; muted #A5B0AF; rule #34414A; warning #FFC15A; error #F07878.
-Use semantic roles for focus, selection, pressed, disabled, destructive and success.
-Controller focus must remain distinguishable from a saved selected option.
+Inspected references:
+- Local game captures: /tmp/opencode/main_menu.png and /tmp/opencode/options_menu3.png.
+  The top carousel/title/footer are game UI. The large circular touch buttons are Android
+  additions and must NOT be used as evidence of the original game's visual design.
+- Original Display settings screenshot in TechTudo's PC requirements guide:
+  https://www.techtudo.com.br/noticias/2015/12/confira-os-requisitos-para-jogar-need-speed-underground-2-no-pc.ghtml
+- Race HUD reference (IGDB screenshot): https://images.igdb.com/igdb/image/upload/t_1080p/sc10v13.png
+- Main-menu cross-check: https://github.com/ThirteenAG/WidescreenFixesPack/issues/1081
 
-## Implementation sequence
+Observed element -> native app adaptation:
 
-1. Reference and foundations: compare actual game menu/HUD captures; approve a small launcher,
-   dialog and control-editor mockup; choose and bundle the font with its license; define semantic
-   XML resources, text appearances, dimensions, drawable shapes and a Java/Canvas theme adapter.
-   Keep one source of truth for colors and fonts, including Canvas controls.
-2. Launcher and menus: preserve current navigation/settings, replace oversized rounded-card
-   treatment with compact angular rows and a strong PLAY/RESUME action, consistent section
-   headers, value alignment and back navigation. Use real pressed/disabled/focus drawables.
-3. Dialogs and inputs: add one app-owned dialog header/body/action component. Migrate the 21
-   builder sites, pickers, input errors, checkboxes, radio choices, sliders and progress states.
-   Set dimensions by available width/insets instead of one 68% width rule on every device.
-4. Controls and overlays: unify dock, editor toolbar, utility icons, steering/pedals, pressed
-   feedback, benchmark/live result and startup/error panels. Keep saved layouts, hitboxes,
-   touch mappings, pedal distinctions and controller glyph colors intact. Retain low-opacity
-   racing controls, unobstructed HUD and clear edit-mode selection/drag targets.
-5. Completeness and verification: inventory every app-owned surface and every interaction state;
-   check phone/tablet widths, landscape insets/cutouts, large text, long values, keyboard entry,
-   controller-only navigation, focus restoration, TalkBack labels and non-color state cues.
-   Check GPU/CPU cost with overlay visible/hidden; avoid expensive blur or continuous redraw.
+| Game element | Observed treatment | App use |
+|---|---|---|
+| Title/header | Black translucent band; narrow oblique yellow-green title, often title case | Launcher section header, dialog title, editor header |
+| Main navigation | Horizontal pale translucent icon strip, circular arrows, selected rounded lime luminous frame, caption below | Top-level launcher categories with real touch/controller focus |
+| Settings sheet | Silver-gray translucent body over garage scene; dark text; dark selected row with lime text/value | Graphics, controls, game and support option lists |
+| Divider/position track | Thin gray rounded rail with a small circular marker | Header separators, category position indication, sliders |
+| Footer actions | Slim white/gray rounded outline, dark translucent interior, condensed italic label | Back, Continue/Play, Apply, Cancel and dialog actions |
+| Menu typography | Narrow oblique/italic, lighter than a heavy all-caps display face | Section labels and actions; keep long explanations readable |
+| HUD standings | White bold italic labels/numbers, dark shadow, minimal black translucent backing | Benchmark values, status/telemetry overlays |
+| HUD instruments | White ticks and needle, gray ring, dark transparent face; blue meter and red high-range band | Optional control/gauge accents and analog input feedback |
+| Minimap | Restrained gray circular rim, translucent interior, sparse colored directional markers | Steering control visual proportions; no repeated decorative gauges |
 
-Each stage is a reviewable commit. First implementation should be foundations + launcher,
-then dialogs, then controls/overlays; no single giant restyling commit.
+Color values are still provisional: reference pixels are alpha-composited over a scene and
+must not be treated as original raw asset colors. Use soft yellow-green for menu headings and
+selection glow, silver/neutral gray panels, white/gray outlines, dark text on pale menu bodies,
+and white HUD numerals. Preserve the HUD's blue/red semantic accents. Do not tint everything
+green or use a neon-green primary fill for every action.
+
+Typography needs two distinct matched roles: narrow oblique menu text and heavier italic HUD
+numbers. The logo is a separate logotype, not a normal UI font. Exact font identity has not
+been established; compare candidate letterforms (a/e/g/R, numbers, slant, width and spacing)
+against references before claiming a match. No proprietary font/image extraction is performed
+by this evaluation. Do not substitute generic bold italic Arial and call it authentic.
+
+## Revised implementation sequence
+
+1. Make a reference sheet with separate menu, settings, footer and HUD examples. Match one
+   title, selected icon tile, settings row, slider, footer action and telemetry block in a small
+   prototype before restyling complete screens. Determine font source/license and asset policy.
+2. Build shared menu components: title band, translucent neutral settings sheet, rounded
+   selection glow frame, circular navigation arrow, rail/marker and outlined footer action.
+   Define separate menu/HUD font roles and semantic states in resources plus a Canvas adapter.
+3. Rework launcher navigation around the game's icon/category strip and content sheet. Preserve
+   Play/Resume discoverability, current settings/navigation and mobile-sized targets. Use a
+   locally available approved static garage reference/background as a prototype first; choose
+   the shipped backdrop explicitly rather than adding a costly live 3D launcher scene.
+4. Apply the same menu components to all dialogs, pickers, forms, graphics/controls/game/saves/
+   support screens and editor actions. Own dialog title/body/actions to avoid OEM mismatches.
+5. Adapt racing controls with HUD-derived neutral translucent faces, measured rim/tick weight,
+   white icons and restrained active-state accents. Keep controller identification colors,
+   pedal differentiation, saved layouts and hitboxes. Utility dock/editor uses menu vocabulary;
+   live benchmark uses HUD typography and telemetry vocabulary.
+6. Compare side by side with actual game screenshots at matched scale. Verify phone/tablet,
+   text size/contrast, controller navigation/focus and bright/dark race backgrounds. Use static
+   or cached selection glow and draw only on changes; no continuous blur or expensive animation.
+
+Each stage is a reviewable commit. This pass changes the plan only, not the app.
 
 ## Acceptance checklist
 
