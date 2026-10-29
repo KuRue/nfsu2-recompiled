@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="NeonDialog" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_neon</item>
+        <item name="android:colorAccent">@color/neon_violet</item>
+        <item name="android:textColorPrimary">@color/neon_text</item>
+        <item name="android:textColorSecondary">@color/neon_muted</item>
+        <item name="android:fontFamily">sans-serif-condensed</item>
+        <item name="android:windowMinWidthMajor">78%</item>
+        <item name="android:windowMinWidthMinor">78%</item>
+    </style>
+</resources>

@@ -208,3 +208,15 @@ Benchmark with preset High plus the Midnight look and Subtle bloom:
 77.8 FPS average, 1% low 37.4, 55,185 draw calls/frame, render thread 4.15 ms.
 That is the heaviest configuration measured; 85% resolution or a lower preset
 buys back frame rate.
+
+## Launcher redesign: Underground neon (2026-10-29)
+
+The launcher now uses the Underground neon theme: deep-violet night background,
+violet primary and cyan secondary accents, condensed uppercase headings, card
+rows, and themed dialogs (`NeonDialog`) replacing the stock Android alert look.
+Benchmark moved to the top of Visual settings as a cyan-accent card showing the
+last result; wording shortened ("Visual settings", "Controls", "Saves",
+"Support", "Performance preset"); the old "Phone preset" name and the
+"Ignored · launcher owns the look"/"Game setting" wording are gone. The display
+detail rows now always carry concrete High-preset defaults, so the launcher is
+the single source of truth.

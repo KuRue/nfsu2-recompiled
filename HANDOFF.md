@@ -1058,3 +1058,12 @@ High preset from the launcher: override log confirms world 2 / car 1 / shadow 2
 unchanged. Benchmark with High + Midnight + bloom: 77.8 avg / 37.4 1% low /
 55,185 calls (heaviest config). Grading now stacks with presets (individual
 rows take precedence over the older bundle switches).
+
+## 2026-10-29: launcher redesign (neon theme, IA, benchmark card)
+
+Underground neon palette, themed dialogs, benchmark card at the top of Visual
+settings with last-result summary, shortened labels, Performance preset rename,
+concrete display defaults (High), "Game setting" sentinels removed. Benchmark
+result dialog re-themed with the neon graph; in-race overlay recoloured.
+Verified on device (screenshots in /tmp/opencode/neon_*.png).
+Next: in-game Display menu removal/disable (RE), remaining toasts, theme polish.

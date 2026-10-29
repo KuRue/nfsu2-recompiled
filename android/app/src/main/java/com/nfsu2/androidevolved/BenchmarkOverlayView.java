@@ -29,7 +29,7 @@ public final class BenchmarkOverlayView extends LinearLayout {
         int pad = Math.round(10 * density);
         setPadding(pad, Math.round(8 * density), pad, Math.round(6 * density));
         GradientDrawable background = new GradientDrawable();
-        background.setColor(0xc00b0f14); background.setCornerRadius(10 * density);
+        background.setColor(0xC00A0818); background.setCornerRadius(10 * density);
         setBackground(background);
         figures = new Figures(context);
         addView(figures, new LayoutParams(Math.round(250 * density), Math.round(80 * density)));
@@ -55,13 +55,13 @@ public final class BenchmarkOverlayView extends LinearLayout {
 
         Figures(Context context) {
             super(context);
-            title.setColor(0xffe6edf3); title.setTextSize(9.5f * density); title.setTypeface(Typeface.DEFAULT_BOLD); title.setLetterSpacing(0.14f);
-            timer.setColor(0xff9aa4ad); timer.setTextSize(9.5f * density); timer.setTypeface(Typeface.MONOSPACE); timer.setTextAlign(Paint.Align.RIGHT);
+            title.setColor(0xFFF2F0FF); title.setTextSize(9.5f * density); title.setTypeface(Typeface.DEFAULT_BOLD); title.setLetterSpacing(0.14f);
+            timer.setColor(0xFF9A97B8); timer.setTextSize(9.5f * density); timer.setTypeface(Typeface.MONOSPACE); timer.setTextAlign(Paint.Align.RIGHT);
             big.setColor(Color.WHITE); big.setTextSize(28 * density); big.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-            unit.setColor(0xff9aa4ad); unit.setTextSize(9 * density);
-            label.setColor(0xff8b949e); label.setTextSize(8 * density); label.setLetterSpacing(0.06f);
+            unit.setColor(0xFF9A97B8); unit.setTextSize(9 * density);
+            label.setColor(0xFF9A97B8); label.setTextSize(8 * density); label.setLetterSpacing(0.06f);
             value.setColor(Color.WHITE); value.setTextSize(13 * density); value.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-            track.setColor(0x33ffffff); progress.setColor(0xff4fc3f7); rule.setColor(0x22ffffff);
+            track.setColor(0x33ffffff); progress.setColor(0xFF35E3FF); rule.setColor(0x33B45CFF);
         }
 
         private void tile(Canvas canvas, float x, float y, String name, String text) {
@@ -102,7 +102,7 @@ public final class BenchmarkOverlayView extends LinearLayout {
             if (stats[11] > 3) {
                 // The AI is stuck: say so, since it drags the figures down.
                 int colour = label.getColor();
-                label.setColor(0xffff7b72);
+                label.setColor(0xFFFF5C8A);
                 canvas.drawText(String.format(Locale.US, "car stuck %.0f s · run again for a fair result", stats[11]), 0, y, label);
                 label.setColor(colour);
             } else canvas.drawText(state, 0, y, label);

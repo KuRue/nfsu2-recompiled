@@ -41,8 +41,11 @@ import java.util.concurrent.Executors;
 public final class LauncherActivity extends Activity {
     private static final int REQUEST_DRIVER_ZIP = 45, REQUEST_DRIVER_PROBE = 46, REQUEST_SAVE_ZIP = 47;
     private int benchmarkSeconds;
-    // NFSU2 green.
-    private static final int ACCENT = 0xFF8EE03A;
+    // Underground neon: violet primary, cyan secondary on deep night.
+    private static final int ACCENT = 0xFFB45CFF;
+    private static final int CYAN = 0xFF35E3FF;
+    private static final int TEXT = 0xFFF2F0FF;
+    private static final int MUTED = 0xFF9A97B8;
     /** {label, guest language name, LANGUAGES/<file>.bin}. */
     private static final String[][] LANGUAGES = {
         {"Español", "Spanish", "Spanish"}, {"English", "English UK", "English"},
@@ -73,7 +76,7 @@ public final class LauncherActivity extends Activity {
 
     /** First launch after an update: the installed version's release notes from GitHub. */
     private void showWhatsNew(String version) {
-        AlertDialog dialog = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.NeonDialog)
                 .setTitle("Updated to version " + version + "!")
                 .setMessage("Loading release notes…")
                 .setPositiveButton("OK", (d, which) -> ReleaseUpdates.whatsNewSeen(this))
@@ -111,7 +114,7 @@ public final class LauncherActivity extends Activity {
         String crash = Diagnostics.unreportedCrash(this);
         if (crash != null) {
             Diagnostics.acknowledgeCrashes(this);
-            new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            new AlertDialog.Builder(this, R.style.NeonDialog)
                     .setTitle("The game closed").setMessage(crash + ".\n\nWould you like to report this on GitHub with the full log?")
                     .setPositiveButton("Report on GitHub", (dialog, which) -> prepareReport(crash))
                     .setNegativeButton("Not now", null).show();
@@ -129,7 +132,7 @@ public final class LauncherActivity extends Activity {
     private View buildScreen() {
         FrameLayout screen = new FrameLayout(this);
         screen.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {0xFF060D08, 0xFF0B2210, 0xFF060D08}));
+                new int[] {0xFF07070F, 0xFF0D0A1A, 0xFF120A24}));
         LinearLayout columns = new LinearLayout(this);
         columns.setPadding(dp(24), dp(10), dp(24), dp(10));
         screen.addView(columns, new FrameLayout.LayoutParams(-1, -1));
@@ -152,8 +155,8 @@ public final class LauncherActivity extends Activity {
         LinearLayout titles = new LinearLayout(this);
         titles.setOrientation(LinearLayout.VERTICAL);
         titles.setPadding(dp(14), 0, 0, 0);
-        titles.addView(label("Need for Speed Underground 2", 18, Color.WHITE, true));
-        titles.addView(label("PC game · recompiled natively for Android", 12, 0x99FFFFFF, false));
+        titles.addView(label("Need for Speed Underground 2", 18, TEXT, true));
+        titles.addView(label("PC game · native Android port", 12, MUTED, false));
         header.addView(titles);
         left.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
@@ -162,7 +165,7 @@ public final class LauncherActivity extends Activity {
         cardParams.topMargin = dp(8);
         left.addView(card, cardParams);
         card.addView(label("GAME FILES", 12, ACCENT, true));
-        status = label("", 13, 0xDDFFFFFF, false);
+        status = label("", 13, TEXT, false);
         status.setPadding(0, dp(4), 0, dp(6));
         card.addView(status);
         checksList = new LinearLayout(this);
@@ -245,15 +248,14 @@ public final class LauncherActivity extends Activity {
         optionsList.removeAllViews();
         if (openGroup != null) { buildGroup(openGroup); return; }
         PhonePreset preset = GameOptions.phonePreset(this);
-        optionsList.addView(optionRow("Graphics and display",
+        optionsList.addView(optionRow("Visual settings",
                 preset == null ? "Custom" : preset.label, () -> openGroup("graphics")));
-        optionsList.addView(optionRow("Controls and feedback",
-                GameOptions.get(this, GameOptions.PEDALS).equals("triggers") ? "Trigger pedals" : "Game bindings",
+        optionsList.addView(optionRow("Controls", "Touch · triggers · vibration",
                 () -> openGroup("controls")));
         optionsList.addView(optionRow("Game", languageLabel() + " · " + GameOptions.onlineServer(this),
                 () -> openGroup("game")));
-        optionsList.addView(optionRow("Career saves", backupSummary(), () -> openGroup("saves")));
-        optionsList.addView(optionRow("Updates and support", "Version " + ReleaseUpdates.installed(this),
+        optionsList.addView(optionRow("Saves", backupSummary(), () -> openGroup("saves")));
+        optionsList.addView(optionRow("Support", "Version " + ReleaseUpdates.installed(this),
                 () -> openGroup("support")));
     }
 
@@ -274,8 +276,9 @@ public final class LauncherActivity extends Activity {
     private void buildGroup(String key) {
         switch (key) {
             case "graphics": {
-                TextView back = backRow("‹  Options");
+                TextView back = backRow("‹  Back");
                 optionsList.addView(back);
+                optionsList.addView(benchmarkRow());
                 if (android.os.Process.is64Bit()) {
                     List<GpuDrivers.Driver> drivers = GpuDrivers.list(this);
                     String[] values = new String[drivers.size() + 1], labels = new String[drivers.size() + 1];
@@ -296,10 +299,10 @@ public final class LauncherActivity extends Activity {
                 String[] values = new String[presets.length], labels = new String[presets.length];
                 for (int i = 0; i < presets.length; i++) { values[i] = presets[i].name(); labels[i] = presets[i].label; }
                 PhonePreset preset = GameOptions.phonePreset(this);
-                optionsList.addView(cycleRow("Phone preset", labels, values, preset == null ? "" : preset.name(), "Custom",
+                optionsList.addView(cycleRow("Performance preset", labels, values, preset == null ? "" : preset.name(), "Custom",
                         name -> { GameOptions.applyPhonePreset(this, PhonePreset.valueOf(name)); refreshOptions(); }));
-                optionsList.addView(optionRow("Game display settings",
-                        GameOptions.displayPresetLabel(this) + " preset", () -> openGroup("display")));
+                optionsList.addView(optionRow("Display detail",
+                        GameOptions.displayPresetLabel(this), () -> openGroup("display")));
                 for (GameOptions.Option option : GameOptions.ALL)
                     if (!isControlOption(option) && !GameOptions.isDisplayOption(option))
                         optionsList.addView(optionCycleRow(option));
@@ -310,7 +313,7 @@ public final class LauncherActivity extends Activity {
                 break;
             }
             case "display": {
-                optionsList.addView(backRow("‹  Options"));
+                optionsList.addView(backRow("‹  Back"));
                 String[] labels = {"Low", "Medium", "High", "Ultra"};
                 String[] values = {"low", "medium", "high", "ultra"};
                 optionsList.addView(cycleRow("Detail preset · Level Of Detail", labels, values,
@@ -322,14 +325,14 @@ public final class LauncherActivity extends Activity {
                 break;
             }
             case "controls":
-                optionsList.addView(backRow("‹  Options"));
+                optionsList.addView(backRow("‹  Back"));
                 for (GameOptions.Option option : GameOptions.ALL)
                     if (isControlOption(option) && !GameOptions.isDisplayOption(option))
                         optionsList.addView(optionCycleRow(option));
                 optionsList.addView(optionRow("Test phone vibration", "Brief handset pulse", () -> {if(!PhoneFeedback.test(this))message("Phone vibration", "This device has no vibration motor.");}));
                 break;
             case "game": {
-                optionsList.addView(backRow("‹  Options"));
+                optionsList.addView(backRow("‹  Back"));
                 List<String[]> found = allowed() ? languages() : new ArrayList<>();
                 if (!found.isEmpty()) {
                     String[] values = new String[found.size()], labels = new String[found.size()];
@@ -342,12 +345,12 @@ public final class LauncherActivity extends Activity {
                 break;
             }
             case "saves":
-                optionsList.addView(backRow("‹  Options"));
+                optionsList.addView(backRow("‹  Back"));
                 optionsList.addView(optionRow("Backup career saves", backupSummary(), this::backupSaves));
                 optionsList.addView(optionRow("Restore career saves", "From a backup ZIP", this::restoreSaves));
                 break;
             case "support":
-                optionsList.addView(backRow("‹  Options"));
+                optionsList.addView(backRow("‹  Back"));
                 optionsList.addView(optionRow("Check for updates",
                         checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
                 optionsList.addView(optionRow("Report a problem", "Full log for GitHub", () -> prepareReport(null)));
@@ -384,12 +387,12 @@ public final class LauncherActivity extends Activity {
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(dp(12), dp(10), dp(12), dp(10));
             GradientDrawable bg = new GradientDrawable();
-            bg.setColor(i == index ? 0x2E8EE03A : 0x168EE03A);
+            bg.setColor(i == index ? 0x33B45CFF : 0x14B45CFF);
             bg.setCornerRadius(dp(10));
             row.setBackground(bg);
             row.setClickable(true);
             row.setOnClickListener(v -> { dialog.dismiss(); set.accept(value); });
-            row.addView(label(labels[i], 14, i == index ? ACCENT : Color.WHITE, i == index),
+            row.addView(label(labels[i], 14, i == index ? CYAN : TEXT, i == index),
                     new LinearLayout.LayoutParams(0, -2, 1f));
             if (i == index) row.addView(label("✓", 16, ACCENT, true));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
@@ -444,7 +447,7 @@ public final class LauncherActivity extends Activity {
         int pad = (int) (20 * getResources().getDisplayMetrics().density);
         box.setPadding(pad, pad / 2, pad, 0);
         box.addView(input);
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Online server")
+        new AlertDialog.Builder(this, R.style.NeonDialog).setTitle("Online server")
                 .setMessage("The game's online mode (EA Nation) connects to this community server instead of the discontinued EA servers.")
                 .setView(box)
                 .setPositiveButton("Save", (dialog, which) -> {
@@ -485,7 +488,7 @@ public final class LauncherActivity extends Activity {
                               : "\nUnsupported vertex formats: " + gpu.optString("vertexFormatsMissing"))
                       + "\n" + (gpu.optBoolean("compatible") ? "Compatible with the game."
                               : "Missing features: " + gpu.optJSONArray("missing"));
-            new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            new AlertDialog.Builder(this, R.style.NeonDialog)
                     .setTitle("Vulkan driver test").setMessage(text)
                     .setPositiveButton("OK", (dialog, which) -> { if (wantedToPlay) benchmarkSeconds = 0; })
                     .setNeutralButton("Use system driver", (dialog, which) -> { benchmarkSeconds = 0; GpuDrivers.select(this, ""); refreshOptions(); })
@@ -538,7 +541,7 @@ public final class LauncherActivity extends Activity {
             android.content.SharedPreferences updates = ReleaseUpdates.prefs(this);
             if (!manual && result.tag.equals(updates.getString("notified_tag", ""))) return;
             updates.edit().putString("notified_tag", result.tag).apply();
-            new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            new AlertDialog.Builder(this, R.style.NeonDialog)
                     .setTitle("New version available: " + result.tag)
                     .setMessage("Download it from GitHub or keep playing this version. Install the APK over "
                             + "the current app to preserve your saves and settings.")
@@ -561,7 +564,7 @@ public final class LauncherActivity extends Activity {
                 Uri issue = Diagnostics.issueUri(this, crash, location);
                 main.post(() -> {
                     refresh();
-                    new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    new AlertDialog.Builder(this, R.style.NeonDialog)
                             .setTitle("Report on GitHub")
                             .setMessage("The full log was saved to:\n" + location
                                     + "\n\nGitHub will open with a technical summary already filled in. Describe what happened and, "
@@ -601,9 +604,9 @@ public final class LauncherActivity extends Activity {
 
     private void confirmBenchmark() {
         String extra = gameRunning() ? "\n\nThe current live session will end." : "";
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Run a benchmark")
-                .setMessage("Starts a fresh session that skips the menus and goes straight into the same circuit race every time. The game's own AI drives, and a panel shows live figures for 60 seconds. Then it returns here with a suggestion. Your career profile is not loaded. Nothing changes until you tap Apply." + extra)
+        new AlertDialog.Builder(this, R.style.NeonDialog)
+                .setTitle("Benchmark")
+                .setMessage("A fixed 60-second AI race with a live frame-time panel. You get a result and a suggestion; nothing changes until you apply it." + extra)
                 .setPositiveButton("Start", (dialog, which) -> { benchmarkSeconds = 60; resumeNextLaunch = false; play(); })
                 .setNegativeButton("Cancel", null).show();
     }
@@ -626,8 +629,11 @@ public final class LauncherActivity extends Activity {
         BenchmarkReport report;
         try { report = BenchmarkReport.parse(text); }
         catch (IllegalArgumentException error) { message("Benchmark", "The report was not usable."); return; }
-        AlertDialog.Builder dialog = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Benchmark").setNegativeButton(report.canApply() ? "Keep settings" : "OK", null);
+        if (report.averageFps > 0)
+            GameOptions.prefs(this).edit().putString("benchmark_last",
+                    String.format(java.util.Locale.US, "%.1f avg · %.1f 1%% low", report.averageFps, report.lowFps)).apply();
+        AlertDialog.Builder dialog = new AlertDialog.Builder(this, R.style.NeonDialog)
+                .setTitle("Benchmark results").setNegativeButton(report.canApply() ? "Keep settings" : "OK", null);
         if (report.timeline.length == 0) dialog.setMessage(report.summary());
         else {
             float density = getResources().getDisplayMetrics().density;
@@ -753,7 +759,7 @@ public final class LauncherActivity extends Activity {
         for (int i = 0; i < zips.length; i++)
             names[i] = zips[i].getName().replace("nfsu2-saves-", "").replace("-", " ").replace(".zip", "  (" + zips[i].length() / 1024 + " KB)");
         names[zips.length] = "Import ZIP from elsewhere…";
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+        new AlertDialog.Builder(this, R.style.NeonDialog)
                 .setTitle("Restore career saves")
                 .setItems(names, (dialog, which) -> {
                     if (which < zips.length) restoreSavesFrom(Uri.fromFile(zips[which]));
@@ -834,9 +840,35 @@ public final class LauncherActivity extends Activity {
 
     private void addCheck(String name, boolean ok, boolean required) {
         TextView row = label((ok ? "✓  " : required ? "✗  " : "!  ") + name + (ok || required ? "" : " · optional"), 13,
-                ok ? 0xFF7CD992 : required ? 0xFFFF6B6B : 0xFFFFC857, false);
+                ok ? 0xFF59F7B0 : required ? 0xFFFF5C8A : 0xFFFFD166, false);
         row.setPadding(0, dp(2), 0, dp(2));
         checksList.addView(row);
+    }
+
+    /** The benchmark entry: distinct cyan accent card, last result underneath. */
+    private View benchmarkRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(dp(16), dp(12), dp(16), dp(13));
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[] {0x3335E3FF, 0x33B45CFF});
+        bg.setCornerRadius(dp(14));
+        bg.setStroke(dp(1), 0xAA35E3FF);
+        row.setBackground(bg);
+        row.setClickable(true);
+        row.setOnClickListener(v -> confirmBenchmark());
+        row.addView(label("BENCHMARK", 11, CYAN, true));
+        row.addView(label("Run the 60-second AI race  ›", 15, TEXT, false));
+        String last = GameOptions.prefs(this).getString("benchmark_last", "");
+        if (!last.isEmpty()) {
+            TextView subtitle = label(last, 12, MUTED, false);
+            subtitle.setPadding(0, dp(3), 0, 0);
+            row.addView(subtitle);
+        }
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = dp(8);
+        row.setLayoutParams(lp);
+        return row;
     }
 
     private View optionRow(String title, String value, Runnable onClick) {
@@ -848,13 +880,13 @@ public final class LauncherActivity extends Activity {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(12), dp(8), dp(12), dp(8));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0x168EE03A);
-        bg.setCornerRadius(dp(10));
+        bg.setColor(0x14B45CFF);
+        bg.setCornerRadius(dp(12));
         row.setBackground(bg);
         row.setClickable(true);
         row.setOnClickListener(v -> onClick.run());
-        row.addView(label(title, 14, Color.WHITE, false), new LinearLayout.LayoutParams(0, -2, 1f));
-        TextView current = label(value, 13, ACCENT, true);
+        row.addView(label(title, 14, TEXT, false), new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView current = label(value, 13, CYAN, true);
         current.setGravity(Gravity.END);
         row.addView(current, new LinearLayout.LayoutParams(0, -2, 1f));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
@@ -868,9 +900,9 @@ public final class LauncherActivity extends Activity {
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(12), dp(16), dp(12));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0xCC0E1A12);
-        bg.setCornerRadius(dp(16));
-        bg.setStroke(dp(1), 0x448EE03A);
+        bg.setColor(0xCC121226);
+        bg.setCornerRadius(dp(18));
+        bg.setStroke(dp(1), 0x55B45CFF);
         card.setBackground(bg);
         return card;
     }
@@ -879,12 +911,12 @@ public final class LauncherActivity extends Activity {
         Button b = new Button(this);
         b.setText(text);
         b.setAllCaps(false);
-        b.setTextColor(primary ? 0xFF0A1C05 : Color.WHITE);
+        b.setTextColor(primary ? 0xFF08060F : TEXT);
         b.setTextSize(TypedValue.COMPLEX_UNIT_SP, primary ? 22 : 15);
         b.setTypeface(Typeface.DEFAULT_BOLD);
         b.setLetterSpacing(primary ? .12f : 0f);
         GradientDrawable bg = primary
-                ? new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[] {0xFFB8F25A, 0xFF3FB82A})
+                ? new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[] {0xFFB45CFF, 0xFF35E3FF})
                 : new GradientDrawable();
         if (!primary) { bg.setColor(0x22FFFFFF); bg.setStroke(dp(1), 0x55FFFFFF); }
         bg.setCornerRadius(dp(14));
@@ -903,7 +935,7 @@ public final class LauncherActivity extends Activity {
     }
 
     private void message(String title, String text) {
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+        new AlertDialog.Builder(this, R.style.NeonDialog)
                 .setTitle(title).setMessage(text).setPositiveButton("OK", null).show();
     }
 

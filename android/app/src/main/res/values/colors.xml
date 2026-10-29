@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#07070F</color>
+    <color name="bg2">#0D0A1A</color>
+    <color name="bg3">#120A24</color>
+    <color name="card">#121226</color>
+    <color name="neon_violet">#B45CFF</color>
+    <color name="neon_cyan">#35E3FF</color>
+    <color name="neon_text">#F2F0FF</color>
+    <color name="neon_muted">#9A97B8</color>
+    <color name="neon_line">#3A2E66</color>
+    <color name="icon_bg">#171717</color>
+</resources>

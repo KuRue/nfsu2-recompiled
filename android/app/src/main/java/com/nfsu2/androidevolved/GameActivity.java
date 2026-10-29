@@ -297,8 +297,7 @@ public final class GameActivity extends NativeActivity {
                 Integer.parseInt(GameOptions.get(this, GameOptions.EFFECTS)),
                 Integer.parseInt(GameOptions.get(this, GameOptions.ATMOSPHERE)),
                 Integer.parseInt(GameOptions.get(this, GameOptions.TREATMENT)),
-                Integer.parseInt(GameOptions.get(this, GameOptions.DETAIL)),
-                GameOptions.get(this, GameOptions.DISPLAY_OWNER).equals("locked"));
+                0, true);
         nativeCpuTextures(launch.getBooleanExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu")));
         String[] loader = launch.getStringArrayExtra("driverLoader");
         if (loader == null || loader.length != 4) loader = GpuDrivers.loaderArguments(this);
