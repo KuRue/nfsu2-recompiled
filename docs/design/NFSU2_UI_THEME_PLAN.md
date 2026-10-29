@@ -202,3 +202,10 @@ content, never in the value itself. Keep real filenames, hostnames and build ide
 Play/Resume remains visible in settings. Visual settings/Display detail use a persistent aggregate
 Estimated demand panel, updated from current configuration. Do not replace it with whichever
 option was last touched. Bars are relative CPU/GPU demand estimates, not live utilization.
+
+### 2026-10-29 — Fixed launch footer and finer demand bars
+
+Play/Resume is anchored below the left scrolling pane, at the bottom of the launcher columns.
+CPU/GPU use ten lime segments each; both share the same active color. Segment count follows
+relative demand score while Low/Medium/High/Very high labels retain their tier thresholds.
+Real rendered preview feasibility/next steps: VISUAL_PREVIEW.md (not yet implemented).

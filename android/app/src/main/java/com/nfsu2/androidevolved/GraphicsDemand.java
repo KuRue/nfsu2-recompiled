@@ -7,12 +7,15 @@ import java.util.Map;
  * Explicit display switches override legacy effect bundles, so those are not counted twice.
  */
 final class GraphicsDemand {
-    final int cpuLevel, gpuLevel;
+    static final int SEGMENTS=10;
+    final int cpuLevel, gpuLevel, cpuSegments, gpuSegments;
     final double targetFps, cpuScore, gpuScore;
     private GraphicsDemand(double fps, double cpu, double gpu) {
         targetFps=fps; cpuScore=cpu; gpuScore=gpu;
         cpuLevel=tier(cpu); gpuLevel=tier(gpu);
+        cpuSegments=segments(cpu); gpuSegments=segments(gpu);
     }
+    private static int segments(double score) { return Math.max(1,Math.min(SEGMENTS,(int)Math.ceil(score*2.5))); }
     private static int tier(double score) { return score<.8?1:score<1.5?2:score<2.5?3:4; }
     private static int value(Map<String,String> s,String key,int fallback) {
         try { return Integer.parseInt(s.get(key)); } catch (RuntimeException e) { return fallback; }

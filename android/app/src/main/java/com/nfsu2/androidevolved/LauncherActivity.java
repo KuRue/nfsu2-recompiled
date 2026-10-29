@@ -147,10 +147,13 @@ public final class LauncherActivity extends Activity {
         LinearLayout left = new LinearLayout(this);
         left.setOrientation(LinearLayout.VERTICAL);
         left.setGravity(Gravity.CENTER_HORIZONTAL);
+        LinearLayout leftColumn = new LinearLayout(this);
+        leftColumn.setOrientation(LinearLayout.VERTICAL);
+        columns.addView(leftColumn, new LinearLayout.LayoutParams(0, -1, 1.1f));
         ScrollView leftScroll = new ScrollView(this);
         leftScroll.setFillViewport(true);
         leftScroll.addView(left);
-        columns.addView(leftScroll, new LinearLayout.LayoutParams(0, -1, 1.1f));
+        leftColumn.addView(leftScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
 
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -198,7 +201,7 @@ public final class LauncherActivity extends Activity {
         playRow.addView(playArrow, arrowParams);
         LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(-1, -2);
         playParams.topMargin = dp(8);
-        left.addView(playRow, playParams);
+        leftColumn.addView(playRow, playParams);
 
         access = actionButton("File access", false);
         access.setOnClickListener(view -> requestAccess());
@@ -923,8 +926,8 @@ public final class LauncherActivity extends Activity {
             GraphicsDemand demand = GraphicsDemand.estimate(settings, metrics.widthPixels, metrics.heightPixels, refresh);
             TextView estimate = label("Estimated demand",13,MUTED,false);
             estimate.setPadding(dp(10),dp(8),dp(10),dp(8));leftInfo.addView(estimate);
-            addImpactBar(leftInfo,"CPU",demand.cpuLevel);
-            addImpactBar(leftInfo,"GPU",demand.gpuLevel);
+            addImpactBar(leftInfo,"CPU",demand.cpuLevel,demand.cpuSegments);
+            addImpactBar(leftInfo,"GPU",demand.gpuLevel,demand.gpuSegments);
             TextView target = label(settings.get(GameOptions.FPS).equals("0")
                     ? "Uncapped · "+Math.round(refresh)+" Hz reference"
                     : Math.round(demand.targetFps)+" FPS target",12,MUTED,false);
@@ -932,27 +935,27 @@ public final class LauncherActivity extends Activity {
         }
     }
 
-    private void addImpactBar(LinearLayout parent, String name, int level) {
+    private void addImpactBar(LinearLayout parent, String name, int level, int segments) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(10), dp(3), dp(10), dp(3));
         TextView caption = label(name, 11, MUTED, true);
         caption.setLetterSpacing(.12f);
         row.addView(caption, new LinearLayout.LayoutParams(dp(40), -2));
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < GraphicsDemand.SEGMENTS; i++) {
             View cell = new View(this);
             GradientDrawable bg = new GradientDrawable();
-            bg.setColor(i < level ? (name.equals("GPU") ? ACCENT : ORANGE) : 0x228EE03A);
+            bg.setColor(i < segments ? ACCENT : 0x228EE03A);
             bg.setCornerRadius(dp(3));
             cell.setBackground(bg);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(26), dp(7));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(7), 1f);
             lp.rightMargin = dp(4);
             row.addView(cell, lp);
         }
         TextView cost = label(level <= 1 ? "Low" : level == 2 ? "Medium" : level == 3 ? "High" : "Very high", 11,
-                level >= 3 ? ORANGE : MUTED, false);
+                MUTED, false);
         cost.setPadding(dp(8), 0, 0, 0);
-        row.addView(cost);
+        row.addView(cost,new LinearLayout.LayoutParams(dp(48),-2));
         parent.addView(row);
     }
 

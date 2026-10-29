@@ -7,6 +7,7 @@ public final class GraphicsDemandTest {
     public static void main(String[] args) {
         Map<String,String> s=new HashMap<>();s.put("fps","60");s.put("resolution","50");
         GraphicsDemand low=demand(s);s.put("resolution","100");GraphicsDemand high=demand(s);
+        check(high.gpuSegments>low.gpuSegments,"More segments for higher demand");
         check(high.gpuScore>low.gpuScore,"Resolution must increase GPU work");
         check(high.cpuScore==low.cpuScore,"Resolution must not inflate CPU work");
         s.put("fps","120");GraphicsDemand fast=demand(s);

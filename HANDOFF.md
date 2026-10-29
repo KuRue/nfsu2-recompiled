@@ -1296,3 +1296,17 @@ FPS/pacing, geometry, disabled reflections and avoiding duplicate bundles. Insta
 summary. Temporarily changed resolution Native -> 60%: GPU Very high -> Medium, CPU unchanged;
 restored Native afterward. No game launched or other preference changed. Screenshot
 /tmp/nfsu2-demand-visuals.png (before final uncapped reference wording refinement).
+
+## 2026-10-29 — Bottom-anchored Play and ten-segment demand bars
+
+Moved Play/Resume into a fixed footer outside the left ScrollView; logo/info/files scroll in
+remaining space. Both CPU/GPU bars now use ten lime segments with weighted widths, driven by
+relative scores (existing tier labels retained). No settings changed. Debug build/full source
+checks passed, including segment sensitivity test. Installed on phone :40615.
+
+Investigated requested real-time game preview: current :game process and startup-only visual
+options need IPC, live renderer settings and frame export. No real preview implemented yet.
+Concrete staged proposal and limitations in docs/design/VISUAL_PREVIEW.md. Use a repeatable,
+isolated game scene, render on change, cache/debounce; temporal effects need a short loop and
+frame pacing cannot be demonstrated by one still. Do not pass off screenshot filters as actual
+geometry/reflection/texture previews. Avoid touching user's career or live session.
