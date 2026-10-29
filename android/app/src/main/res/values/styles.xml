@@ -29,4 +29,58 @@
         <item name="android:fontFamily">sans-serif-condensed</item>
         <item name="android:textColor">@color/neon_muted</item>
     </style>
+
+    <style name="MenuDialog" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_menu</item>
+        <item name="android:windowMinWidthMajor">68%</item>
+        <item name="android:windowMinWidthMinor">68%</item>
+        <item name="android:fontFamily">@font/menu_body</item>
+        <item name="android:textColorPrimary">@color/menu_ink</item>
+        <item name="android:textColorSecondary">@color/menu_secondary</item>
+        <item name="android:colorAccent">@color/menu_lime</item>
+        <item name="android:colorControlActivated">@color/menu_lime</item>
+        <item name="android:colorControlNormal">@color/menu_secondary</item>
+        <item name="android:colorControlHighlight">#33C6E78B</item>
+        <item name="android:textAppearanceLarge">@style/MenuDialogTitleText</item>
+        <item name="android:textAppearanceMedium">@style/MenuDialogBodyText</item>
+        <item name="android:textAppearanceSmall">@style/MenuDialogSmallText</item>
+        <item name="android:buttonBarStyle">@style/MenuDialogButtonBar</item>
+        <item name="android:buttonBarButtonStyle">@style/MenuDialogButton</item>
+    </style>
+
+    <style name="HudDialog" parent="MenuDialog">
+        <item name="android:windowBackground">@drawable/dialog_hud</item>
+        <item name="android:textColorPrimary">@color/menu_white</item>
+        <item name="android:textColorSecondary">@color/menu_disabled</item>
+    </style>
+
+    <style name="MenuDialogTitleText" parent="android:TextAppearance.Material.Title">
+        <item name="android:fontFamily">@font/menu_oblique</item>
+        <item name="android:textColor">@color/menu_lime</item>
+        <item name="android:textSize">21sp</item>
+    </style>
+    <style name="MenuDialogBodyText" parent="android:TextAppearance.Material.Body1">
+        <item name="android:fontFamily">@font/menu_body</item>
+        <item name="android:textColor">@color/menu_ink</item>
+        <item name="android:textSize">15sp</item>
+    </style>
+    <style name="MenuDialogSmallText" parent="android:TextAppearance.Material.Body2">
+        <item name="android:fontFamily">@font/menu_body</item>
+        <item name="android:textColor">@color/menu_secondary</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+    <style name="MenuDialogButtonBar">
+        <item name="android:background">@drawable/dialog_button_bar</item>
+        <item name="android:paddingTop">2dp</item>
+        <item name="android:paddingBottom">2dp</item>
+    </style>
+    <style name="MenuDialogButton" parent="android:Widget.Material.Button.Borderless">
+        <item name="android:fontFamily">@font/menu_oblique</item>
+        <item name="android:textColor">@color/menu_button_text</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:paddingLeft">12dp</item>
+        <item name="android:paddingRight">12dp</item>
+    </style>
 </resources>

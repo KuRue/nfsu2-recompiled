@@ -26,9 +26,9 @@ final class DemandSlider extends View {
     DemandSlider(Context context, int captionColor, int valueColor, int accent) {
         super(context);
         density = context.getResources().getDisplayMetrics().density;
-        caption.setColor(captionColor); caption.setTextSize(10.5f * density); caption.setTypeface(Typeface.DEFAULT_BOLD);
+        caption.setColor(captionColor); caption.setTextSize(10f * density); caption.setTypeface(Typeface.DEFAULT_BOLD);
         caption.setLetterSpacing(.12f);
-        tier.setColor(valueColor); tier.setTextSize(10.5f * density); tier.setTextAlign(Paint.Align.RIGHT);
+        tier.setColor(valueColor); tier.setTextSize(10f * density); tier.setTextAlign(Paint.Align.RIGHT);
         tier.setFakeBoldText(true); tier.setShadowLayer(1.5f * density, 0, density, 0xcc000000); // lime values carry a dark shadow, as in the menus
         rail.setColor(0x80303438); // dark enough to read on the gray settings sheet
         fill.setColor(accent);
@@ -44,15 +44,19 @@ final class DemandSlider extends View {
         invalidate();
     }
 
+    // One line: name, rail, tier.
     @Override protected void onMeasure(int widthSpec, int heightSpec) {
-        setMeasuredDimension(MeasureSpec.getSize(widthSpec), Math.round(30 * density));
+        setMeasuredDimension(MeasureSpec.getSize(widthSpec), Math.round(16 * density));
     }
 
     @Override protected void onDraw(Canvas canvas) {
-        float radius = 5.5f * density, left = radius + density, right = getWidth() - radius - density;
-        canvas.drawText(name, left - radius, 11 * density, caption);
-        canvas.drawText(level, getWidth() - density, 11 * density, tier);
-        float y = 22 * density, half = 1.6f * density;
+        float y = getHeight() / 2f, baseline = y + 3.6f * density;
+        canvas.drawText(name, 0, baseline, caption);
+        canvas.drawText(level, getWidth(), baseline, tier);
+        float radius = 4.5f * density, half = 1.4f * density;
+        float left = caption.measureText(name) + 6 * density + radius;
+        float right = getWidth() - tier.measureText(level) - 6 * density - radius;
+        if (right <= left) return;
         bar.set(left, y - half, right, y + half);
         canvas.drawRoundRect(bar, half, half, rail);
         float x = left + (right - left) * position;

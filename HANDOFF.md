@@ -1310,3 +1310,29 @@ Concrete staged proposal and limitations in docs/design/VISUAL_PREVIEW.md. Use a
 isolated game scene, render on change, cache/debounce; temporal effects need a short loop and
 frame pacing cannot be demonstrated by one still. Do not pass off screenshot filters as actual
 geometry/reflection/texture previews. Avoid touching user's career or live session.
+
+## 2026-10-29: real launcher preview and unified NFSU2 UI skin
+
+Implemented the in-progress visual preview (isolated :preview showcase-camera still,
+live per-setting updates, cached stills) and finished the app-owned menu theme pass:
+
+- MenuTheme now owns MenuDialog/HudDialog: black title bands, silver sheets, Barlow
+  Condensed oblique/lime headings, dark body text, themed list rows/adapter, dark
+  footer actions and dark form text on the silver sheet. Framework lists no longer
+  render light text on silver.
+- All app-owned AlertDialog call sites migrated (launcher, game, graphics cache,
+  control editor); single-choice rows show a lime check, list rows use menu row
+  states, and buttons use the dark/lime selector.
+- Racing controls/editor: neutral translucent faces, lime active/focus, Barlow
+  editor toolbar; pedal and Xbox/PlayStation identification colors preserved.
+- Benchmark: live panel uses the neutral dark/lime HUD palette and Barlow type;
+  results use the dark HudDialog.
+- Preview: real car still in Visual settings, cached by complete settings; base
+  changes restart the isolated preview. A changed car-shadow still took about
+  7.4 s. The race HUD is still visible in the preview; next pass.
+
+Verified on phone: home, Visual settings preview, silver cache-reset dialog,
+Saves list, racing HUD/editor and live benchmark panel. The phone dropped adb
+while the benchmark result was finishing, so the result screenshot is missing.
+Remaining: category icon strip/backdrop/logo, preview HUD-off, tablet/large-font
+and full controller traversal.

@@ -14,7 +14,7 @@ final class GraphicsCache {
     static final String DIRECTORY = "dxvk-v2";
 
     static void prompt(Activity activity) {
-        new AlertDialog.Builder(activity, R.style.NeonDialog).setTitle("Reset graphics cache")
+        MenuTheme.dialog(activity, "Reset graphics cache")
                 .setMessage("The current game session will close. Shaders will be recompiled when you play; saves and settings are preserved.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Reset", (dialog, which) -> reset(activity)).show();
@@ -34,11 +34,11 @@ final class GraphicsCache {
                 if (!cache.isDirectory() || !cache.renameTo(backup))
                     throw new IllegalStateException("Could not reset the graphics cache.");
             }
-            new AlertDialog.Builder(activity, R.style.NeonDialog).setTitle("Graphics cache ready")
+            MenuTheme.dialog(activity, "Graphics cache ready")
                     .setMessage("The next launch will create a new cache. The old cache is backed up in the app's private cache folder.")
                     .setPositiveButton("OK", null).show();
         } catch (RuntimeException error) {
-            new AlertDialog.Builder(activity, R.style.NeonDialog).setTitle("Graphics cache").setMessage(error.getMessage())
+            MenuTheme.dialog(activity, "Graphics cache").setMessage(error.getMessage())
                     .setPositiveButton("OK", null).show();
         }
     }

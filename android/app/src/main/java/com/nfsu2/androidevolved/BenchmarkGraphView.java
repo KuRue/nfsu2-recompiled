@@ -28,12 +28,12 @@ public final class BenchmarkGraphView extends View {
     public BenchmarkGraphView(Context context) {
         super(context);
         density = context.getResources().getDisplayMetrics().density;
-        band.setColor(0x338EE03A);
-        line.setColor(0xff8EE03A); line.setStyle(Paint.Style.STROKE); line.setStrokeWidth(1.8f * density);
+        band.setColor(0x33C6E78B);
+        line.setColor(0xffC6E78B); line.setStyle(Paint.Style.STROKE); line.setStrokeWidth(1.8f * density);
         line.setStrokeJoin(Paint.Join.ROUND);
         grid.setColor(0x26ffffff); grid.setStrokeWidth(1f * density);
         target.setColor(0xAAFFC857); target.setStrokeWidth(1f * density);
-        axis.setColor(0xff8FA88F); axis.setTextSize(7.5f * density); axis.setTypeface(android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.NORMAL));
+        axis.setColor(0xffB8BDB6); axis.setTextSize(7.5f * density); axis.setTypeface(MenuTheme.font(context,false));
     }
 
     /** points holds FIELDS floats per quarter second, starting at offset. goalFps 0 hides the cap line. */

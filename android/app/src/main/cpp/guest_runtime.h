@@ -51,3 +51,9 @@ unsigned guestForceFeedbackLevel();
 void stopGuestForceFeedback();
 
 void setGuestFeedbackSource(bool physics);
+// Launcher visual preview: queue settings (returns their generation); last generation on screen.
+#include <string>
+#include <utility>
+#include <vector>
+unsigned queuePreviewSettings(std::vector<std::pair<std::string,std::string>> values);
+unsigned previewReadyGeneration();

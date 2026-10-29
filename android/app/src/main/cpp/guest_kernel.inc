@@ -368,9 +368,12 @@ void regCloseKey(){ret(registryHandles.erase(arg(0))?0:6,1);}
 // Launcher overrides do not replace saved in-game values.
 bool visualRegistryOverride(const std::string& name,uint32_t& value){
     auto number=[](const char* key,int fallback){const char* v=std::getenv(key);return v?std::atoi(v):fallback;};
-    static const auto displayOverrides=[](){
+    // Re-parsed when the text changes: the launcher's live preview updates it while running.
+    static std::string parsed="\x01";static std::map<std::string,uint32_t> displayOverrides;
+    {const char* current=std::getenv("NFSU2_DISPLAY_OVERRIDES");std::string now=current?current:"";
+     if(now!=parsed){parsed=now;displayOverrides=[&](){
         std::map<std::string,uint32_t> map;
-        const char* text=std::getenv("NFSU2_DISPLAY_OVERRIDES");
+        const char* text=current;
         if(text){std::string all(text);size_t start=0;
             while(start<all.size()){
                 size_t comma=all.find(',',start);
@@ -381,7 +384,7 @@ bool visualRegistryOverride(const std::string& name,uint32_t& value){
                 if(comma==std::string::npos)break;
                 start=comma+1;}}
         return map;
-    }();
+    }();}}
     auto direct=displayOverrides.find(name);
     if(direct!=displayOverrides.end()){value=direct->second;return true;}
     value=1;

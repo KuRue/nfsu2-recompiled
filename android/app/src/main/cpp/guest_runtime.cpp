@@ -626,6 +626,54 @@ void serviceGuestSoundTick();
 // but no control is bound to that event. 0x8900AC is the player; +0x22C is its current
 // mode (2 car racing, 4 auto pilot). The property is read every 2 s.
 uint32_t callGuest(uint32_t va,const uint32_t* args,size_t count,uint32_t cleanup,bool threadStart);
+bool visualRegistryOverride(const std::string& name,uint32_t& value);
+// Launcher visual preview (launcher_preview.cpp). The car is shown by the game's showcase camera
+// (sub_00501290(true)) with the HUD off (player+0x28 = 1). Settings arrive while it runs and are
+// applied on this thread at Present: environment for the launcher's own options, then each game
+// display variable (the g_* values the in-game options menu changes, loaded from the registry by
+// the routine at 0x5BEB00) is rewritten from the launcher override or, without one, the value the
+// game had loaded. A generation becomes ready once its frames have settled on screen.
+struct PreviewSettings {std::vector<std::pair<std::string,std::string>> values;unsigned generation=0;};
+std::mutex previewMutex;PreviewSettings previewPending;
+// Generation 1 is the settings the preview started with; each update is the next number.
+std::atomic<unsigned> previewRequested{1},previewReady{0};
+unsigned queuePreviewLocal(std::vector<std::pair<std::string,std::string>> values){
+    std::lock_guard<std::mutex> lock(previewMutex);previewPending.values=std::move(values);previewPending.generation=++previewRequested;
+    return previewPending.generation;
+}
+unsigned previewReadyLocal(){return previewReady.load();}
+struct DisplayVariable {const char* name;uint32_t address;};
+constexpr DisplayVariable displayVariables[]={
+    {"g_animatedtextureenable",0x870ce8},{"g_bleachbypassenable",0x870d00},{"g_cardamageenable",0x870ccc},
+    {"g_carenvironmentmapenable",0x870cb8},{"g_carenvironmentmapupdatedata",0x870cbc},{"g_carheadlightenable",0x870cc4},
+    {"g_carlightingenable",0x870cc8},{"g_carlodlevel",0x870cf8},{"g_carshadowenable",0x870cc0},{"g_crowdenable",0x870cd0},
+    {"g_depthoffieldenable",0x870cf0},{"g_fogenable",0x870cd8},{"g_horizonfogenable",0x870d0c},{"g_lightglowenable",0x870ce4},
+    {"g_lightstreaksenable",0x870ce0},{"g_motionblurenable",0x870cdc},{"g_overbrightenable",0x870cfc},
+    {"g_particlesystemenable",0x870cec},{"g_rainenable",0x870d10},{"g_roadreflectionenable",0x870cd4},
+    {"g_tintingenable",0x870d04},{"g_worldlodlevel",0x870cf4}};
+void runLauncherPreview(uint32_t player,uint32_t mode){
+    static unsigned racing=0,settle=0,applied=0;static bool showing=false;static uint32_t loaded[std::size(displayVariables)];
+    if(mode==2)++racing;
+    if(!showing){
+        if(racing<30)return;
+        for(size_t i=0;i<std::size(displayVariables);++i)loaded[i]=read32(displayVariables[i].address);
+        State saved;saved.save();const uint32_t on=1;callGuest(0x501290u,&on,1,0,false);saved.load();
+        showing=true;settle=0;applied=1;
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSPreview","showcase camera on");
+    }
+    if(memory->writable(player+0x28u,1)){uint8_t off=1;std::memcpy(static_cast<uint8_t*>(memory->base())+player+0x28u,&off,1);}
+    PreviewSettings next;
+    {std::lock_guard<std::mutex> lock(previewMutex);if(previewPending.generation){next=std::move(previewPending);previewPending=PreviewSettings{};}}
+    if(next.generation){
+        for(const auto& [name,value]:next.values)setenv(name.c_str(),value.c_str(),1);
+        for(size_t i=0;i<std::size(displayVariables);++i){uint32_t value=0;
+            write32(displayVariables[i].address,visualRegistryOverride(displayVariables[i].name,value)?value:loaded[i]);}
+        applied=next.generation;settle=0;
+    }
+    // The first shot waits for the camera to come to rest; later ones only for the change.
+    if(++settle==(previewReady.load()?8u:45u)){previewReady=applied;
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSPreview","ready generation %u",previewReady.load());}
+}
 void maybeAutopilot(){
 #if defined(__ANDROID__)&&!defined(NFSU2_EXE_F4BB0D99)
     static int wanted=0;static auto lastRead=std::chrono::steady_clock::time_point{};static uint32_t logged=~0u;
@@ -639,6 +687,7 @@ void maybeAutopilot(){
     uint32_t player;std::memcpy(&player,base+0x8900acu,4);
     if(!player||!memory->readable(player+0x22cu,8))return;
     uint32_t mode[2];std::memcpy(mode,base+player+0x22cu,8);
+    if(launcherPreviewMode())runLauncherPreview(player,mode[0]);
     if(mode[0]!=logged){logged=mode[0];NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","player %08x mode %u requested %u",player,mode[0],mode[1]);}
     // Development: `debug.nfs.dumprace 1` logs the race setup and SkipFE settings when a race
     // starts, to compare a menu Quick Race with the SkipFE one.
@@ -708,13 +757,6 @@ void d3dDispatch(){
         bool steady=steadyPace.load(std::memory_order_relaxed);
         static uint64_t callsAtPresent=0;uint64_t callsThisFrame=d3dCalls-callsAtPresent;callsAtPresent=d3dCalls;
         unsigned calls=callsThisFrame>0xffffffffull?0xffffffffu:unsigned(callsThisFrame);
-        if(launcherPreviewMode() && guestDrivingControls() && calls>8000){
-            auto scene=nfs_physics::readSnapshot([](uint32_t address,void* out,size_t size){
-                if(!memory||!memory->readable(address,size))return false;
-                std::memcpy(out,static_cast<const uint8_t*>(memory->base())+address,size);return true;
-            });
-            launcherPreviewGate.observe(true,scene.valid,calls);
-        }
         unsigned paceLimit=selectedLimit?steadyFrameRate(selectedLimit,steady?panel:0):0;
         static unsigned quietFrames=0;
         unsigned presentLimit=menuPresentLimit(paceLimit,calls,quietFrames);
@@ -1821,6 +1863,8 @@ void setGuestBenchmark(unsigned seconds,const std::string& reportPath,const std:
     if(!resolution.empty())benchmarkResolution=resolution;
     if(!benchmarkSeconds)benchmarkPath.clear();
 }
+unsigned queuePreviewSettings(std::vector<std::pair<std::string,std::string>> values){return queuePreviewLocal(std::move(values));}
+unsigned previewReadyGeneration(){return previewReadyLocal();}
 void setGuestBenchmarkHandler(void (*handler)(const char*)){std::lock_guard<std::mutex> lock(benchmarkMutex);benchmarkHandler=handler;}
 void setGuestSkipIntro(bool skip){skipIntroMovies=skip;}
 bool guestBenchmarkActive(){return benchmarkSeconds.load()!=0;}

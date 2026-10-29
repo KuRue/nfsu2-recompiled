@@ -57,6 +57,9 @@ public final class LauncherActivity extends Activity {
     private TextView status, optionsTitle, submenuBack;
     private MenuPanel infoPanel;
     private VisualPreview visualPreview;
+    /** Play/Resume. Hidden in submenus so the left pane can use the full height. */
+    private LinearLayout playRow;
+    private ScrollView leftScroll;
     private ImageView previewImage;
     private TextView previewStatus;
     private String previewPath;
@@ -82,8 +85,7 @@ public final class LauncherActivity extends Activity {
 
     /** First launch after an update: the installed version's release notes from GitHub. */
     private void showWhatsNew(String version) {
-        AlertDialog dialog = new AlertDialog.Builder(this, R.style.NeonDialog)
-                .setTitle("Updated to version " + version + "!")
+        AlertDialog dialog = MenuTheme.dialog(this, "Updated to version " + version + "!")
                 .setMessage("Loading release notes…")
                 .setPositiveButton("OK", (d, which) -> ReleaseUpdates.whatsNewSeen(this))
                 .setNeutralButton("View on GitHub", (d, which) -> {
@@ -121,8 +123,7 @@ public final class LauncherActivity extends Activity {
         String crash = Diagnostics.unreportedCrash(this);
         if (crash != null) {
             Diagnostics.acknowledgeCrashes(this);
-            new AlertDialog.Builder(this, R.style.NeonDialog)
-                    .setTitle("The game closed").setMessage(crash + ".\n\nWould you like to report this on GitHub with the full log?")
+            MenuTheme.dialog(this, "The game closed").setMessage(crash + ".\n\nWould you like to report this on GitHub with the full log?")
                     .setPositiveButton("Report on GitHub", (dialog, which) -> prepareReport(crash))
                     .setNegativeButton("Not now", null).show();
         }
@@ -155,7 +156,7 @@ public final class LauncherActivity extends Activity {
         LinearLayout leftColumn = new LinearLayout(this);
         leftColumn.setOrientation(LinearLayout.VERTICAL);
         columns.addView(leftColumn, new LinearLayout.LayoutParams(0, -1, 1.1f));
-        ScrollView leftScroll = new ScrollView(this);
+        leftScroll = new ScrollView(this);
         leftScroll.setFillViewport(true);
         leftScroll.addView(left);
         leftColumn.addView(leftScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
@@ -195,7 +196,7 @@ public final class LauncherActivity extends Activity {
 
         play = new GlowActionButton(this);play.setText("Play");
         play.setOnClickListener(view -> play());
-        LinearLayout playRow = new LinearLayout(this);
+        playRow = new LinearLayout(this);
         playRow.addView(play, new LinearLayout.LayoutParams(0, dp(54), 1f));
         playArrow = actionButton("▾", false);
         playArrow.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
@@ -472,8 +473,8 @@ public final class LauncherActivity extends Activity {
     private void chooseOnlineServer() {
         android.widget.EditText input = new android.widget.EditText(this);
         input.setSingleLine(true);
-        input.setTextColor(0xFFF2FFF0);
-        input.setHintTextColor(0xFF8FA88F);
+        input.setTextColor(MenuTheme.color(this,R.color.menu_ink));
+        input.setHintTextColor(MenuTheme.color(this,R.color.menu_secondary));
         input.setText(GameOptions.onlineServer(this));
         input.setSelection(input.getText().length());
         input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
@@ -481,7 +482,7 @@ public final class LauncherActivity extends Activity {
         int pad = (int) (20 * getResources().getDisplayMetrics().density);
         box.setPadding(pad, pad / 2, pad, 0);
         box.addView(input);
-        new AlertDialog.Builder(this, R.style.NeonDialog).setTitle("Online server")
+        MenuTheme.dialog(this, "Online server")
                 .setMessage("The game's online mode (EA Nation) connects to this community server instead of the discontinued EA servers.")
                 .setView(box)
                 .setPositiveButton("Save", (dialog, which) -> {
@@ -522,8 +523,7 @@ public final class LauncherActivity extends Activity {
                               : "\nUnsupported vertex formats: " + gpu.optString("vertexFormatsMissing"))
                       + "\n" + (gpu.optBoolean("compatible") ? "Compatible with the game."
                               : "Missing features: " + gpu.optJSONArray("missing"));
-            new AlertDialog.Builder(this, R.style.NeonDialog)
-                    .setTitle("Vulkan driver test").setMessage(text)
+            MenuTheme.dialog(this, "Vulkan driver test").setMessage(text)
                     .setPositiveButton("OK", (dialog, which) -> { if (wantedToPlay) benchmarkSeconds = 0; })
                     .setNeutralButton("Use system driver", (dialog, which) -> { benchmarkSeconds = 0; GpuDrivers.select(this, ""); refreshOptions(); })
                     .setNegativeButton(wantedToPlay ? "Play anyway" : null, wantedToPlay ? (dialog, which) -> launch() : null)
@@ -575,8 +575,7 @@ public final class LauncherActivity extends Activity {
             android.content.SharedPreferences updates = ReleaseUpdates.prefs(this);
             if (!manual && result.tag.equals(updates.getString("notified_tag", ""))) return;
             updates.edit().putString("notified_tag", result.tag).apply();
-            new AlertDialog.Builder(this, R.style.NeonDialog)
-                    .setTitle("New version available: " + result.tag)
+            MenuTheme.dialog(this, "New version available: " + result.tag)
                     .setMessage("Download it from GitHub or keep playing this version. Install the APK over "
                             + "the current app to preserve your saves and settings.")
                     .setPositiveButton("Update", (dialog, which) -> openUrl(Uri.parse(result.url)))
@@ -598,8 +597,7 @@ public final class LauncherActivity extends Activity {
                 Uri issue = Diagnostics.issueUri(this, crash, location);
                 main.post(() -> {
                     refresh();
-                    new AlertDialog.Builder(this, R.style.NeonDialog)
-                            .setTitle("Report on GitHub")
+                    MenuTheme.dialog(this, "Report on GitHub")
                             .setMessage("The full log was saved to:\n" + location
                                     + "\n\nGitHub will open with a technical summary already filled in. Describe what happened and, "
                                     + "if possible, attach that ZIP file (GitHub cannot attach it automatically).")
@@ -624,7 +622,7 @@ public final class LauncherActivity extends Activity {
                 new String[] {"resume", "fresh"}, resumeNextLaunch ? "resume" : "fresh", "resume",
                 mode -> {
                     if(mode.equals("resume")){resumeNextLaunch=true;launch();}
-                    else new AlertDialog.Builder(this, R.style.NeonDialog).setTitle("Restart game?")
+                    else MenuTheme.dialog(this, "Restart game?")
                         .setMessage("The current live session will end. Unsaved progress will be lost.")
                         .setPositiveButton("Restart",(dialog,which)->{resumeNextLaunch=false;launch();})
                         .setNegativeButton("Cancel",null).show();
@@ -638,8 +636,7 @@ public final class LauncherActivity extends Activity {
 
     private void confirmBenchmark() {
         String extra = gameRunning() ? "\n\nThe current live session will end." : "";
-        new AlertDialog.Builder(this, R.style.NeonDialog)
-                .setTitle("Benchmark")
+        MenuTheme.dialog(this, "Benchmark")
                 .setMessage("A fixed 60-second AI race with a live frame-time panel. You get a result and a suggestion; nothing changes until you apply it." + extra)
                 .setPositiveButton("Start", (dialog, which) -> { benchmarkSeconds = 60; resumeNextLaunch = false; play(); })
                 .setNegativeButton("Cancel", null).show();
@@ -667,8 +664,8 @@ public final class LauncherActivity extends Activity {
             GameOptions.prefs(this).edit().putString("benchmark_last",
                     String.format(java.util.Locale.US, "%.1f avg · %.1f 1%% low", report.averageFps, report.lowFps)).apply();
         refreshOptions();
-        AlertDialog.Builder dialog = new AlertDialog.Builder(this, R.style.NeonDialog)
-                .setTitle("Benchmark results").setNegativeButton(report.canApply() ? "Keep settings" : "OK", null);
+        AlertDialog.Builder dialog = MenuTheme.hudDialog(this, "Benchmark results")
+                .setNegativeButton(report.canApply() ? "Keep settings" : "OK", null);
         if (report.timeline.length == 0) dialog.setMessage(report.summary());
         else {
             float density = getResources().getDisplayMetrics().density;
@@ -794,13 +791,12 @@ public final class LauncherActivity extends Activity {
         for (int i = 0; i < zips.length; i++)
             names[i] = zips[i].getName().replace("nfsu2-saves-", "").replace("-", " ").replace(".zip", "  (" + zips[i].length() / 1024 + " KB)");
         names[zips.length] = "Import ZIP";
-        new AlertDialog.Builder(this, R.style.NeonDialog)
-                .setTitle("Restore saves")
-                .setItems(names, (dialog, which) -> {
-                    if (which < zips.length) restoreSavesFrom(Uri.fromFile(zips[which]));
-                    else openSavePicker();
-                })
-                .setNegativeButton("Cancel", null).show();
+        AlertDialog.Builder builder = MenuTheme.dialog(this, "Restore saves");
+        MenuTheme.items(builder, this, names, (dialog, which) -> {
+            if (which < zips.length) restoreSavesFrom(Uri.fromFile(zips[which]));
+            else openSavePicker();
+        });
+        builder.setNegativeButton("Cancel", null).show();
     }
 
     private void openSavePicker() {
@@ -908,6 +904,7 @@ public final class LauncherActivity extends Activity {
         });
         boolean visuals="graphics".equals(openGroup)||"display".equals(openGroup);
         if(!visuals){visualPreview.hide();previewImage=null;previewStatus=null;}
+        if (playRow != null) playRow.setVisibility(openGroup == null ? View.VISIBLE : View.GONE);
         if (openGroup == null) { leftHome.setVisibility(View.VISIBLE); infoPanel.setVisibility(View.GONE); return; }
         leftHome.setVisibility(View.GONE); infoPanel.setVisibility(View.VISIBLE);
         leftInfo.removeAllViews();
@@ -940,10 +937,10 @@ public final class LauncherActivity extends Activity {
             refresh=Math.min(120,refresh);
             GraphicsDemand demand = GraphicsDemand.estimate(settings, metrics.widthPixels, metrics.heightPixels, refresh);
             // CPU and GPU sliders share one row above the preview.
-            LinearLayout sliders=new LinearLayout(this);sliders.setPadding(dp(10),dp(4),dp(10),0);
+            LinearLayout sliders=new LinearLayout(this);sliders.setPadding(dp(10),dp(2),dp(10),0);
             DemandSlider cpu=new DemandSlider(this,MUTED,ACCENT,ACCENT),gpu=new DemandSlider(this,MUTED,ACCENT,ACCENT);
             cpu.set("CPU",demand.cpuScore,tierName(demand.cpuLevel));gpu.set("GPU",demand.gpuScore,tierName(demand.gpuLevel));
-            LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,-2,1f);half.rightMargin=dp(14);
+            LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,-2,1f);half.rightMargin=dp(12);
             sliders.addView(cpu,half);sliders.addView(gpu,new LinearLayout.LayoutParams(0,-2,1f));
             leftInfo.addView(sliders);
             TextView target = label(settings.get(GameOptions.FPS).equals("0")
@@ -959,7 +956,7 @@ public final class LauncherActivity extends Activity {
                 if(previewPath==null)return;
                 ImageView full=new ImageView(this);full.setAdjustViewBounds(true);
                 full.setImageBitmap(android.graphics.BitmapFactory.decodeFile(previewPath));
-                new AlertDialog.Builder(this,R.style.NeonDialog).setTitle("Visual preview").setView(full)
+                MenuTheme.dialog(this,"Visual preview").setView(full)
                     .setPositiveButton("Back",null).setNeutralButton("Refresh",(d,w)->visualPreview.retry()).show();
             });
             previewStatus.setOnClickListener(view->visualPreview.retry());
@@ -973,10 +970,10 @@ public final class LauncherActivity extends Activity {
 
     /** Size the preview to the space between the settings card and Play: full width, cropped to fit. */
     private void fitPreview(){
-        if(previewImage==null||play==null||infoPanel==null||previewImage.getWidth()==0)return;
-        int[] panel=new int[2],button=new int[2];infoPanel.getLocationOnScreen(panel);play.getLocationOnScreen(button);
-        int spare=(button[1]-dp(8))-(panel[1]+infoPanel.getHeight());
-        int height=Math.max(dp(64),Math.min(previewImage.getWidth()*9/16,previewImage.getHeight()+spare));
+        if(previewImage==null||leftScroll==null||infoPanel==null||previewImage.getWidth()==0)return;
+        int[] panel=new int[2],area=new int[2];infoPanel.getLocationOnScreen(panel);leftScroll.getLocationOnScreen(area);
+        int spare=(area[1]+leftScroll.getHeight()-dp(4))-(panel[1]+infoPanel.getHeight());
+        int height=Math.max(dp(64),Math.min(previewImage.getWidth()*3/4,previewImage.getHeight()+spare));
         if(Math.abs(height-previewImage.getHeight())<2)return;
         previewImage.setAdjustViewBounds(false);previewImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
         android.view.ViewGroup.LayoutParams params=previewImage.getLayoutParams();params.height=height;previewImage.setLayoutParams(params);
@@ -1047,8 +1044,7 @@ public final class LauncherActivity extends Activity {
     }
 
     private void message(String title, String text) {
-        new AlertDialog.Builder(this, R.style.NeonDialog)
-                .setTitle(title).setMessage(text).setPositiveButton("OK", null).show();
+        MenuTheme.dialog(this, title).setMessage(text).setPositiveButton("OK", null).show();
     }
 
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
