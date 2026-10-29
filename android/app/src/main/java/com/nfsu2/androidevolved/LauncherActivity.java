@@ -222,6 +222,7 @@ public final class LauncherActivity extends Activity {
         card.addView(status);
         checksList = new LinearLayout(this);
         checksList.setOrientation(LinearLayout.VERTICAL);
+        checksList.setBackground(MenuTheme.filePanel(this));checksList.setPadding(dp(10),dp(5),dp(10),dp(5));
         card.addView(checksList);
 
         play = actionButton("Play", true);
@@ -900,9 +901,11 @@ public final class LauncherActivity extends Activity {
     // ---- Widgets ---------------------------------------------------------------------------------------
 
     private void addCheck(String name, boolean ok, boolean required) {
-        TextView row = label((ok ? "✓  " : required ? "✗  " : "!  ") + name + (ok || required ? "" : " · optional"), 13,
-                getColor(ok ? R.color.menu_success : required ? R.color.menu_error : R.color.menu_warning), false);
-        row.setPadding(0, dp(2), 0, dp(2));
+        String text=(ok ? "✓  " : required ? "✗  " : "!  ")+name+(ok||required?"":" · optional");
+        android.text.SpannableString styled=new android.text.SpannableString(text);
+        styled.setSpan(new android.text.style.ForegroundColorSpan(getColor(ok?R.color.menu_success:required?R.color.menu_file_error:R.color.menu_file_warning)),0,1,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        TextView row=label("",14,getColor(R.color.menu_white),false);row.setText(styled);
+        row.setPadding(0,dp(1),0,dp(1));
         checksList.addView(row);
     }
 
@@ -940,7 +943,6 @@ public final class LauncherActivity extends Activity {
         body.setPadding(0, dp(8), 0, dp(10));
         leftInfo.addView(body);
         TextView hint = label("Tap a setting to see what it costs.", 12, MUTED, false);
-        hint.setAlpha(.85f);
         leftInfo.addView(hint);
     }
 

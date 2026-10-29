@@ -5,13 +5,15 @@ and saved phone screenshots from the preceding run: phone_home_after_tablet.png,
 dialog_polish.png and dock_editor.png. These are not fresh device verification.
 Scope: app-owned launcher, menus, dialogs, overlays and controls. No app changes in this pass.
 
-## Current accepted palette and divider rule (2026-10-29)
+## Current palette and divider rule (latest user refinement, 2026-10-29)
 
-User refinement supersedes the pale silver-sheet proposal: the launcher background and menu
-sheets are neutral dark gray, body/value text is light gray, and headings/selections/status
-use green/lime. Darker title bands and outlined actions retain the game's component structure.
-Header/section divider bars have no marker dot. Dots are reserved for actual interactive
-slider thumbs; do not reintroduce decorative position dots in static headers.
+The all-dark revision was farther from the desired look. Return toward silver-gray menu
+sheets, but darker than the initial pale version, over the dark neutral backdrop. Use dark
+readable text on these medium-gray sheets, with rounded dark header containers and lime titles.
+Game-file checks get a distinct dark inset, light-gray labels and colored status glyphs so
+these do not blend into their parent sheet. Preserve outlined actions and separate focus states.
+Static header dividers remain plain: dots belong only on actual interactive slider thumbs.
+This latest refinement supersedes the preceding all-dark panel/light-body-text direction.
 
 ## Findings
 

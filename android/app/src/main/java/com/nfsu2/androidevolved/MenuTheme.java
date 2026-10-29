@@ -9,7 +9,7 @@ import android.graphics.drawable.StateListDrawable;
 import android.view.View;
 import android.widget.TextView;
 
-/** App-owned adaptation of the game's menu structure with dark-gray sheets, oblique type and lime focus frame. */
+/** App-owned adaptation of the game's menu structure with neutral-gray sheets, oblique type and lime focus frame. */
 final class MenuTheme {
     private static Typeface oblique, body;
     static int color(Context c, int id) { return c.getColor(id); }
@@ -20,6 +20,7 @@ final class MenuTheme {
         return display ? oblique : body;
     }
     static GradientDrawable panel(Context c) {return panel(c,R.color.menu_sheet);}
+    static Drawable filePanel(Context c) {return surface(c,color(c,R.color.menu_file_background),0xFF626B5D,1);}
     static GradientDrawable popupPanel(Context c) {return panel(c,R.color.menu_popup_sheet);}
     private static GradientDrawable panel(Context c,int color) {
         GradientDrawable d = new GradientDrawable();
@@ -35,7 +36,7 @@ final class MenuTheme {
         // White inner/action focus remains distinguishable from the persistent lime selection.
         d.addState(new int[]{android.R.attr.state_focused},surface(c,0xFF41463B,color(c,R.color.menu_white),2));
         d.addState(new int[]{android.R.attr.state_pressed},surface(c,0xFF41463B,lime,2));
-        d.addState(new int[]{},surface(c,selected?0xFF41463B:0x163F3F3F,selected?lime:0,selected?2:0));
+        d.addState(new int[]{},surface(c,selected?0xFF41463B:0x00000000,selected?lime:0,selected?2:0));
         return d;
     }
     static ColorStateList rowText(Context c,boolean selected) {
@@ -52,7 +53,7 @@ final class MenuTheme {
     static void heading(TextView text) {
         Context c=text.getContext();text.setTypeface(font(c,true));text.setTextSize(20);
         text.setTextColor(color(c,R.color.menu_lime));text.setLetterSpacing(0);
-        text.setPadding(dp(c,10),dp(c,4),dp(c,10),dp(c,5));text.setBackgroundColor(0xFF292929);
+        text.setPadding(dp(c,10),dp(c,4),dp(c,10),dp(c,5));text.setBackground(surface(c,0xFF292929,0,0));
     }
     /** A static header divider. Position markers belong on interactive sliders only. */
     static View divider(Context c) {

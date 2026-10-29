@@ -1205,3 +1205,17 @@ Debug build passed and installed on 192.168.1.169:40615. Home screenshot visuall
 /tmp/nfsu2-dark-gray-launcher.png. Body/status contrast against #343434 is 5.43–9.25:1;
 secondary text is 6.70:1. No settings, game logic or slider behavior changed. Palette and
 no-header-dot rule are recorded at the top of docs/design/NFSU2_UI_THEME_PLAN.md.
+
+## 2026-10-29: darker silver sheets, distinct file checks, rounded headers
+
+Latest user feedback: the first silver version was closer; all-dark was too far. Restored
+medium silver-gray sheets (darker than the original pale ones), keeping the dark-gray backdrop.
+Body/value text is dark on the medium sheets. Header backgrounds are now rounded. Game-file
+checks have a contrasting dark inset, light-gray labels and colored status glyphs; slightly
+larger check text improves separation. Static header bars still have no dots. Latest direction
+supersedes the preceding all-dark menu-panel preference; theme plan's top section updated.
+
+Debug build passed and installed on 192.168.1.169:40615. Home screenshot checked at
+/tmp/nfsu2-midgray-launcher.png: rounded headers, contrasting checks and Play fit on screen.
+Body/secondary contrast on composited sheets is 4.66/4.53:1; file text 10.33:1. No game settings,
+input behavior or gameplay code changed. Font remains the licensed approximation from prior pass.
