@@ -27,7 +27,7 @@ final class RacingControlsView extends View {
     /** Touches outside every control drive the game's mouse: x/y as fractions of the view, phase 0 down, 1 move, 2 up. */
     interface Pointer { void touch(float x, float y, int phase); }
     // Special controls that do not map to a DirectInput scan code.
-    private static final int MODE = -1, TEXT = -2, STICK = -3, EDIT = -5;
+    private static final int MODE = -1, TEXT = -2, STICK = -3, EDIT = -5, BAR = -6;
     private static final int ROUND = 0, PEDAL = 1, WHEEL = 2;
     private final Keys keys;
     private Pointer pointer;
@@ -44,6 +44,8 @@ final class RacingControlsView extends View {
     private final ArrayList<Control> controls = new ArrayList<>();
     private final HashMap<Integer, Control> fingers = new HashMap<>();
     private boolean racing;
+    private boolean barExpanded;
+    private final RectF barArea = new RectF();
     private boolean lastGameMode;
     private boolean editing;
     private boolean hiddenByGamepad;
@@ -59,27 +61,34 @@ final class RacingControlsView extends View {
         final String icon;
         final int scan, shape, color;
         final RectF original;
+        final boolean utility;
         String id;
         int held;
         float steering;
-        Control(float x, float y, float w, float h, int shape, String icon, int scan, int color) {
-            area = new RectF(x, y, x+w, y+h); original=new RectF(area); this.shape=shape; this.icon=icon; this.scan=scan; this.color=color;
+        Control(float x, float y, float w, float h, int shape, String icon, int scan, int color, boolean utility) {
+            area = new RectF(x, y, x+w, y+h); original=new RectF(area); this.shape=shape; this.icon=icon; this.scan=scan; this.color=color; this.utility=utility;
         }
     }
     RacingControlsView(Context context, Keys keys, Runnable textInput, Runnable configureTilt, Runnable configureFrameLimit) {
         super(context); this.keys=keys; this.textInput=textInput;
         layouts=context.getSharedPreferences("touch_layouts_v1",Context.MODE_PRIVATE);
-        style=layouts.getString("style","classic");this.configureTilt=configureTilt;this.configureFrameLimit=configureFrameLimit;
+        style=layouts.getString("style","classic");barExpanded=layouts.getBoolean("bar.expanded",false);
+        this.configureTilt=configureTilt;this.configureFrameLimit=configureFrameLimit;
         setContentDescription("Game controls");
         setHapticFeedbackEnabled(true);
         line.setStyle(Paint.Style.STROKE);line.setStrokeCap(Paint.Cap.ROUND);line.setStrokeJoin(Paint.Join.ROUND);
         text.setTextAlign(Paint.Align.CENTER);text.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));
     }
-    private void add(float x, float y, float size, String icon, int scan) {add(x,y,size,size,ROUND,icon,scan,0);}
+    private void add(float x, float y, float size, String icon, int scan) {add(x,y,size,size,ROUND,icon,scan,0,false);}
+    private void addUtility(float x, float y, float size, String icon, int scan) {add(x,y,size,size,ROUND,icon,scan,0,true);}
     private void add(float x, float y, float w, float h, int shape, String icon, int scan, int color) {
-        Control c=new Control(x,y,w,h,shape,icon,scan,color);
+        add(x,y,w,h,shape,icon,scan,color,false);
+    }
+    private void add(float x, float y, float w, float h, int shape, String icon, int scan, int color, boolean utility) {
+        Control c=new Control(x,y,w,h,shape,icon,scan,color,utility);
         // v2: icon layout; positions saved for the old captioned buttons do not apply.
-        c.id="v2."+(racing?"race."+(style.equals("classic")?"":style+"."):"menu.")+scan;
+        // Bar buttons use a separate id so old saved layouts cannot scatter them.
+        c.id="v2."+(racing?"race."+(style.equals("classic")?"":style+"."):"menu.")+(utility?"bar.":"")+scan;
         float factor=layouts.getFloat(c.id+".size",1);
         float cx=layouts.getFloat(c.id+".x",c.area.centerX()/(getWidth()/scale))*(getWidth()/scale);
         float cy=layouts.getFloat(c.id+".y",c.area.centerY()/(getHeight()/scale))*(getHeight()/scale);
@@ -115,21 +124,34 @@ final class RacingControlsView extends View {
         if(getWidth()==0)return;
         scale=Math.min(getResources().getDisplayMetrics().density, getWidth()/820f);
         float w=getWidth()/scale, h=getHeight()/scale, bottom=h-20;
-        add(w-62,16,46,"settings",EDIT);
-        add(w-118,16,46,racing?"menu":"wheel",MODE);
         if(racing) {
-            add(16,16,46,"pause",1);
-            // Free-roam actions of the PC keyboard defaults (Opciones > Controles).
-            add(72,16,46,"map",0x32);     // Mapa del mundo: M
-            add(128,16,46,"sms",0x0f);    // Leer SMS: Tab
-            add(184,16,46,"reset",0x13);  // Reiniciar coche: R
+            // Compact cockpit: steering, pedals and the two action buttons stay
+            // on screen; pausing, map, SMS, reset, camera, shifts and the
+            // settings/mode controls live in the top bar behind the expander.
+            add(16,16,46,"expand",BAR);
+            float bx=70, by=16, bs=42, gap=5, barRight=bx;
+            int barIndex=0;
+            addUtility(bx+(bs+gap)*barIndex++,by,bs,"pause",1);
+            addUtility(bx+(bs+gap)*barIndex++,by,bs,"map",0x32);
+            addUtility(bx+(bs+gap)*barIndex++,by,bs,"sms",0x0f);
+            addUtility(bx+(bs+gap)*barIndex++,by,bs,"reset",0x13);
+            if(style.equals("classic")) {
+                addUtility(bx+(bs+gap)*barIndex++,by,bs,"camera",0x2e);
+            } else {
+                boolean xbox=style.equals("xbox");
+                addUtility(bx+(bs+gap)*barIndex++,by,bs,xbox?"X":"□",0x2e);
+                addUtility(bx+(bs+gap)*barIndex++,by,bs,xbox?"Y":"△",0x30);
+            }
+            addUtility(bx+(bs+gap)*barIndex++,by,bs,"shiftUp",0x2a);
+            addUtility(bx+(bs+gap)*barIndex++,by,bs,"shiftDown",0x1d);
+            addUtility(bx+(bs+gap)*barIndex++,by,bs,"settings",EDIT);
+            addUtility(bx+(bs+gap)*barIndex++,by,bs,"menu",MODE);
+            barRight=bx+(bs+gap)*(barIndex-1)+bs;
+            barArea.set(64,12,barRight+6,12+bs+8);
             if(style.equals("classic")) {
                 add(20,bottom-92,92,"left",0xcb);
                 add(124,bottom-92,92,"right",0xcd);
                 add(228,bottom-66,62,"handbrake",0x39);
-                add(30,bottom-160,52,"shiftUp",0x2a);
-                add(92,bottom-160,52,"shiftDown",0x1d);
-                add(154,bottom-160,52,"camera",0x2e);
                 add(w-110,bottom-150,90,150,PEDAL,"gas",0xc8,0xFF1E7A4A);
                 add(w-206,bottom-108,82,108,PEDAL,"brake",0xd0,0xFF8A2A2A);
                 add(w-290,bottom-72,70,"nitro",0x38);
@@ -140,12 +162,10 @@ final class RacingControlsView extends View {
                 add(w-198,bottom-108,78,108,PEDAL,"brake",0xd0,0xFF8A2A2A);
                 add(w-252,bottom-178,58,xbox?"A":"×",0x39);
                 add(w-186,bottom-238,58,xbox?"B":"○",0x38);
-                add(w-318,bottom-238,58,xbox?"X":"□",0x2e);
-                add(w-252,bottom-298,58,xbox?"Y":"△",0x30);
-                add(30,bottom-228,52,"shiftUp",0x2a);
-                add(92,bottom-228,52,"shiftDown",0x1d);
             }
         } else {
+            add(w-62,16,46,"settings",EDIT);
+            add(w-118,16,46,"wheel",MODE);
             float pad=60,cx=24+pad*1.5f,cy=bottom-pad*1.5f;
             add(cx-pad/2,cy-pad*1.5f,pad,"up",0xc8);
             add(cx-pad/2,cy+pad*.5f,pad,"down",0xd0);
@@ -165,7 +185,17 @@ final class RacingControlsView extends View {
         if(hiddenByGamepad&&!editing)return;
         canvas.save(); canvas.scale(scale,scale);
         if(editing)canvas.drawColor(0x55000000);
-        for(Control c:controls)drawControl(canvas,c);
+        if(racing&&barExpanded&&!editing) {
+            fill.setColor(0xB30B1526);
+            line.setColor(0x668EE03A);
+            line.setStrokeWidth(1.5f);
+            canvas.drawRoundRect(barArea,16,16,fill);
+            canvas.drawRoundRect(barArea,16,16,line);
+        }
+        for(Control c:controls) {
+            if(c.utility&&(!barExpanded||editing))continue;
+            drawControl(canvas,c);
+        }
         if(editing) {
             float w=getWidth()/scale;
             drawToolbarButton(canvas,new RectF(w/2-250,18,w/2-150,58),"RESET");
@@ -199,7 +229,7 @@ final class RacingControlsView extends View {
         fill.setColor(0x55000000);canvas.drawCircle(cx,cy+r*.06f,r,fill);
         fill.setColor(on?0xD0FF9A32:0x8C141C26);canvas.drawCircle(cx,cy,r,fill);
         int ring=faceColor(c);
-        line.setColor(picked?0xFFFFCF69:on?0xFFFFD18A:ring!=0?ring:0x8CFFFFFF);
+        line.setColor(picked?0xFFFFCF69:on?0xFFFFD18A:c.scan==BAR?ACCENT:ring!=0?ring:0x8CFFFFFF);
         canvas.drawCircle(cx,cy,r-line.getStrokeWidth()/2,line);
         if(c.shape==WHEEL) {
             fill.setColor(on?ACCENT:0xCC3A4654);
@@ -265,6 +295,13 @@ final class RacingControlsView extends View {
                 canvas.drawArc(cx-s*.75f,cy-s*.75f,cx+s*.75f,cy+s*.75f,-60,290,false,line);
                 path.reset();path.moveTo(cx+s*.2f,cy-s*.95f);path.lineTo(cx+s*.55f,cy-s*.62f);path.lineTo(cx+s*.08f,cy-s*.42f);
                 canvas.drawPath(path,line);break;
+            case "expand":
+                if(barExpanded) {
+                    canvas.drawLine(cx-s*.5f,cy-s*.5f,cx+s*.5f,cy+s*.5f,line);
+                    canvas.drawLine(cx+s*.5f,cy-s*.5f,cx-s*.5f,cy+s*.5f,line);
+                } else {
+                    for(int i=-1;i<=1;++i){float y=cy+i*s*.55f;canvas.drawLine(cx-s*.8f,y,cx+s*.8f,y,line);}
+                }break;
             case "back":
                 canvas.drawLine(cx-s*.5f,cy-s*.5f,cx+s*.5f,cy+s*.5f,line);canvas.drawLine(cx+s*.5f,cy-s*.5f,cx-s*.5f,cy+s*.5f,line);break;
             case "keyboard":
@@ -392,6 +429,7 @@ final class RacingControlsView extends View {
     private Control hit(float x,float y) {
         x/=scale;y/=scale;Control best=null;double bestDistance=Double.MAX_VALUE;
         for(Control c:controls) {
+            if(c.utility&&(!barExpanded||editing))continue;
             float cx=c.area.centerX(),cy=c.area.centerY();
             double d;
             if(c.shape==PEDAL) {
@@ -466,7 +504,8 @@ final class RacingControlsView extends View {
             if(id==pointerId){pointerId=-1;pointerTouch(e.getX(index),e.getY(index),2);}
             Control c=fingers.remove(id); release(c);
             if(c!=null && c==hit(e.getX(index),e.getY(index))) {
-                if(c.scan==MODE) {racing=!racing;layoutControls();}
+                if(c.scan==BAR) {barExpanded=!barExpanded;layouts.edit().putBoolean("bar.expanded",barExpanded).apply();releaseAll();}
+                else if(c.scan==MODE) {racing=!racing;layoutControls();}
                 else if(c.scan==TEXT) {releaseAll();textInput.run();}
                 else if(c.scan==EDIT) {releaseAll();editing=true;selected=null;}
                 performClick();

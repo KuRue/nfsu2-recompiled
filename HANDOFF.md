@@ -1104,3 +1104,14 @@ Replaced the five remaining Toast.makeText calls with NeonToast: a small dark
 green card with a lime border and the same typography. Verified on device:
 cache reset dialog, control options, tilt steering (lime controls), frame-rate
 limit, save-layout input, and the no-saved-layouts toast.
+
+## 2026-10-29: compact on-screen driving controls
+
+The racing HUD now shows only steering, pedals, nitro and handbrake. A single
+lime-ringed expander at the top-left opens a utility bar with pause, map, SMS,
+reset, camera, shift up/down, settings and menu/mode; the Xbox/PlayStation
+layout also puts X/Y there while keeping A/B (handbrake/nitro). The bar is
+persisted in touch_layouts_v1 as bar.expanded, defaults collapsed, and hides
+while the control editor is open. Bar buttons use separate v2...bar.<scan> ids
+so old saved layouts cannot scatter them.
+Verified on device: collapsed cockpit, expanded bar, pause from the bar.
