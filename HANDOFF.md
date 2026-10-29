@@ -1029,3 +1029,13 @@ and g_depthoffieldenable via a temporary registry edit (screenshots in
 LOD/performance_level forcing showed no measurable change (draw calls within
 run variance), so they stay untouched until the game's menu mapping is known.
 Docs table records every key and its current behaviour.
+
+## 2026-10-29: Visual treatment + Detail level options
+
+Added "Visual treatment" (bleach bypass; +depth of field at level 2) and
+"Detail level" (pins world/car LOD and performance level to 1 or 2). Benchmark
+with Detail=Maximum: 87.4 avg / 54.2 1% low / 51,678 draw calls vs 95.5 avg /
+49k without it, so the values are being applied. Remaining: confirm which key
+the game's Display "Level Of Detail" row writes (expected g_performancelevel,
+default 1=Medium) and whether it also writes the world/car LOD keys — needs one
+manual change in the game's menu, then a registry diff.

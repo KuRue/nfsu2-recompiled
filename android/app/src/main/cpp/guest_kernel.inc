@@ -364,33 +364,41 @@ void registryOpen(uint32_t output,uint32_t argc){
 void regOpenKeyA(){registryOpen(arg(2),3);}void regOpenKeyExA(){registryOpen(arg(4),5);}
 void regCloseKey(){ret(registryHandles.erase(arg(0))?0:6,1);}
 // Launcher overrides do not replace saved in-game values.
-bool visualRegistryOverride(const std::string& name){
+bool visualRegistryOverride(const std::string& name,uint32_t& value){
     auto number=[](const char* key,int fallback){const char* v=std::getenv(key);return v?std::atoi(v):fallback;};
+    value=1;
     bool night=number("NFSU2_NATIVE_LOOK",0)>0; // any look preset, not only "1"
     bool reflections=number("NFSU2_NATIVE_REFLECTIONS",0)==1;
     int effects=number("NFSU2_NATIVE_EFFECTS",0);
     int atmosphere=number("NFSU2_NATIVE_ATMOSPHERE",0);
-    if(atmosphere>=1&&(name=="g_fogenable"||name=="g_horizonfogenable"))return true;
-    if(atmosphere>=2&&name=="g_rainenable")return true;
+    int treatment=number("NFSU2_NATIVE_TREATMENT",0);
+    int detail=number("NFSU2_NATIVE_DETAIL",0);
     if(night&&(name=="g_carlightingenable"||name=="g_carheadlightenable"||
                name=="g_carshadowenable"||name=="g_lightglowenable"))return true;
     if(effects>=1&&(name=="g_lightstreaksenable"||name=="g_overbrightenable"||
                     name=="g_tintingenable"||name=="g_particlesystemenable"||name=="g_crowdenable"))return true;
     if(effects>=2&&name=="g_motionblurenable")return true;
-    // The environment cube is only filled while "update data" is on; without it
-    // car paint samples an empty map and looks matte.
+    if(atmosphere>=1&&(name=="g_fogenable"||name=="g_horizonfogenable"))return true;
+    if(atmosphere>=2&&name=="g_rainenable")return true;
+    if(treatment>=1&&name=="g_bleachbypassenable")return true;
+    if(treatment>=2&&name=="g_depthoffieldenable")return true;
     if(reflections&&(name=="g_carenvironmentmapenable"||name=="g_roadreflectionenable"||
                      name=="g_carenvironmentmapupdatedata"))return true;
+    // The game's own display levels are 0..2 (Low/Medium/High); the launcher can
+    // pin them so the city and cars keep full detail.
+    if(detail>=1&&(name=="g_worldlodlevel"||name=="g_carlodlevel"||name=="g_performancelevel")){
+        value=detail>=2?2u:1u;return true;}
     return false;
 }
 void regQueryValueExA(){
     auto name=lower(guestString(arg(1)));NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Registry query %08x value=%s",arg(0),name.c_str());
     if(!registryHandles.count(arg(0))){ret(6,6);return;}
-    bool forceOn=visualRegistryOverride(name);
+    uint32_t forced=0;bool forceOn=visualRegistryOverride(name,forced);
     auto value=gameRegistry.find(name);if(value==gameRegistry.end()&&!forceOn){ret(2,6);return;}
-    RegistryValue visual{4,{1,0,0,0}};
+    std::vector<uint8_t> forcedBytes(4);std::memcpy(forcedBytes.data(),&forced,4);
+    RegistryValue visual{4,std::move(forcedBytes)};
     const auto& queried=forceOn?visual:value->second;
-    if(forceOn)NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Visual override %s = 1 (saved value unchanged)",name.c_str());
+    if(forceOn)NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Visual override %s = %u (saved value unchanged)",name.c_str(),forced);
     if(!arg(5)){ret(87,6);return;}uint32_t size=read32(arg(5));write32(arg(5),queried.bytes.size());
     if(arg(3))write32(arg(3),queried.type);
     if(arg(4)){if(size<queried.bytes.size()){ret(234,6);return;}std::memcpy(ptr(arg(4),queried.bytes.size()),queried.bytes.data(),queried.bytes.size());}
@@ -401,7 +409,7 @@ void regSetValueExA(){
     uint32_t size=arg(5);if(size>1048576){ret(87,6);return;}
     RegistryValue value{arg(3),std::vector<uint8_t>(size)};if(size)std::memcpy(value.bytes.data(),ptr(arg(4),size),size);
     auto name=lower(guestString(arg(1)));
-    if(visualRegistryOverride(name)){ret(0,6);return;}
+    uint32_t ignored=0;if(visualRegistryOverride(name,ignored)){ret(0,6);return;}
     gameRegistry[name]=std::move(value);
     if(registryPersisted(name))savePersistedRegistry();
     ret(0,6);

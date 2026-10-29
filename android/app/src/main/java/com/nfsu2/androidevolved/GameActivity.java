@@ -164,7 +164,7 @@ public final class GameActivity extends NativeActivity {
     private static native int nativeFeedbackLevel();
     private static native void nativeStopFeedback();
     private static native void nativeTriggerFallback(boolean enabled);
-    private static native void nativeVisualOptions(boolean packs, int filtering, int sharpness, int look, int reflections, int bloom, int effects, int atmosphere);
+    private static native void nativeVisualOptions(boolean packs, int filtering, int sharpness, int look, int reflections, int bloom, int effects, int atmosphere, int treatment, int detail);
     private static native void nativeResolution(int width, int height);
     private static native void nativeFrameLimit(int framesPerSecond);
     private static native void nativeDisplayRefresh(int hertz);
@@ -293,7 +293,9 @@ public final class GameActivity extends NativeActivity {
                 Integer.parseInt(GameOptions.get(this, GameOptions.REFLECTIONS)),
                 Integer.parseInt(GameOptions.get(this, GameOptions.BLOOM)),
                 Integer.parseInt(GameOptions.get(this, GameOptions.EFFECTS)),
-                Integer.parseInt(GameOptions.get(this, GameOptions.ATMOSPHERE)));
+                Integer.parseInt(GameOptions.get(this, GameOptions.ATMOSPHERE)),
+                Integer.parseInt(GameOptions.get(this, GameOptions.TREATMENT)),
+                Integer.parseInt(GameOptions.get(this, GameOptions.DETAIL)));
         nativeCpuTextures(launch.getBooleanExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu")));
         String[] loader = launch.getStringArrayExtra("driverLoader");
         if (loader == null || loader.length != 4) loader = GpuDrivers.loaderArguments(this);

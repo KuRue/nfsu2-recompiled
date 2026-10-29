@@ -21,7 +21,7 @@ final class GameOptions {
     }
 
     static final String RESOLUTION = "resolution", FPS = "fps", FRAME_PACE = "frame_pace", WIDESCREEN = "widescreen", LATENCY = "latency",
-            FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", BLOOM = "bloom", LOOK = "lighting_look", EFFECTS = "night_effects", ATMOSPHERE = "atmosphere", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", INTRO = "intro", LANGUAGE = "language";
+            FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", BLOOM = "bloom", LOOK = "lighting_look", EFFECTS = "night_effects", ATMOSPHERE = "atmosphere", TREATMENT = "treatment", DETAIL = "detail", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", INTRO = "intro", LANGUAGE = "language";
 
     static final Option[] ALL = {
             new Option(FEEDBACK_SOURCE, "Phone feedback source", "physics",
@@ -42,6 +42,12 @@ final class GameOptions {
                     new String[] {"0", "1", "2", "3", "4"},
                     new String[] {"Original", "Night lighting + balanced color", "Neon night · cool shadows",
                             "Filmic night · soft highlights", "Midnight · deepest blacks"}),
+            new Option(TREATMENT, "Visual treatment", "0",
+                    new String[] {"0", "1", "2"},
+                    new String[] {"Original", "Bleach bypass", "Bleach + depth of field"}),
+            new Option(DETAIL, "Detail level", "0",
+                    new String[] {"0", "1", "2"},
+                    new String[] {"Original (game setting)", "High", "Maximum"}),
             new Option(ATMOSPHERE, "Atmosphere", "0",
                     new String[] {"0", "1", "2"},
                     new String[] {"Original", "Fog and horizon haze", "Fog + rain"}),

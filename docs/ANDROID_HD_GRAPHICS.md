@@ -142,3 +142,20 @@ was off. Mapping of the remaining keys and what the port does now:
 Measured (same benchmark, 2340×1080, Midnight + effects + reflections):
 no atmosphere 91.0 FPS avg; fog 95.5; fog + rain 96.7; adding bleach + DOF
 90.4. Differences are inside the benchmark's run-to-run variance.
+
+## Visual treatment and detail level (2026-10-29, later still)
+
+Two more launcher options:
+
+- **Visual treatment**: Original / **Bleach bypass** / **Bleach + depth of
+  field**, forcing `g_bleachbypassenable` and `g_depthoffieldenable`. This is
+  the game's own stylised film look; the depth-of-field stage is the second one.
+- **Detail level**: Original (the game's own setting) / **High** / **Maximum**,
+  pinning `g_worldlodlevel`, `g_carlodlevel` and `g_performancelevel` to 1 or 2.
+  Confirmed on the benchmark: Maximum lifts draw calls from ~49k to 51.7k
+  (about 5% more geometry) and costs roughly 8% frame rate in the same scene.
+  The game's own Display menu names this row "Level Of Detail"; the registry
+  dump and log now print the real forced value.
+
+The override log line used to print "= 1" regardless of the forced value; it now
+prints the actual number.
