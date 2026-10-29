@@ -21,11 +21,13 @@ def main():
                 '-pthread', ROOT / 'tests' / (name + '.cpp'), '-o', executable)
             run(executable)
         java = ROOT / 'android/app/src/main/java/com/nfsu2/androidevolved'
-        run('javac', '-d', build, java / 'ReleaseVersion.java', java / 'BenchmarkReport.java',
+        run('javac', '-d', build, java / 'ReleaseVersion.java', java / 'BenchmarkReport.java', java / 'GraphicsDemand.java',
+            ROOT / 'tests/java/com/nfsu2/androidevolved/GraphicsDemandTest.java',
             ROOT / 'tests/java/com/nfsu2/androidevolved/ReleaseVersionTest.java',
             ROOT / 'tests/java/com/nfsu2/androidevolved/BenchmarkReportTest.java')
         run('java', '-cp', build, 'com.nfsu2.androidevolved.ReleaseVersionTest')
         run('java', '-cp', build, 'com.nfsu2.androidevolved.BenchmarkReportTest')
+        run('java', '-cp', build, 'com.nfsu2.androidevolved.GraphicsDemandTest')
         # Parse scripts without creating tracked-tree bytecode or invoking builds/network.
         for name in ['phone_upstream.py', 'build_phone_update.py', 'check_phone_source.py']:
             path = ROOT / 'scripts' / name

@@ -54,47 +54,6 @@ public final class LauncherActivity extends Activity {
 
     private LinearLayout checksList, optionsList, leftHome, leftInfo;
 
-    /** title -> {one-line explanation, GPU cost 0-3, CPU cost 0-3}. */
-    private static final java.util.Map<String, String[]> OPTION_INFO = new java.util.HashMap<>();
-    static {
-        OPTION_INFO.put("Benchmark", new String[] {"Runs a fixed 60-second AI race and reports frame times. Nothing changes until you apply the result.", "0", "0"});
-        OPTION_INFO.put("Performance preset", new String[] {"Resolution, frame cap and buffering chosen together. Lower raises frame rate and saves heat.", "2", "1"});
-        OPTION_INFO.put("Vulkan driver", new String[] {"Use the system driver or an imported Adreno driver.", "0", "0"});
-        OPTION_INFO.put("Frame rate limit", new String[] {"Caps how many frames the game draws; lower runs cooler.", "1", "2"});
-        OPTION_INFO.put("Frame pace", new String[] {"Even slices of the display, or the exact selected cap.", "0", "1"});
-        OPTION_INFO.put("Widescreen", new String[] {"Corrected HUD and camera for wide screens.", "0", "0"});
-        OPTION_INFO.put("Minimap", new String[] {"Where the radar sits on screen.", "0", "0"});
-        OPTION_INFO.put("Intro", new String[] {"Play or skip the intro movies.", "0", "0"});
-        OPTION_INFO.put("Texture packs", new String[] {"HD HUD and world textures. More memory and bandwidth.", "2", "0"});
-        OPTION_INFO.put("Texture filtering", new String[] {"Anisotropic filtering keeps roads sharp at a distance.", "2", "0"});
-        OPTION_INFO.put("Sharpening", new String[] {"Adds contrast at edges in the final pass.", "1", "0"});
-        OPTION_INFO.put("Bloom and glow", new String[] {"Soft glow around bright lights and neon.", "2", "0"});
-        OPTION_INFO.put("Lighting look", new String[] {"Colour grading and the game's car lighting.", "1", "1"});
-        OPTION_INFO.put("Visual treatment", new String[] {"Bleach-bypass film look and depth of field.", "2", "1"});
-        OPTION_INFO.put("Night effects", new String[] {"Light trails, particles, tinting and crowd.", "3", "1"});
-        OPTION_INFO.put("Atmosphere", new String[] {"Fog and rain over the city.", "1", "1"});
-        OPTION_INFO.put("Reflections", new String[] {"Car environment map and road reflections.", "3", "1"});
-        OPTION_INFO.put("Internal resolution", new String[] {"Render scale. The biggest single cost and the biggest win for frame rate.", "3", "0"});
-        OPTION_INFO.put("Level of detail preset", new String[] {"The game's own four-step display preset. Fills the individual rows below.", "3", "2"});
-        OPTION_INFO.put("Display detail", new String[] {"World and car detail, shadows, effects and reflections.", "3", "2"});
-        OPTION_INFO.put("World detail", new String[] {"More city geometry and objects.", "3", "2"});
-        OPTION_INFO.put("Car geometry", new String[] {"Higher-detail car models.", "2", "1"});
-        OPTION_INFO.put("Car shadow", new String[] {"Car shadow quality; Neon is the showiest.", "2", "0"});
-        OPTION_INFO.put("Headlights", new String[] {"Headlights and their light cones.", "1", "0"});
-        OPTION_INFO.put("Reflection detail", new String[] {"Size of the car reflection cube.", "3", "0"});
-        OPTION_INFO.put("Reflection updates", new String[] {"Refresh the car reflections with the scene.", "2", "1"});
-        OPTION_INFO.put("Road reflections", new String[] {"Wet-road reflection resolution.", "3", "0"});
-        OPTION_INFO.put("Crowds", new String[] {"People on the sidewalks.", "1", "2"});
-        OPTION_INFO.put("Light trails", new String[] {"The neon streaks behind cars.", "1", "0"});
-        OPTION_INFO.put("Light glow", new String[] {"Glow around light sources.", "1", "0"});
-        OPTION_INFO.put("Particles", new String[] {"Sparks, smoke and dust.", "2", "1"});
-        OPTION_INFO.put("Motion blur", new String[] {"Speed blur while driving.", "2", "0"});
-        OPTION_INFO.put("Fog", new String[] {"Distance fog and horizon haze.", "1", "0"});
-        OPTION_INFO.put("Depth of field", new String[] {"Blurs far background.", "2", "0"});
-        OPTION_INFO.put("Over bright", new String[] {"Brighter highlights.", "1", "0"});
-        OPTION_INFO.put("Bleach bypass", new String[] {"High-contrast film look.", "1", "0"});
-        OPTION_INFO.put("Rain", new String[] {"Rain over the city.", "2", "1"});
-    }
     private TextView status, optionsTitle, submenuBack;
     private MenuPanel infoPanel;
     private ScrollView optionsScroll;
@@ -239,9 +198,9 @@ public final class LauncherActivity extends Activity {
         playRow.addView(playArrow, arrowParams);
         LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(-1, -2);
         playParams.topMargin = dp(8);
-        leftHome.addView(playRow, playParams);
+        left.addView(playRow, playParams);
 
-        access = actionButton("Allow access to Internal storage/nfsu2", false);
+        access = actionButton("File access", false);
         access.setOnClickListener(view -> requestAccess());
         LinearLayout.LayoutParams accessParams = new LinearLayout.LayoutParams(-1, dp(46));
         accessParams.topMargin = dp(10);
@@ -295,6 +254,7 @@ public final class LauncherActivity extends Activity {
     private Dialog dialog;
 
     private void refreshOptions() {
+        updateLeftPane();
         optionsTitle.setText(groupTitle(openGroup));
         submenuBack.setVisibility(openGroup==null?View.GONE:View.VISIBLE);
         optionsList.removeAllViews();
@@ -302,12 +262,12 @@ public final class LauncherActivity extends Activity {
         PhonePreset preset = GameOptions.phonePreset(this);
         optionsList.addView(optionRow("Visual settings",
                 preset == null ? "Custom" : preset.label, () -> openGroup("graphics")));
-        optionsList.addView(optionRow("Controls", "Touch · triggers · vibration",
+        optionsList.addView(optionRow("Controls", "Controller",
                 () -> openGroup("controls")));
-        optionsList.addView(optionRow("Game", languageLabel() + " · " + GameOptions.onlineServer(this),
+        optionsList.addView(optionRow("Game", languageLabel(),
                 () -> openGroup("game")));
         optionsList.addView(optionRow("Saves", backupSummary(), () -> openGroup("saves")));
-        optionsList.addView(optionRow("Support", "Updates · diagnostics",
+        optionsList.addView(optionRow("Support", "Diagnostics",
                 () -> openGroup("support")));
     }
 
@@ -354,7 +314,7 @@ public final class LauncherActivity extends Activity {
                             try { GpuDrivers.remove(this, GpuDrivers.selected(this)); refreshOptions(); }
                             catch (java.io.IOException error) { message("Vulkan driver", error.getMessage()); }
                         }));
-                    optionsList.addView(optionRow("Import driver ZIP", "Custom Adreno driver", () -> startActivityForResult(
+                    optionsList.addView(optionRow("Import driver", "ZIP file", () -> startActivityForResult(
                             new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),
                             REQUEST_DRIVER_ZIP)));
                 }
@@ -369,16 +329,15 @@ public final class LauncherActivity extends Activity {
                 for (GameOptions.Option option : GameOptions.ALL)
                     if (!isControlOption(option) && !GameOptions.isDisplayOption(option))
                         optionsList.addView(optionCycleRow(option));
-                optionsList.addView(optionRow("Run a benchmark", "60 seconds of a race, driven by the game's AI", this::confirmBenchmark));
-                optionsList.addView(optionRow("Upscaling and frame generation", "Not on this GPU", this::explainUpscaling));
-                optionsList.addView(optionRow("Test driver", "GPU and Vulkan features", () -> probeDriver(false)));
-                optionsList.addView(optionRow("Reset graphics cache", "Rebuild shaders", () -> GraphicsCache.prompt(this)));
+                optionsList.addView(optionRow("Upscaling", "Unavailable", this::explainUpscaling));
+                optionsList.addView(optionRow("Test driver", "Vulkan features", () -> probeDriver(false)));
+                optionsList.addView(optionRow("Clear shaders", "Rebuild shaders", () -> GraphicsCache.prompt(this)));
                 break;
             }
             case "display": {
                 String[] labels = {"Low", "Medium", "High", "Ultra"};
                 String[] values = {"low", "medium", "high", "ultra"};
-                optionsList.addView(cycleRow("Level of detail preset", labels, values,
+                optionsList.addView(cycleRow("Detail preset", labels, values,
                         GameOptions.prefs(this).getString(GameOptions.DISPLAY_PRESET, "high"), "Low",
                         value -> { GameOptions.applyDisplayPreset(this, value); refreshOptions(); }));
                 optionsList.addView(sectionDivider("INDIVIDUAL SETTINGS"));
@@ -391,7 +350,7 @@ public final class LauncherActivity extends Activity {
                 for (GameOptions.Option option : GameOptions.ALL)
                     if (isControlOption(option) && !GameOptions.isDisplayOption(option))
                         optionsList.addView(optionCycleRow(option));
-                optionsList.addView(optionRow("Test phone vibration", "Brief handset pulse", () -> {if(!PhoneFeedback.test(this))message("Phone vibration", "This device has no vibration motor.");}));
+                optionsList.addView(optionRow("Test vibration", "Phone motor", () -> {if(!PhoneFeedback.test(this))message("Phone vibration", "This device has no vibration motor.");}));
                 break;
             case "game": {
                 List<String[]> found = allowed() ? languages() : new ArrayList<>();
@@ -406,13 +365,13 @@ public final class LauncherActivity extends Activity {
                 break;
             }
             case "saves":
-                optionsList.addView(optionRow("Backup career saves", backupSummary(), this::backupSaves));
-                optionsList.addView(optionRow("Restore career saves", "From a backup ZIP", this::restoreSaves));
+                optionsList.addView(optionRow("Backup saves", backupSummary(), this::backupSaves));
+                optionsList.addView(optionRow("Restore saves", "ZIP file", this::restoreSaves));
                 break;
             case "support":
-                optionsList.addView(optionRow("Check for updates",
-                        checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
-                optionsList.addView(optionRow("Report a problem", "Full log for GitHub", () -> prepareReport(null)));
+                optionsList.addView(optionRow("Check updates",
+                        checkingUpdates ? "Checking…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
+                optionsList.addView(optionRow("Report issue", "Diagnostic log", () -> prepareReport(null)));
                 break;
         }
     }
@@ -428,7 +387,7 @@ public final class LauncherActivity extends Activity {
                           java.util.function.Consumer<String> set) {
         int index = java.util.Arrays.asList(values).indexOf(current);
         return optionRow(title, index < 0 ? fallback : labels[index],
-                () -> { showOptionInfo(title); chooseValue(title, labels, values, current, fallback, set); });
+                () -> chooseValue(title, labels, values, current, fallback, set));
     }
 
     /** Silver menu sheet with an outlined lime selection and separate controller focus. */
@@ -640,7 +599,7 @@ public final class LauncherActivity extends Activity {
                             .setNegativeButton("Cancel", null).show();
                 });
             } catch (Exception error) {
-                main.post(() -> { refresh(); message("Report a problem", "Could not prepare the log: " + error.getMessage()); });
+                main.post(() -> { refresh(); message("Report issue", "Could not prepare the log: " + error.getMessage()); });
             }
         });
     }
@@ -653,7 +612,7 @@ public final class LauncherActivity extends Activity {
     // ---- Launch ----------------------------------------------------------------------------------------
 
     private void chooseStartMode() {
-        chooseValue("How to start", new String[] {"Resume live session", "Restart game"},
+        chooseValue("Start mode", new String[] {"Resume", "Restart"},
                 new String[] {"resume", "fresh"}, resumeNextLaunch ? "resume" : "fresh", "resume",
                 mode -> {
                     if(mode.equals("resume")){resumeNextLaunch=true;launch();}
@@ -679,7 +638,7 @@ public final class LauncherActivity extends Activity {
     }
 
     private void explainUpscaling() {
-        message("Upscaling and frame generation",
+        message("Upscaling",
                 "Neural upscaling and frame generation are not offered on this phone.\n\n"
                 + "Qualcomm's Adreno Neural Fusion super resolution and 2× frame generation run on Snapdragon 8 Elite Gen 6 and newer. This phone's Adreno 830 is older than that. Those passes also need depth, motion vectors, and camera jitter. This 2004 game, through the Vulkan translation, does not produce that motion data. AMD FSR 4 and Arm's neural upscalers target other GPUs.\n\n"
                 + "A color-only spatial upscaler could run here, but it would replace the display's own scale with a full-screen pass that has not been seen on this phone. That is not wired in.\n\n"
@@ -800,24 +759,24 @@ public final class LauncherActivity extends Activity {
 
     private void backupSaves() {
         if (!requireStorageForSaves()) return;
-        if (gameRunning()) { message("Backup career saves", "The game is still running. Close it first so a save being written cannot end up in the backup."); return; }
+        if (gameRunning()) { message("Backup saves", "The game is still running. Close it first so a save being written cannot end up in the backup."); return; }
         status.setText("Backing up career saves…");
         worker.execute(() -> {
             try {
                 File zip = SaveArchive.backup(savesRoot(), savesBackupFolder());
                 // Index the file so the system file picker (and other apps) can see it.
                 MediaScannerConnection.scanFile(this, new String[] {zip.getPath()}, new String[] {"application/zip"}, null);
-                main.post(() -> { refresh(); message("Backup career saves", "Saved " + zip.length() / 1024 + " KB to:\n" + zip.getPath()
+                main.post(() -> { refresh(); message("Backup saves", "Saved " + zip.length() / 1024 + " KB to:\n" + zip.getPath()
                         + "\n\nKeep copies of this file somewhere safe, for example cloud storage."); });
             } catch (Exception error) {
-                main.post(() -> { refresh(); message("Backup career saves", error.getMessage()); });
+                main.post(() -> { refresh(); message("Backup saves", error.getMessage()); });
             }
         });
     }
 
     private void restoreSaves() {
         if (!requireStorageForSaves()) return;
-        if (gameRunning()) { message("Restore career saves", "The game is still running. Close it first so an autosave cannot conflict with the restore."); return; }
+        if (gameRunning()) { message("Restore saves", "The game is still running. Close it first so an autosave cannot conflict with the restore."); return; }
         File[] zips = savesBackupFolder().listFiles((dir, name) -> name.endsWith(".zip"));
         if (zips == null || zips.length == 0) {
             openSavePicker(); return;
@@ -826,9 +785,9 @@ public final class LauncherActivity extends Activity {
         String[] names = new String[zips.length + 1];
         for (int i = 0; i < zips.length; i++)
             names[i] = zips[i].getName().replace("nfsu2-saves-", "").replace("-", " ").replace(".zip", "  (" + zips[i].length() / 1024 + " KB)");
-        names[zips.length] = "Import ZIP from elsewhere…";
+        names[zips.length] = "Import ZIP";
         new AlertDialog.Builder(this, R.style.NeonDialog)
-                .setTitle("Restore career saves")
+                .setTitle("Restore saves")
                 .setItems(names, (dialog, which) -> {
                     if (which < zips.length) restoreSavesFrom(Uri.fromFile(zips[which]));
                     else openSavePicker();
@@ -867,14 +826,14 @@ public final class LauncherActivity extends Activity {
                         refresh();
                         String text = "Restored " + result.files + " save file" + (result.files == 1 ? "" : "s") + ".";
                         if (result.backup != null) text += "\n\nYour previous saves were backed up first to:\n" + result.backup.getPath();
-                        message("Restore career saves", text);
+                        message("Restore saves", text);
                     });
                 } catch (Exception error) {
-                    main.post(() -> { refresh(); message("Restore career saves", error.getMessage()); });
+                    main.post(() -> { refresh(); message("Restore saves", error.getMessage()); });
                 } finally { staged.delete(); }
             });
         } catch (Exception error) {
-            message("Restore career saves", "Could not read the backup: " + error.getMessage());
+            message("Restore saves", "Could not read the backup: " + error.getMessage());
         }
     }
 
@@ -948,27 +907,28 @@ public final class LauncherActivity extends Activity {
         TextView body = label(text, 13, MUTED, false);
         body.setPadding(dp(10), dp(8), dp(10), dp(10));
         leftInfo.addView(body);
-        TextView hint = label("Tap a setting to see what it costs.", 12, MUTED, false);
-        hint.setPadding(dp(10),0,dp(10),dp(6));leftInfo.addView(hint);
-    }
-
-    private void showOptionInfo(String title) {
-        if (leftInfo == null || openGroup == null) return;
-        String[] info = OPTION_INFO.get(title);
-        String text = info != null ? info[0] : "Choose a value from the menu.";
-        int gpu = info != null ? Integer.parseInt(info[1]) : 0;
-        int cpu = info != null ? Integer.parseInt(info[2]) : 0;
-        leftInfo.removeAllViews();
-        infoPanel.setTitle(title);
-        TextView body = label(text, 13, MUTED, false);
-        body.setPadding(dp(10), dp(8), dp(10), dp(12));
-        leftInfo.addView(body);
-        addImpactBar(leftInfo, "GPU", gpu);
-        addImpactBar(leftInfo, "CPU", cpu);
-        if (gpu == 0 && cpu == 0) {
-            TextView none = label("Negligible frame cost", 12, MUTED, false);
-            none.setPadding(0, dp(6), 0, 0);
-            leftInfo.addView(none);
+        if (openGroup.equals("graphics") || openGroup.equals("display")) {
+            leftInfo.removeAllViews();
+            java.util.Map<String,String> settings = new java.util.HashMap<>();
+            for (GameOptions.Option option : GameOptions.ALL) settings.put(option.key, GameOptions.get(this,option.key));
+            android.util.DisplayMetrics metrics = new android.util.DisplayMetrics();
+            getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
+            android.view.Display display = getWindowManager().getDefaultDisplay();
+            android.view.Display.Mode current = display.getMode();
+            float refresh = 60;
+            for (android.view.Display.Mode mode : display.getSupportedModes())
+                if (mode.getPhysicalWidth()==current.getPhysicalWidth() && mode.getPhysicalHeight()==current.getPhysicalHeight())
+                    refresh=Math.max(refresh,mode.getRefreshRate());
+            refresh=Math.min(120,refresh);
+            GraphicsDemand demand = GraphicsDemand.estimate(settings, metrics.widthPixels, metrics.heightPixels, refresh);
+            TextView estimate = label("Estimated demand",13,MUTED,false);
+            estimate.setPadding(dp(10),dp(8),dp(10),dp(8));leftInfo.addView(estimate);
+            addImpactBar(leftInfo,"CPU",demand.cpuLevel);
+            addImpactBar(leftInfo,"GPU",demand.gpuLevel);
+            TextView target = label(settings.get(GameOptions.FPS).equals("0")
+                    ? "Uncapped · "+Math.round(refresh)+" Hz reference"
+                    : Math.round(demand.targetFps)+" FPS target",12,MUTED,false);
+            target.setPadding(dp(10),dp(8),dp(10),dp(8));leftInfo.addView(target);
         }
     }
 
@@ -979,7 +939,7 @@ public final class LauncherActivity extends Activity {
         TextView caption = label(name, 11, MUTED, true);
         caption.setLetterSpacing(.12f);
         row.addView(caption, new LinearLayout.LayoutParams(dp(40), -2));
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 4; i++) {
             View cell = new View(this);
             GradientDrawable bg = new GradientDrawable();
             bg.setColor(i < level ? (name.equals("GPU") ? ACCENT : ORANGE) : 0x228EE03A);
@@ -989,7 +949,7 @@ public final class LauncherActivity extends Activity {
             lp.rightMargin = dp(4);
             row.addView(cell, lp);
         }
-        TextView cost = label(level == 0 ? "none" : level == 1 ? "low" : level == 2 ? "medium" : "high", 11,
+        TextView cost = label(level <= 1 ? "Low" : level == 2 ? "Medium" : level == 3 ? "High" : "Very high", 11,
                 level >= 3 ? ORANGE : MUTED, false);
         cost.setPadding(dp(8), 0, 0, 0);
         row.addView(cost);
@@ -1003,7 +963,7 @@ public final class LauncherActivity extends Activity {
         row.setPadding(dp(16), dp(12), dp(16), dp(13));
         row.setBackground(MenuTheme.row(this,false));row.setMinimumHeight(dp(48));row.setFocusable(true);
         row.setClickable(true);
-        row.setOnClickListener(v -> { showOptionInfo("Benchmark"); confirmBenchmark(); });
+        row.setOnClickListener(v -> confirmBenchmark());
         TextView caption=label("Benchmark",16,TEXT,true);caption.setDuplicateParentStateEnabled(true);caption.setTextColor(MenuTheme.rowText(this,false));row.addView(caption);
         String last = GameOptions.prefs(this).getString("benchmark_last", "");
         if (!last.isEmpty()) {

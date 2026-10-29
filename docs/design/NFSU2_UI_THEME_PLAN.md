@@ -194,3 +194,11 @@ checked. A roughly 3.2s gfxinfo window rendered 95 frames, no janky frames, 5ms 
 rendered zero frames. These are brief launcher checks, not sustained game/battery measurements.
 No game was launched and Resume text/system-animation-disable were not separately exercised.
 Preview recording: /tmp/nfsu2-play-shimmer.mp4; still: /tmp/nfsu2-glow-home.png.
+
+### 2026-10-29 — Compact labels and persistent launch action
+
+Use one/two-word row titles and value labels; put necessary explanations in confirmation/help
+content, never in the value itself. Keep real filenames, hostnames and build identifiers intact.
+Play/Resume remains visible in settings. Visual settings/Display detail use a persistent aggregate
+Estimated demand panel, updated from current configuration. Do not replace it with whichever
+option was last touched. Bars are relative CPU/GPU demand estimates, not live utilization.

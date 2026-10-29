@@ -1272,3 +1272,27 @@ idle check: 0 frames/~3.2s. Returned home and recorded animation, then stopped r
 /tmp/nfsu2-play-shimmer.mp4 and /tmp/nfsu2-glow-home.png are previews. No game launched, no
 Resume-state or system-animation-disable test performed; the shared draw/lifecycle code covers
 those paths but real checks remain. These measurements do not establish game/battery impact.
+
+## 2026-10-29 — Compact launcher menus and persistent demand summary
+
+Shortened launcher row titles, option values and pickers to one/two-word terms (Physics,
+Triggers, Native, Steady, Auto, etc.). Kept persisted keys/values and runtime behavior unchanged;
+filenames/server addresses/build IDs and explanatory confirmation dialogs retain their content.
+Removed duplicate benchmark action. Play/Resume now sits outside the home-only files container
+and remains visible/animated in every settings group. Existing pause/focus/disabled lifecycle
+stops still apply; the previous hidden-in-settings zero-frame measurement no longer applies.
+
+Visual settings and Display detail now keep a stable Estimated demand panel. CPU/GPU tiers
+recompute after settings/preset changes, not when touching a row. GraphicsDemand estimates
+relative recurring work from pixel scale, FPS/steady pacing, geometry, reflections and effects.
+It is a heuristic comparison, not measured utilization, achieved FPS, temperature or a calibrated
+phone prediction. Uncapped uses the panel maximum (up to runtime's 120 Hz) as a reference.
+Explicit display switches take precedence; legacy bundles are not counted again. Texture CPU
+decoding is loading work and excluded. Future device measurements can calibrate weights.
+
+Debug APK build and full phone source checks passed, including new demand tests for resolution,
+FPS/pacing, geometry, disabled reflections and avoiding duplicate bundles. Installed on
+192.168.1.169:40615. Verified Play in Visuals and Controls, compact resolution picker, and stable
+summary. Temporarily changed resolution Native -> 60%: GPU Very high -> Medium, CPU unchanged;
+restored Native afterward. No game launched or other preference changed. Screenshot
+/tmp/nfsu2-demand-visuals.png (before final uncapped reference wording refinement).
