@@ -986,3 +986,24 @@ phone source checks pass; APK builds (68.6 MB after the packaging repack).
 
 Pending: on-device A/B screenshots and a benchmark delta for Subtle/Strong
 bloom. Commit branch android/visual-effects before any merge.
+
+## 2026-10-29: AAudio survives Bluetooth/headphone route changes
+
+Symptom (user): connecting Bluetooth headphones mid-race "froze" the game. Logs
+show the platform disconnects the shared AAudio stream on the route change
+(`AAudioServiceEndpointPlay: callbackLoop() exiting, result = -899` =
+AAUDIO_ERROR_DISCONNECTED) and stops calling the data callback for good; the
+port had no error callback and never reopened the stream, so audio died and one
+run showed a 1.68 s presentation stall.
+
+Fix: register AAudioStreamBuilder_setErrorCallback (DISCONNECTED / INVALID_STATE
+/ TIMEOUT set a flag), then reopen the stream from the guest thread — a cheap
+per-present tick (serviceGuestSoundTick) plus the existing 1 s statistics pass as
+fallback, throttled to one attempt per 500 ms. Reopened streams log
+"AAudio stream reopened after a device change"; mixer/voice state is host-side
+and survives.
+
+Verification status: the disconnect was reproduced on the phone (01:19:50) with
+the old build. Post-fix route-change test is pending: no A2DP device was
+connected during the session (Buds disconnected; A2DP suspended), so toggling
+Bluetooth changed no media route. Build with the fix is installed on the phone.

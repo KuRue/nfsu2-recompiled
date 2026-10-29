@@ -616,6 +616,7 @@ void finishGuestBenchmark(){
 void direct3DCreate(){ret(createGuestD3D9(arg(0)),1);}
 void freeD3DGuest(uint32_t address){heaps->free(GuestHeaps::process,address);}
 void serviceGuestSound();
+void serviceGuestSoundTick();
 [[maybe_unused]] void samplePhysicsForPhone();
 // Development hook for the benchmark: `adb shell setprop debug.nfs.autopilot 1` hands the
 // player's car to the game's own AI during a circuit race. The retail input handler
@@ -776,6 +777,7 @@ void d3dDispatch(){
             }
             if(finished)finishGuestBenchmark();
         }
+        serviceGuestSoundTick();
         static unsigned frames=0;static auto since=std::chrono::steady_clock::now();
         if(++frames==120){serviceGuestSound();auto now=std::chrono::steady_clock::now();double seconds=std::chrono::duration<double>(now-since).count();
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest D3D9 presentation %.1f FPS over %.2f seconds; bridge ~%.2f ms/frame (present %.2f), %.0f calls/frame",

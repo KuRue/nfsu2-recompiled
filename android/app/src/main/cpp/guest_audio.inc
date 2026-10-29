@@ -17,6 +17,7 @@ uint32_t soundToken{};
 AAudioStream* soundStream=nullptr;
 int32_t soundLastXruns=0;
 std::atomic<uint32_t> soundCallbackPeakUs{0};
+std::atomic<bool> soundStreamLost{false};
 aaudio_data_callback_result_t soundCallback(AAudioStream*,void*,void* data,int32_t frames){
     auto start=std::chrono::steady_clock::now();
     soundMixer.render(static_cast<float*>(data),unsigned(frames));
@@ -24,6 +25,13 @@ aaudio_data_callback_result_t soundCallback(AAudioStream*,void*,void* data,int32
     auto peak=soundCallbackPeakUs.load(std::memory_order_relaxed);
     while(us>peak&&!soundCallbackPeakUs.compare_exchange_weak(peak,us,std::memory_order_relaxed)){}
     return AAUDIO_CALLBACK_RESULT_CONTINUE;
+}
+// Bluetooth/headphone changes disconnect the shared stream (result -899) and
+// AAudio stops calling the data callback for good. Mark it and let the guest
+// thread reopen the stream; never do that work in the real-time callback.
+void soundErrorCallback(AAudioStream*,void*,aaudio_result_t error){
+    if(error==AAUDIO_ERROR_DISCONNECTED||error==AAUDIO_ERROR_INVALID_STATE||error==AAUDIO_ERROR_TIMEOUT)
+        soundStreamLost.store(true,std::memory_order_release);
 }
 // Output buffer: 40 ms, grown to 100 ms after reported underruns. Two bursts
 // (4-10 ms on MediaTek, Exynos and Unisoc low-latency streams) were all a
@@ -41,6 +49,7 @@ AAudioStream* openSoundStream(aaudio_performance_mode_t mode){
     AAudioStreamBuilder_setPerformanceMode(builder,mode);
     AAudioStreamBuilder_setBufferCapacityInFrames(builder,48000*soundMaximumMs/1000);
     AAudioStreamBuilder_setDataCallback(builder,soundCallback,nullptr);
+    AAudioStreamBuilder_setErrorCallback(builder,soundErrorCallback,nullptr);
     AAudioStream* stream=nullptr;
     auto status=AAudioStreamBuilder_openStream(builder,&stream);AAudioStreamBuilder_delete(builder);
     return status==AAUDIO_OK?stream:nullptr;
@@ -69,7 +78,22 @@ bool startSoundStream(){
 // Called on the guest thread after Present, never from the real-time callback.
 // Grow only after an actual underrun, one burst at a time, bounded by capacity.
 void serviceGuestSound(){
-    if(!soundStream)return;
+    static std::chrono::steady_clock::time_point lastSoundRetry{};
+    bool lost=soundStreamLost.exchange(false,std::memory_order_acq_rel);
+    if(soundStream&&!lost){
+        aaudio_stream_state_t state=AAudioStream_getState(soundStream);
+        if(state==AAUDIO_STREAM_STATE_DISCONNECTED||state==AAUDIO_STREAM_STATE_CLOSED||state==AAUDIO_STREAM_STATE_STOPPED)lost=true;
+    }
+    if(!soundStream||lost){
+        auto now=std::chrono::steady_clock::now();
+        if(now-lastSoundRetry<std::chrono::milliseconds(500))return; // throttle reopen attempts
+        lastSoundRetry=now;
+        if(soundStream){AAudioStream_requestStop(soundStream);AAudioStream_close(soundStream);soundStream=nullptr;}
+        soundStreamLost.store(false,std::memory_order_release);
+        if(startSoundStream())NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","AAudio stream reopened after a device change: %u Hz",soundMixer.rate);
+        else NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","AAudio stream reopen failed; retrying");
+        if(!soundStream)return;
+    }
     int32_t xruns=AAudioStream_getXRunCount(soundStream),burst=AAudioStream_getFramesPerBurst(soundStream);
     int32_t size=AAudioStream_getBufferSizeInFrames(soundStream),capacity=AAudioStream_getBufferCapacityInFrames(soundStream);
     if(xruns>soundLastXruns&&burst>0&&size<soundFrames(soundMaximumMs))
@@ -92,8 +116,16 @@ void serviceGuestSound(){
         xruns,AAudioStream_getBufferSizeInFrames(soundStream),capacity,burst,soundMixer.rate,
         soundCallbackPeakUs.exchange(0,std::memory_order_relaxed),int(AAudioStream_getPerformanceMode(soundStream)));
 }
+// Cheap per-present check: the error callback sets the flag from AAudio's
+// real-time thread, and the next presented frame reopens the stream instead of
+// waiting up to a second for the statistics pass.
+void serviceGuestSoundTick(){
+    if(!soundStreamLost.load(std::memory_order_acquire))return;
+    serviceGuestSound();
+}
 #else
 [[maybe_unused]] void serviceGuestSound(){}
+[[maybe_unused]] void serviceGuestSoundTick(){}
 bool startSoundStream(){return true;} // Host tests inspect the mixer; no physical audio output.
 #endif
 void shutdownGuestSound(){
