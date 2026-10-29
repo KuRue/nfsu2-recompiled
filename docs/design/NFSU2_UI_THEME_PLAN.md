@@ -102,3 +102,29 @@ Each stage is a reviewable commit. This pass changes the plan only, not the app.
 
 Android-owned permission screens, system file pickers and notification chrome cannot be fully
 reskinned by the app. Theme the app's explanation and return flows around them.
+
+## First implementation pass — 2026-10-29
+
+Shared MenuTheme + semantic menu_colors resources now drive launcher sheets, headers,
+rail/marker separators, rows, actions and value pickers. Silver sheets use dark text; headers
+use black bands with soft lime captions. Selected values use lime framing; D-pad focus uses
+white framing; pressed and disabled states are separate. Actions have translucent dark faces
+and outlines, with no gradient fill. Rows/actions have 48dp minimum targets. Picker width is
+bounded by available width and a 520dp cap; its sheet is less transparent for readability.
+
+Bundled unmodified Barlow Condensed Regular and Medium Italic from
+https://github.com/google/fonts/tree/main/ofl/barlowcondensed as a visual approximation,
+NOT an identified original game font. Original filenames: BarlowCondensed-Regular.ttf and
+BarlowCondensed-MediumItalic.ttf. The OFL license is included in the APK at
+assets/licenses/BarlowCondensed-OFL.txt. Menu actions/headings use oblique; help copy uses upright.
+
+Verified on SM-S938U1: launcher, Visual settings, performance preset picker and selected Vulkan
+system-driver picker. D-pad navigation switches focus frames and activates picker Back;
+no game options were changed. Debug APK build and phone source checks pass. Font license and
+both font files verified in APK. Contrast checked against the darkest launcher sheet composite;
+small status/body colors were darkened. Full physical Backbone traversal, large-font/tablet
+screens and overlay performance remain to verify.
+
+This is foundations + launcher/picker styling only. The original navigation structure remains;
+icon-category navigation, backdrop/logotype, all framework dialogs, racing controls/editor,
+benchmark overlays and HUD-specific typography are subsequent passes. No gameplay code changed.

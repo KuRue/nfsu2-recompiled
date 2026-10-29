@@ -8,7 +8,6 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
@@ -42,11 +41,7 @@ public final class LauncherActivity extends Activity {
     private static final int REQUEST_DRIVER_ZIP = 45, REQUEST_DRIVER_PROBE = 46, REQUEST_SAVE_ZIP = 47;
     private int benchmarkSeconds;
     // NFSU2 green with an amber benchmark accent.
-    private static final int ACCENT = 0xFF8EE03A;
-    private static final int CYAN = 0xFFB8F25A;
-    private static final int ORANGE = 0xFFFFC857;
-    private static final int TEXT = 0xFFF2FFF0;
-    private static final int MUTED = 0xFF8FA88F;
+    private int ACCENT, CYAN, ORANGE, TEXT, MUTED;
     /** {label, guest language name, LANGUAGES/<file>.bin}. */
     private static final String[][] LANGUAGES = {
         {"Español", "Spanish", "Spanish"}, {"English", "English UK", "English"},
@@ -108,6 +103,8 @@ public final class LauncherActivity extends Activity {
 
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        ACCENT=getColor(R.color.menu_lime);CYAN=getColor(R.color.menu_ink);ORANGE=getColor(R.color.menu_warning);
+        TEXT=getColor(R.color.menu_ink);MUTED=getColor(R.color.menu_secondary);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
                 View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN |
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
@@ -175,7 +172,7 @@ public final class LauncherActivity extends Activity {
     private View buildScreen() {
         FrameLayout screen = new FrameLayout(this);
         screen.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {0xFF060D08, 0xFF0B2210, 0xFF060D08}));
+                new int[] {0xFF080C0C, getColor(R.color.menu_background), 0xFF272D2A}));
         LinearLayout columns = new LinearLayout(this);
         columns.setPadding(dp(24), dp(10), dp(24), dp(10));
         // Phones use the full width; tablets centre a readable two-pane block
@@ -201,8 +198,8 @@ public final class LauncherActivity extends Activity {
         LinearLayout titles = new LinearLayout(this);
         titles.setOrientation(LinearLayout.VERTICAL);
         titles.setPadding(dp(14), 0, 0, 0);
-        titles.addView(label("Need for Speed Underground 2", 18, TEXT, true));
-        titles.addView(label("PC game · native Android port", 12, MUTED, false));
+        titles.addView(label("Need for Speed Underground 2", 23, getColor(R.color.menu_white), true));
+        titles.addView(label("PC game · native Android port", 13, getColor(R.color.menu_white), false));
         header.addView(titles);
         left.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
@@ -211,6 +208,7 @@ public final class LauncherActivity extends Activity {
         left.addView(leftHome, new LinearLayout.LayoutParams(-1, -2));
         leftInfo = new LinearLayout(this);
         leftInfo.setOrientation(LinearLayout.VERTICAL);
+        leftInfo.setBackground(MenuTheme.panel(this));leftInfo.setPadding(dp(12),dp(10),dp(12),dp(10));
         leftInfo.setVisibility(View.GONE);
         left.addView(leftInfo, new LinearLayout.LayoutParams(-1, -2));
 
@@ -218,7 +216,8 @@ public final class LauncherActivity extends Activity {
         LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(-1, -2);
         cardParams.topMargin = dp(8);
         leftHome.addView(card, cardParams);
-        card.addView(label("GAME FILES", 12, ACCENT, true));
+        card.addView(menuHeading("Game Files"));
+        card.addView(MenuTheme.rail(this),new LinearLayout.LayoutParams(-1,dp(10)));
         status = label("", 13, TEXT, false);
         status.setPadding(0, dp(4), 0, dp(6));
         card.addView(status);
@@ -226,7 +225,7 @@ public final class LauncherActivity extends Activity {
         checksList.setOrientation(LinearLayout.VERTICAL);
         card.addView(checksList);
 
-        play = actionButton("PLAY", true);
+        play = actionButton("Play", true);
         play.setOnClickListener(view -> play());
         LinearLayout playRow = new LinearLayout(this);
         playRow.addView(play, new LinearLayout.LayoutParams(0, dp(54), 1f));
@@ -252,8 +251,9 @@ public final class LauncherActivity extends Activity {
         LinearLayout.LayoutParams rightParams = new LinearLayout.LayoutParams(0, -1, 1f);
         rightParams.leftMargin = dp(24);
         columns.addView(right, rightParams);
-        right.addView(label("OPTIONS", 12, ACCENT, true));
-        TextView note = label("Applied the next time you press PLAY.", 12, 0x88FFFFFF, false);
+        right.addView(menuHeading("Options"));
+        right.addView(MenuTheme.rail(this),new LinearLayout.LayoutParams(-1,dp(10)));
+        TextView note = label("Applied the next time you press PLAY.", 13, MUTED, false);
         note.setPadding(0, dp(2), 0, dp(4));
         right.addView(note);
         ScrollView scroll = new ScrollView(this);
@@ -285,7 +285,7 @@ public final class LauncherActivity extends Activity {
         lastGameRunning=gameRunning();
         boolean resumable = ready && lastGameRunning;
         resumeNextLaunch = resumable;
-        play.setText(resumable ? "RESUME" : "PLAY");
+        play.setText(resumable ? "Resume" : "Play");
         playArrow.setVisibility(resumable ? View.VISIBLE : View.GONE);
         play.setEnabled(ready);
         play.setAlpha(ready ? 1f : .45f);
@@ -309,7 +309,7 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Game", languageLabel() + " · " + GameOptions.onlineServer(this),
                 () -> openGroup("game")));
         optionsList.addView(optionRow("Saves", backupSummary(), () -> openGroup("saves")));
-        optionsList.addView(optionRow("Support", "Version " + ReleaseUpdates.installed(this),
+        optionsList.addView(optionRow("Support", "Updates · diagnostics",
                 () -> openGroup("support")));
     }
 
@@ -427,13 +427,13 @@ public final class LauncherActivity extends Activity {
                 () -> { showOptionInfo(title); chooseValue(title, labels, values, current, fallback, set); });
     }
 
-    /** Launcher-styled value picker: dark green card, green check on the current value. */
+    /** Silver menu sheet with an outlined lime selection and separate controller focus. */
     private void chooseValue(String title, String[] labels, String[] values, String current, String fallback,
                              java.util.function.Consumer<String> set) {
         LinearLayout card = card();
-        card.setPadding(dp(20), dp(14), dp(20), dp(16));
-        TextView heading = label(title, 15, ACCENT, true);
-        heading.setPadding(0, 0, 0, dp(8));
+        card.setPadding(dp(20), dp(14), dp(20), dp(16));card.setBackground(MenuTheme.popupPanel(this));
+        TextView heading = menuHeading(title);
+        heading.setPadding(dp(10),dp(4),dp(10),dp(8));
         card.addView(heading);
         int index = java.util.Arrays.asList(values).indexOf(current);
         for (int i = 0; i < labels.length; i++) {
@@ -441,13 +441,11 @@ public final class LauncherActivity extends Activity {
             LinearLayout row = new LinearLayout(this);
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(dp(12), dp(10), dp(12), dp(10));
-            GradientDrawable bg = new GradientDrawable();
-            bg.setColor(i == index ? 0x2E8EE03A : 0x168EE03A);
-            bg.setCornerRadius(dp(10));
-            row.setBackground(bg);
+            row.setBackground(MenuTheme.row(this,i == index));row.setMinimumHeight(dp(48));row.setFocusable(true);
             row.setClickable(true);
             row.setOnClickListener(v -> { dialog.dismiss(); set.accept(value); });
-            row.addView(label(labels[i], 14, i == index ? CYAN : TEXT, i == index),
+            TextView choice=label(labels[i],16,TEXT,true);choice.setTextColor(MenuTheme.rowText(this,i==index));choice.setDuplicateParentStateEnabled(true);
+            row.addView(choice,
                     new LinearLayout.LayoutParams(0, -2, 1f));
             if (i == index) row.addView(label("✓", 16, ACCENT, true));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
@@ -455,6 +453,10 @@ public final class LauncherActivity extends Activity {
             row.setLayoutParams(lp);
             card.addView(row);
         }
+        LinearLayout footer=new LinearLayout(this);footer.setGravity(Gravity.END);
+        Button cancel=actionButton("Back",false);cancel.setOnClickListener(v->{if(dialog!=null)dialog.dismiss();});
+        footer.addView(cancel,new LinearLayout.LayoutParams(dp(112),dp(48)));
+        LinearLayout.LayoutParams footerParams=new LinearLayout.LayoutParams(-1,-2);footerParams.topMargin=dp(12);card.addView(footer,footerParams);
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundColor(Color.TRANSPARENT);
         scroll.addView(card);
@@ -464,13 +466,15 @@ public final class LauncherActivity extends Activity {
         picker.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
         picker.getWindow().setDimAmount(0.6f);
         picker.show();
+        picker.getWindow().setLayout(Math.min(dp(520),getResources().getDisplayMetrics().widthPixels-dp(48)),-2);
         dialog = picker;
     }
 
     /** Section header that returns to the category list. */
     private TextView backRow(String text) {
-        TextView back = label(text, 13, ACCENT, true);
-        back.setPadding(dp(4), 0, 0, dp(4));
+        TextView back = label(text,20,ACCENT,true);
+        back.setBackground(MenuTheme.action(this,false));back.setMinimumHeight(dp(48));back.setFocusable(true);
+        back.setGravity(Gravity.CENTER_VERTICAL);back.setPadding(dp(10),dp(4),dp(10),dp(4));
         back.setClickable(true);
         back.setOnClickListener(v -> closeGroup());
         return back;
@@ -898,7 +902,7 @@ public final class LauncherActivity extends Activity {
 
     private void addCheck(String name, boolean ok, boolean required) {
         TextView row = label((ok ? "✓  " : required ? "✗  " : "!  ") + name + (ok || required ? "" : " · optional"), 13,
-                ok ? 0xFF59F7B0 : required ? 0xFFFF5C8A : 0xFFFFD166, false);
+                getColor(ok ? R.color.menu_success : required ? R.color.menu_error : R.color.menu_warning), false);
         row.setPadding(0, dp(2), 0, dp(2));
         checksList.addView(row);
     }
@@ -908,9 +912,7 @@ public final class LauncherActivity extends Activity {
         LinearLayout block = new LinearLayout(this);
         block.setOrientation(LinearLayout.VERTICAL);
         block.setPadding(0, dp(14), 0, dp(2));
-        View line = new View(this);
-        line.setBackgroundColor(0x331E3A5F);
-        block.addView(line, new LinearLayout.LayoutParams(-1, dp(1)));
+        block.addView(MenuTheme.rail(this), new LinearLayout.LayoutParams(-1, dp(9)));
         TextView title = label(text, 10, MUTED, true);
         title.setLetterSpacing(.14f);
         title.setPadding(dp(2), dp(8), 0, dp(2));
@@ -934,7 +936,7 @@ public final class LauncherActivity extends Activity {
             case "support": title = "Support"; text = "Updates, logs and diagnostics."; break;
             default: title = "Options"; text = "";
         }
-        leftInfo.addView(label(title.toUpperCase(java.util.Locale.US), 12, ACCENT, true));
+        leftInfo.addView(menuHeading(title));
         TextView body = label(text, 13, MUTED, false);
         body.setPadding(0, dp(8), 0, dp(10));
         leftInfo.addView(body);
@@ -950,7 +952,7 @@ public final class LauncherActivity extends Activity {
         int gpu = info != null ? Integer.parseInt(info[1]) : 0;
         int cpu = info != null ? Integer.parseInt(info[2]) : 0;
         leftInfo.removeAllViews();
-        leftInfo.addView(label(title.toUpperCase(java.util.Locale.US), 12, ACCENT, true));
+        leftInfo.addView(menuHeading(title));
         TextView body = label(text, 13, MUTED, false);
         body.setPadding(0, dp(8), 0, dp(12));
         leftInfo.addView(body);
@@ -987,22 +989,19 @@ public final class LauncherActivity extends Activity {
         parent.addView(row);
     }
 
-    /** The benchmark entry: distinct cyan accent card, last result underneath. */
+    /** Benchmark row shares the menu treatment; the last result remains underneath. */
     private View benchmarkRow() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.VERTICAL);
         row.setPadding(dp(16), dp(12), dp(16), dp(13));
-        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {0x33FFC857, 0x1A8EE03A});
-        bg.setCornerRadius(dp(14));
-        bg.setStroke(dp(1), 0xAAFFC857);
-        row.setBackground(bg);
+        row.setBackground(MenuTheme.row(this,false));row.setMinimumHeight(dp(48));row.setFocusable(true);
         row.setClickable(true);
         row.setOnClickListener(v -> { showOptionInfo("Benchmark"); confirmBenchmark(); });
-        row.addView(label("BENCHMARK", 11, ORANGE, true));
+        TextView caption=label("Benchmark",16,TEXT,true);caption.setDuplicateParentStateEnabled(true);caption.setTextColor(MenuTheme.rowText(this,false));row.addView(caption);
         String last = GameOptions.prefs(this).getString("benchmark_last", "");
         if (!last.isEmpty()) {
             TextView subtitle = label(last, 12, MUTED, false);
+            subtitle.setDuplicateParentStateEnabled(true);subtitle.setTextColor(MenuTheme.rowText(this,false));
             subtitle.setPadding(0, dp(3), 0, 0);
             row.addView(subtitle);
         }
@@ -1020,16 +1019,12 @@ public final class LauncherActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(12), dp(8), dp(12), dp(8));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0x168EE03A);
-        bg.setCornerRadius(dp(12));
-        row.setBackground(bg);
-        row.setClickable(true);
-        row.setOnClickListener(v -> onClick.run());
-        row.addView(label(title, 14, TEXT, false), new LinearLayout.LayoutParams(0, -2, 1f));
-        TextView current = label(value, 13, CYAN, true);
-        current.setGravity(Gravity.END);
-        row.addView(current, new LinearLayout.LayoutParams(0, -2, 1f));
+        row.setBackground(MenuTheme.row(this,false));row.setMinimumHeight(dp(48));row.setFocusable(true);
+        row.setClickable(true);row.setOnClickListener(v -> onClick.run());
+        TextView caption=label(title,16,TEXT,true);caption.setDuplicateParentStateEnabled(true);caption.setTextColor(MenuTheme.rowText(this,false));
+        row.addView(caption,new LinearLayout.LayoutParams(0,-2,1f));
+        TextView current=label(value,16,TEXT,true);current.setDuplicateParentStateEnabled(true);current.setTextColor(MenuTheme.rowText(this,false));
+        current.setGravity(Gravity.END);row.addView(current,new LinearLayout.LayoutParams(0,-2,1f));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.topMargin = dp(5);
         row.setLayoutParams(lp);
@@ -1040,11 +1035,7 @@ public final class LauncherActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(12), dp(16), dp(12));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0xCC0E1A12);
-        bg.setCornerRadius(dp(18));
-        bg.setStroke(dp(1), 0x448EE03A);
-        card.setBackground(bg);
+        card.setBackground(MenuTheme.panel(this));
         return card;
     }
 
@@ -1052,16 +1043,9 @@ public final class LauncherActivity extends Activity {
         Button b = new Button(this);
         b.setText(text);
         b.setAllCaps(false);
-        b.setTextColor(primary ? 0xFF0A1C05 : TEXT);
-        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, primary ? 22 : 15);
-        b.setTypeface(Typeface.DEFAULT_BOLD);
-        b.setLetterSpacing(primary ? .12f : 0f);
-        GradientDrawable bg = primary
-                ? new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[] {0xFFB8F25A, 0xFF3FB82A})
-                : new GradientDrawable();
-        if (!primary) { bg.setColor(0x22FFFFFF); bg.setStroke(dp(1), 0x55FFFFFF); }
-        bg.setCornerRadius(dp(14));
-        b.setBackground(bg);
+        b.setTextColor(new android.content.res.ColorStateList(new int[][]{{-android.R.attr.state_enabled},{}},new int[]{getColor(R.color.menu_disabled),getColor(R.color.menu_white)}));
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP,primary?24:18);b.setTypeface(MenuTheme.font(this,true));
+        b.setLetterSpacing(0);b.setMinHeight(dp(48));b.setBackground(MenuTheme.action(this,primary));
         b.setStateListAnimator(null);
         return b;
     }
@@ -1071,9 +1055,11 @@ public final class LauncherActivity extends Activity {
         t.setText(text);
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
         t.setTextColor(color);
-        if (bold) { t.setTypeface(Typeface.DEFAULT_BOLD); t.setLetterSpacing(.06f); }
+        t.setTypeface(MenuTheme.font(this,bold));t.setLetterSpacing(0);
         return t;
     }
+
+    private TextView menuHeading(String title) { TextView text=label(title,20,ACCENT,true);MenuTheme.heading(text);return text; }
 
     private void message(String title, String text) {
         new AlertDialog.Builder(this, R.style.NeonDialog)

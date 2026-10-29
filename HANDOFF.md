@@ -1175,3 +1175,20 @@ dialogs are less oversized on the phone. Added condensed title/body text
 appearance styles for the framework dialog list/body where the platform reads
 them; the AlertDialog title itself still uses the framework's own style.
 Verified the narrower cache-reset dialog and the themed benchmark panel.
+
+## 2026-10-29: reference-based native launcher theme foundations
+
+Added MenuTheme and semantic menu_colors, silver translucent launcher sheets with dark text,
+black/lime title bands, gray rail/marker dividers, oblique menu labels, outlined actions and
+stateful rows. Value pickers use the same styling, a responsive capped width and Back footer.
+Bundled Barlow Condensed Regular/Medium Italic (licensed approximation, not exact game font);
+OFL is packaged under assets/licenses. Font roles and colors are ready for subsequent screens.
+Main Support row uses Updates/diagnostics instead of a long build string; full version remains
+in Support. Settings/navigation otherwise unchanged; no gameplay code changed.
+
+Debug APK installed on 192.168.1.169:40615. Checked home, Visual settings, preset and driver
+pickers, selected lime frame, white D-pad focus, D-pad Back activation and submenu navigation.
+Build/source checks pass; fonts/license checked in APK; body/status contrast adjusted. No game
+options changed. No tablet/large-font or full physical Backbone traversal performed this pass.
+Remaining theme work: category-icon navigation/backdrop/logotype, shared framework dialog
+migration, touch dock/editor and HUD/benchmark roles. See docs/design/NFSU2_UI_THEME_PLAN.md.
