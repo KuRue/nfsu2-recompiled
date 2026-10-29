@@ -41,12 +41,12 @@ import java.util.concurrent.Executors;
 public final class LauncherActivity extends Activity {
     private static final int REQUEST_DRIVER_ZIP = 45, REQUEST_DRIVER_PROBE = 46, REQUEST_SAVE_ZIP = 47;
     private int benchmarkSeconds;
-    // NFSU2: electric blue and nitrous orange on deep navy.
-    private static final int ACCENT = 0xFF35A8FF;
-    private static final int CYAN = 0xFFEAF6FF;
-    private static final int ORANGE = 0xFFFF9E1B;
-    private static final int TEXT = 0xFFEAF2FF;
-    private static final int MUTED = 0xFF7E93AD;
+    // NFSU2 green with an amber benchmark accent.
+    private static final int ACCENT = 0xFF8EE03A;
+    private static final int CYAN = 0xFFB8F25A;
+    private static final int ORANGE = 0xFFFFC857;
+    private static final int TEXT = 0xFFF2FFF0;
+    private static final int MUTED = 0xFF8FA88F;
     /** {label, guest language name, LANGUAGES/<file>.bin}. */
     private static final String[][] LANGUAGES = {
         {"Español", "Spanish", "Spanish"}, {"English", "English UK", "English"},
@@ -175,7 +175,7 @@ public final class LauncherActivity extends Activity {
     private View buildScreen() {
         FrameLayout screen = new FrameLayout(this);
         screen.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {0xFF03070F, 0xFF061225, 0xFF0A0A18}));
+                new int[] {0xFF060D08, 0xFF0B2210, 0xFF060D08}));
         LinearLayout columns = new LinearLayout(this);
         columns.setPadding(dp(24), dp(10), dp(24), dp(10));
         screen.addView(columns, new FrameLayout.LayoutParams(-1, -1));
@@ -439,7 +439,7 @@ public final class LauncherActivity extends Activity {
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(dp(12), dp(10), dp(12), dp(10));
             GradientDrawable bg = new GradientDrawable();
-            bg.setColor(i == index ? 0x3335A8FF : 0x1435A8FF);
+            bg.setColor(i == index ? 0x2E8EE03A : 0x168EE03A);
             bg.setCornerRadius(dp(10));
             row.setBackground(bg);
             row.setClickable(true);
@@ -968,7 +968,7 @@ public final class LauncherActivity extends Activity {
         for (int i = 0; i < 3; i++) {
             View cell = new View(this);
             GradientDrawable bg = new GradientDrawable();
-            bg.setColor(i < level ? (name.equals("GPU") ? ACCENT : ORANGE) : 0x221E3A5F);
+            bg.setColor(i < level ? (name.equals("GPU") ? ACCENT : ORANGE) : 0x228EE03A);
             bg.setCornerRadius(dp(3));
             cell.setBackground(bg);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(26), dp(7));
@@ -988,9 +988,9 @@ public final class LauncherActivity extends Activity {
         row.setOrientation(LinearLayout.VERTICAL);
         row.setPadding(dp(16), dp(12), dp(16), dp(13));
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {0x33FF9E1B, 0x1A35A8FF});
+                new int[] {0x33FFC857, 0x1A8EE03A});
         bg.setCornerRadius(dp(14));
-        bg.setStroke(dp(1), 0xAAFF9E1B);
+        bg.setStroke(dp(1), 0xAAFFC857);
         row.setBackground(bg);
         row.setClickable(true);
         row.setOnClickListener(v -> { showOptionInfo("Benchmark"); confirmBenchmark(); });
@@ -1016,7 +1016,7 @@ public final class LauncherActivity extends Activity {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(12), dp(8), dp(12), dp(8));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0x1435A8FF);
+        bg.setColor(0x168EE03A);
         bg.setCornerRadius(dp(12));
         row.setBackground(bg);
         row.setClickable(true);
@@ -1036,9 +1036,9 @@ public final class LauncherActivity extends Activity {
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(12), dp(16), dp(12));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0xCC0B1526);
+        bg.setColor(0xCC0E1A12);
         bg.setCornerRadius(dp(18));
-        bg.setStroke(dp(1), 0x551E3A5F);
+        bg.setStroke(dp(1), 0x448EE03A);
         card.setBackground(bg);
         return card;
     }
@@ -1047,12 +1047,12 @@ public final class LauncherActivity extends Activity {
         Button b = new Button(this);
         b.setText(text);
         b.setAllCaps(false);
-        b.setTextColor(primary ? 0xFF08060F : TEXT);
+        b.setTextColor(primary ? 0xFF0A1C05 : TEXT);
         b.setTextSize(TypedValue.COMPLEX_UNIT_SP, primary ? 22 : 15);
         b.setTypeface(Typeface.DEFAULT_BOLD);
         b.setLetterSpacing(primary ? .12f : 0f);
         GradientDrawable bg = primary
-                ? new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[] {0xFF1E6BFF, 0xFF35D0FF})
+                ? new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[] {0xFFB8F25A, 0xFF3FB82A})
                 : new GradientDrawable();
         if (!primary) { bg.setColor(0x22FFFFFF); bg.setStroke(dp(1), 0x55FFFFFF); }
         bg.setCornerRadius(dp(14));
