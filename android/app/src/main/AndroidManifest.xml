@@ -20,6 +20,7 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps the paused game session in memory so Resume restores it exactly." />
         </service>
+        <service android:name=".VisualPreviewService" android:exported="false" android:process=":preview" />
         <activity android:name=".GpuProbeActivity" android:exported="false"
             android:process=":gpu_probe" android:screenOrientation="sensorLandscape" />
         <activity android:name=".LauncherActivity" android:exported="true" android:screenOrientation="sensorLandscape"

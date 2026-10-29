@@ -180,8 +180,8 @@ public final class GameActivity extends NativeActivity {
     private static native void nativeMinimapTop(boolean top);
     private static native void nativeSkipIntro(boolean skip);
     private static native void nativeBackBuffers(int count);
-    private static native void nativeCpuTextures(boolean enabled);
-    private static native void nativeGpuDriver(String hooks, String temp, String directory, String library);
+    static native void nativeCpuTextures(boolean enabled);
+    static native void nativeGpuDriver(String hooks, String temp, String directory, String library);
     private void showFrameLimitOptions() {
         GameOptions.Option option=GameOptions.find(GameOptions.FPS);
         String saved=GameOptions.get(this,GameOptions.FPS);int selected=0;

@@ -559,6 +559,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
 // drives the GPU through two Vulkan drivers.
 static bool customVulkanDriver=false;
 static std::string customVulkanError;
+const char* launcherPreviewDriverError(){return customVulkanError.c_str();}
 extern "C" void dxvkAndroidSetInstanceProcAddr(PFN_vkGetInstanceProcAddr entry);
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGpuDriver(JNIEnv* env,jclass,jstring hooks,jstring temp,jstring directory,jstring library){
     auto text=[&](jstring value){const char* c=value?env->GetStringUTFChars(value,nullptr):nullptr;std::string r=c?c:"";if(c)env->ReleaseStringUTFChars(value,c);return r;};

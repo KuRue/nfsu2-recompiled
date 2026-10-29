@@ -1,3 +1,4 @@
+#include "preview_mode.h"
 #include <initializer_list>
 #include <set>
 #include <condition_variable>
@@ -692,6 +693,13 @@ void d3dDispatch(){
         bool steady=steadyPace.load(std::memory_order_relaxed);
         static uint64_t callsAtPresent=0;uint64_t callsThisFrame=d3dCalls-callsAtPresent;callsAtPresent=d3dCalls;
         unsigned calls=callsThisFrame>0xffffffffull?0xffffffffu:unsigned(callsThisFrame);
+        if(launcherPreviewMode() && guestDrivingControls() && calls>8000){
+            auto scene=nfs_physics::readSnapshot([](uint32_t address,void* out,size_t size){
+                if(!memory||!memory->readable(address,size))return false;
+                std::memcpy(out,static_cast<const uint8_t*>(memory->base())+address,size);return true;
+            });
+            launcherPreviewGate.observe(true,scene.valid,calls);
+        }
         unsigned paceLimit=selectedLimit?steadyFrameRate(selectedLimit,steady?panel:0):0;
         static unsigned quietFrames=0;
         unsigned presentLimit=menuPresentLimit(paceLimit,calls,quietFrames);
@@ -1664,12 +1672,12 @@ std::string connectGuestRuntime(const char* executable) {
         // loaded, about 4 s after launch (phone, 2026-10-27). A benchmark run always uses it so
         // each run is the same race; `debug.nfs.skipfe 1` does the same for development.
         {char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.skipfe",value);
-            if(std::atoi(value)||benchmarkSeconds.load()){
+            if(std::atoi(value)||benchmarkSeconds.load()||launcherPreviewMode()){
                 // 0x864FB0 is the SkipFE opponent count (copied to race setup 0x89E7C4, which a
                 // menu Quick Race with three opponents also sets to 3). Three AI racers keep the
                 // scene representative of a real race.
-                write32(0x864fac,1);write32(0x864fb0,3);
-                NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","SkipFE: straight into a race with 3 opponents");}}
+                write32(0x864fac,1);write32(0x864fb0,launcherPreviewMode()?0:3);
+                NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","SkipFE: straight into a race with %u opponents",launcherPreviewMode()?0u:3u);}}
         // Development: `debug.nfs.poke "ADDR=VALUE,..."` (hex address, decimal value) writes
         // 32-bit values before the entry, for trying the SkipFE race settings.
         {char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.poke",value);

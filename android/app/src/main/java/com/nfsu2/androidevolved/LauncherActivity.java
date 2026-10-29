@@ -56,6 +56,10 @@ public final class LauncherActivity extends Activity {
 
     private TextView status, optionsTitle, submenuBack;
     private MenuPanel infoPanel;
+    private VisualPreview visualPreview;
+    private ImageView previewImage;
+    private TextView previewStatus;
+    private String previewPath;
     private ScrollView optionsScroll;
     private GlowActionButton play;
     private Button access, playArrow;
@@ -126,6 +130,7 @@ public final class LauncherActivity extends Activity {
 
     @Override protected void onPause() {
         resumed = false;
+        if(visualPreview!=null)visualPreview.hide();
         if(play!=null)play.setActive(false);
         main.removeCallbacks(sessionRefresh);
         super.onPause();
@@ -893,6 +898,16 @@ public final class LauncherActivity extends Activity {
     /** Contextual left pane: what the current group is, then each setting's cost. */
     private void updateLeftPane() {
         if (leftHome == null || leftInfo == null) return;
+        if(visualPreview==null)visualPreview=new VisualPreview(this,(path,state)->{
+            if(previewImage==null||previewStatus==null)return;
+            previewStatus.setText(state);previewPath=path;
+            // The image needs no caption; the status line is for Preparing and errors.
+            if(path!=null){previewImage.setImageBitmap(android.graphics.BitmapFactory.decodeFile(path));previewImage.setVisibility(View.VISIBLE);previewStatus.setVisibility(View.GONE);
+                previewImage.post(this::fitPreview);}
+            else {previewImage.setImageDrawable(null);previewImage.setVisibility(View.GONE);previewStatus.setVisibility(View.VISIBLE);}
+        });
+        boolean visuals="graphics".equals(openGroup)||"display".equals(openGroup);
+        if(!visuals){visualPreview.hide();previewImage=null;previewStatus=null;}
         if (openGroup == null) { leftHome.setVisibility(View.VISIBLE); infoPanel.setVisibility(View.GONE); return; }
         leftHome.setVisibility(View.GONE); infoPanel.setVisibility(View.VISIBLE);
         leftInfo.removeAllViews();
@@ -924,40 +939,50 @@ public final class LauncherActivity extends Activity {
                     refresh=Math.max(refresh,mode.getRefreshRate());
             refresh=Math.min(120,refresh);
             GraphicsDemand demand = GraphicsDemand.estimate(settings, metrics.widthPixels, metrics.heightPixels, refresh);
-            TextView estimate = label("Estimated demand",13,MUTED,false);
-            estimate.setPadding(dp(10),dp(8),dp(10),dp(8));leftInfo.addView(estimate);
-            addImpactBar(leftInfo,"CPU",demand.cpuLevel,demand.cpuSegments);
-            addImpactBar(leftInfo,"GPU",demand.gpuLevel,demand.gpuSegments);
+            // CPU and GPU sliders share one row above the preview.
+            LinearLayout sliders=new LinearLayout(this);sliders.setPadding(dp(10),dp(4),dp(10),0);
+            DemandSlider cpu=new DemandSlider(this,MUTED,ACCENT,ACCENT),gpu=new DemandSlider(this,MUTED,ACCENT,ACCENT);
+            cpu.set("CPU",demand.cpuScore,tierName(demand.cpuLevel));gpu.set("GPU",demand.gpuScore,tierName(demand.gpuLevel));
+            LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,-2,1f);half.rightMargin=dp(14);
+            sliders.addView(cpu,half);sliders.addView(gpu,new LinearLayout.LayoutParams(0,-2,1f));
+            leftInfo.addView(sliders);
             TextView target = label(settings.get(GameOptions.FPS).equals("0")
                     ? "Uncapped · "+Math.round(refresh)+" Hz reference"
-                    : Math.round(demand.targetFps)+" FPS target",12,MUTED,false);
-            target.setPadding(dp(10),dp(8),dp(10),dp(8));leftInfo.addView(target);
+                    : Math.round(demand.targetFps)+" FPS target",11,MUTED,false);
+            target.setPadding(dp(10),0,dp(10),dp(4));leftInfo.addView(target);
+            previewStatus=label("Preparing…",12,MUTED,false);
+            previewStatus.setPadding(dp(10),dp(4),dp(10),dp(4));leftInfo.addView(previewStatus);
+            previewImage=new ImageView(this);previewImage.setAdjustViewBounds(true);
+            previewImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            previewImage.setContentDescription("Game-rendered visual preview. Tap to enlarge.");
+            previewImage.setOnClickListener(view->{
+                if(previewPath==null)return;
+                ImageView full=new ImageView(this);full.setAdjustViewBounds(true);
+                full.setImageBitmap(android.graphics.BitmapFactory.decodeFile(previewPath));
+                new AlertDialog.Builder(this,R.style.NeonDialog).setTitle("Visual preview").setView(full)
+                    .setPositiveButton("Back",null).setNeutralButton("Refresh",(d,w)->visualPreview.retry()).show();
+            });
+            previewStatus.setOnClickListener(view->visualPreview.retry());
+            // Full pane width at the capture's 16:9.
+            LinearLayout.LayoutParams frame=new LinearLayout.LayoutParams(-1,-2);frame.leftMargin=frame.rightMargin=dp(8);
+            leftInfo.addView(previewImage,frame);
+            if(resumed&&allowed())visualPreview.request();
+            else previewStatus.setText("File access required");
         }
     }
 
-    private void addImpactBar(LinearLayout parent, String name, int level, int segments) {
-        LinearLayout row = new LinearLayout(this);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(10), dp(3), dp(10), dp(3));
-        TextView caption = label(name, 11, MUTED, true);
-        caption.setLetterSpacing(.12f);
-        row.addView(caption, new LinearLayout.LayoutParams(dp(40), -2));
-        for (int i = 0; i < GraphicsDemand.SEGMENTS; i++) {
-            View cell = new View(this);
-            GradientDrawable bg = new GradientDrawable();
-            bg.setColor(i < segments ? ACCENT : 0x228EE03A);
-            bg.setCornerRadius(dp(3));
-            cell.setBackground(bg);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(7), 1f);
-            lp.rightMargin = dp(4);
-            row.addView(cell, lp);
-        }
-        TextView cost = label(level <= 1 ? "Low" : level == 2 ? "Medium" : level == 3 ? "High" : "Very high", 11,
-                MUTED, false);
-        cost.setPadding(dp(8), 0, 0, 0);
-        row.addView(cost,new LinearLayout.LayoutParams(dp(48),-2));
-        parent.addView(row);
+    /** Size the preview to the space between the settings card and Play: full width, cropped to fit. */
+    private void fitPreview(){
+        if(previewImage==null||play==null||infoPanel==null||previewImage.getWidth()==0)return;
+        int[] panel=new int[2],button=new int[2];infoPanel.getLocationOnScreen(panel);play.getLocationOnScreen(button);
+        int spare=(button[1]-dp(8))-(panel[1]+infoPanel.getHeight());
+        int height=Math.max(dp(64),Math.min(previewImage.getWidth()*9/16,previewImage.getHeight()+spare));
+        if(Math.abs(height-previewImage.getHeight())<2)return;
+        previewImage.setAdjustViewBounds(false);previewImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        android.view.ViewGroup.LayoutParams params=previewImage.getLayoutParams();params.height=height;previewImage.setLayoutParams(params);
     }
+
+    private static String tierName(int level){return level<=1?"Low":level==2?"Medium":level==3?"High":"Very high";}
 
     /** Benchmark row shares the menu treatment; the last result remains underneath. */
     private View benchmarkRow() {

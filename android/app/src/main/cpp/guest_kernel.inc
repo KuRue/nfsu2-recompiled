@@ -321,6 +321,7 @@ bool registryPersisted(const std::string& name){
     return name!="install dir"&&name!="language"&&name!="g_racingresolution"&&name!="g_fsaalevel";
 }
 void loadPersistedRegistry(){
+    if(launcherPreviewMode())return;
     std::ifstream file(registryFile(),std::ios::binary);if(!file)return;
     auto read=[&](void* data,size_t bytes){return bool(file.read(static_cast<char*>(data),std::streamsize(bytes)));};
     uint32_t count=0,restored=0;if(!read(&count,4)||count>4096)return;
@@ -334,6 +335,7 @@ void loadPersistedRegistry(){
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFS","Registry: restored %u saved game settings",restored);
 }
 void savePersistedRegistry(){
+    if(launcherPreviewMode())return;
     std::string target=registryFile(),temporary=target+".tmp";
     {std::ofstream file(temporary,std::ios::binary|std::ios::trunc);if(!file)return;
         uint32_t count=0;for(auto& [name,value]:gameRegistry)if(registryPersisted(name))++count;
