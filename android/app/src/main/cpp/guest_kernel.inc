@@ -369,6 +369,9 @@ bool visualRegistryOverride(const std::string& name){
     bool night=number("NFSU2_NATIVE_LOOK",0)>0; // any look preset, not only "1"
     bool reflections=number("NFSU2_NATIVE_REFLECTIONS",0)==1;
     int effects=number("NFSU2_NATIVE_EFFECTS",0);
+    int atmosphere=number("NFSU2_NATIVE_ATMOSPHERE",0);
+    if(atmosphere>=1&&(name=="g_fogenable"||name=="g_horizonfogenable"))return true;
+    if(atmosphere>=2&&name=="g_rainenable")return true;
     if(night&&(name=="g_carlightingenable"||name=="g_carheadlightenable"||
                name=="g_carshadowenable"||name=="g_lightglowenable"))return true;
     if(effects>=1&&(name=="g_lightstreaksenable"||name=="g_overbrightenable"||

@@ -1019,3 +1019,13 @@ level 2); fixed LOOK>1 not enabling night lighting. Phone benchmark after:
 Midnight+effects 91.0 avg / 54.7 1% low / 49,370 calls; Night+motion blur 97.8 /
 60.0 / 46,439. Screenshots in /tmp/opencode/vis_midnight_*.png and
 vis_nightfx2_*.png.
+
+## 2026-10-29: registry audit, Atmosphere option
+
+Audited all 28 saved settings. Added Atmosphere (fog+haze / +rain), forcing
+g_fogenable, g_horizonfogenable and g_rainenable. Tested g_bleachbypassenable
+and g_depthoffieldenable via a temporary registry edit (screenshots in
+/tmp/opencode/vis_cinematic_*.png): not exposed yet, pending the user's taste.
+LOD/performance_level forcing showed no measurable change (draw calls within
+run variance), so they stay untouched until the game's menu mapping is known.
+Docs table records every key and its current behaviour.

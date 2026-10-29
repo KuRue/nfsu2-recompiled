@@ -119,3 +119,26 @@ update 91.0 FPS average, 1% low 54.7, 49,370 draw calls/frame; Night + motion
 blur 97.8 FPS, 1% low 60.0, 46,439 calls (baseline without effects: ~117 FPS,
 42k calls). Drop to 85% resolution or turn effects off if that matters more than
 the look.
+
+## Registry audit: what else the game was hiding (2026-10-29)
+
+`android_registry.dat` is the game's own settings store; every visual feature
+was off. Mapping of the remaining keys and what the port does now:
+
+| Key | Saved | Port behaviour |
+|---|---|---|
+| `g_carenvironmentmapenable` / `updatedata` / `g_roadreflectionenable` | 0 | forced with **Reflections** (update flag is what fixes matte paint) |
+| `g_carlightingenable` / `headlight` / `carshadow` / `lightglow` | 0 | forced with any **Lighting look** |
+| `g_lightstreaksenable`, `g_overbrightenable`, `g_tintingenable`, `g_particlesystemenable`, `g_crowdenable` | 0 | forced with **Night effects** |
+| `g_motionblurenable` | 0 | **Night effects** level 2 |
+| `g_fogenable`, `g_horizonfogenable` | 0 | **Atmosphere** level 1 |
+| `g_rainenable` | 0 | **Atmosphere** level 2 |
+| `g_bleachbypassenable`, `g_depthoffieldenable` | 0 | tested (see screenshots), not exposed yet |
+| `g_worldlodlevel`, `g_carlodlevel`, `g_performancelevel` | 0/0/1 | left alone: forcing 2 changed nothing measurable in the benchmark, so the value mapping is unconfirmed |
+| `g_texturefiltering` | 1 | left alone: anisotropic filtering is already forced at the sampler level |
+| `g_cardamageenable` | 0 | cosmetic damage only |
+| `g_vsyncon` | 0 | irrelevant: the port paces frames itself |
+
+Measured (same benchmark, 2340×1080, Midnight + effects + reflections):
+no atmosphere 91.0 FPS avg; fog 95.5; fog + rain 96.7; adding bleach + DOF
+90.4. Differences are inside the benchmark's run-to-run variance.
