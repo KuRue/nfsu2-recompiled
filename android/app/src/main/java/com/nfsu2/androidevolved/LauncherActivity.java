@@ -298,8 +298,10 @@ public final class LauncherActivity extends Activity {
                 PhonePreset preset = GameOptions.phonePreset(this);
                 optionsList.addView(cycleRow("Phone preset", labels, values, preset == null ? "" : preset.name(), "Custom",
                         name -> { GameOptions.applyPhonePreset(this, PhonePreset.valueOf(name)); refreshOptions(); }));
+                optionsList.addView(optionRow("Game display settings",
+                        GameOptions.displayPresetLabel(this) + " preset", () -> openGroup("display")));
                 for (GameOptions.Option option : GameOptions.ALL)
-                    if (!isControlOption(option))
+                    if (!isControlOption(option) && !GameOptions.isDisplayOption(option))
                         optionsList.addView(optionCycleRow(option));
                 optionsList.addView(optionRow("Run a benchmark", "60 seconds of a race, driven by the game's AI", this::confirmBenchmark));
                 optionsList.addView(optionRow("Upscaling and frame generation", "Not on this GPU", this::explainUpscaling));
@@ -307,10 +309,22 @@ public final class LauncherActivity extends Activity {
                 optionsList.addView(optionRow("Reset graphics cache", "Rebuild shaders", () -> GraphicsCache.prompt(this)));
                 break;
             }
+            case "display": {
+                optionsList.addView(backRow("‹  Options"));
+                String[] labels = {"Low", "Medium", "High", "Ultra"};
+                String[] values = {"low", "medium", "high", "ultra"};
+                optionsList.addView(cycleRow("Detail preset · Level Of Detail", labels, values,
+                        GameOptions.prefs(this).getString(GameOptions.DISPLAY_PRESET, "low"), "Low",
+                        value -> { GameOptions.applyDisplayPreset(this, value); refreshOptions(); }));
+                for (GameOptions.Option option : GameOptions.ALL)
+                    if (GameOptions.isDisplayOption(option))
+                        optionsList.addView(optionCycleRow(option));
+                break;
+            }
             case "controls":
                 optionsList.addView(backRow("‹  Options"));
                 for (GameOptions.Option option : GameOptions.ALL)
-                    if (isControlOption(option))
+                    if (isControlOption(option) && !GameOptions.isDisplayOption(option))
                         optionsList.addView(optionCycleRow(option));
                 optionsList.addView(optionRow("Test phone vibration", "Brief handset pulse", () -> {if(!PhoneFeedback.test(this))message("Phone vibration", "This device has no vibration motor.");}));
                 break;

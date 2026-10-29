@@ -476,7 +476,13 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
     const char* value=env->GetStringUTFChars(language,nullptr);if(!value)return;
     setGuestLanguage(value);env->ReleaseStringUTFChars(language,value);
 }
-extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeVisualOptions(JNIEnv*,jclass,jboolean packs,jint filtering,jint sharpness,jint look,jint reflections,jint bloom,jint effects,jint atmosphere,jint treatment,jint detail){
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeDisplayOverrides(JNIEnv* env,jclass,jstring text){
+    const char* value=env->GetStringUTFChars(text,nullptr);if(!value)return;
+    setenv("NFSU2_DISPLAY_OVERRIDES",value,1);
+    __android_log_print(ANDROID_LOG_INFO,"NFSU2","Display overrides: %s",value);
+    env->ReleaseStringUTFChars(text,value);
+}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeVisualOptions(JNIEnv*,jclass,jboolean packs,jint filtering,jint sharpness,jint look,jint reflections,jint bloom,jint effects,jint atmosphere,jint treatment,jint detail,jboolean lockDisplay){
     auto set=[](const char* name,int value){auto text=std::to_string(value);setenv(name,text.c_str(),1);};
     set("NFSU2_NATIVE_HD",packs==JNI_TRUE?1:0);
     set("NFSU2_NATIVE_AF",filtering==4||filtering==8||filtering==16?filtering:0);
@@ -487,6 +493,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
     set("NFSU2_NATIVE_ATMOSPHERE",atmosphere>=1&&atmosphere<=2?atmosphere:0);
     set("NFSU2_NATIVE_TREATMENT",treatment>=1&&treatment<=2?treatment:0);
     set("NFSU2_NATIVE_DETAIL",detail>=1&&detail<=2?detail:0);
+    set("NFSU2_NATIVE_LOCK_DISPLAY",lockDisplay==JNI_TRUE?1:0);
     set("NFSU2_NATIVE_REFLECTIONS",reflections==1?1:0);
     setenv("NFSU2_NATIVE_TEXROOT","/storage/emulated/0/nfsu2/TEXPACKS",1);
     __android_log_print(ANDROID_LOG_INFO,"NFSU2","Native visuals: packs=%d AF=%d sharpen=%d look=%d bloom=%d reflections=%d effects=%d atmosphere=%d treatment=%d detail=%d",int(packs),filtering,sharpness,look,bloom,reflections,effects,atmosphere,treatment,detail);

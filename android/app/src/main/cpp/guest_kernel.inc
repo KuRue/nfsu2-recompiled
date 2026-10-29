@@ -366,6 +366,22 @@ void regCloseKey(){ret(registryHandles.erase(arg(0))?0:6,1);}
 // Launcher overrides do not replace saved in-game values.
 bool visualRegistryOverride(const std::string& name,uint32_t& value){
     auto number=[](const char* key,int fallback){const char* v=std::getenv(key);return v?std::atoi(v):fallback;};
+    static const auto displayOverrides=[](){
+        std::map<std::string,uint32_t> map;
+        const char* text=std::getenv("NFSU2_DISPLAY_OVERRIDES");
+        if(text){std::string all(text);size_t start=0;
+            while(start<all.size()){
+                size_t comma=all.find(',',start);
+                std::string item=all.substr(start,comma==std::string::npos?std::string::npos:comma-start);
+                size_t eq=item.find('=');
+                if(eq!=std::string::npos&&eq>0)
+                    map[item.substr(0,eq)]=uint32_t(std::strtoul(item.substr(eq+1).c_str(),nullptr,10));
+                if(comma==std::string::npos)break;
+                start=comma+1;}}
+        return map;
+    }();
+    auto direct=displayOverrides.find(name);
+    if(direct!=displayOverrides.end()){value=direct->second;return true;}
     value=1;
     bool night=number("NFSU2_NATIVE_LOOK",0)>0; // any look preset, not only "1"
     bool reflections=number("NFSU2_NATIVE_REFLECTIONS",0)==1;
@@ -409,6 +425,10 @@ void regSetValueExA(){
     uint32_t size=arg(5);if(size>1048576){ret(87,6);return;}
     RegistryValue value{arg(3),std::vector<uint8_t>(size)};if(size)std::memcpy(value.bytes.data(),ptr(arg(4),size),size);
     auto name=lower(guestString(arg(1)));
+    // Launcher-owned look: the in-game display menu still reports success but
+    // its writes are not saved, so the two sources cannot fight each other.
+    const char* lock=std::getenv("NFSU2_NATIVE_LOCK_DISPLAY");
+    if(lock&&std::strcmp(lock,"1")==0&&name.rfind("g_",0)==0){ret(0,6);return;}
     uint32_t ignored=0;if(visualRegistryOverride(name,ignored)){ret(0,6);return;}
     gameRegistry[name]=std::move(value);
     if(registryPersisted(name))savePersistedRegistry();

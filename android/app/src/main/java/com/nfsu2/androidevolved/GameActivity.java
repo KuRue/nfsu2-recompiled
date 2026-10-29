@@ -164,7 +164,8 @@ public final class GameActivity extends NativeActivity {
     private static native int nativeFeedbackLevel();
     private static native void nativeStopFeedback();
     private static native void nativeTriggerFallback(boolean enabled);
-    private static native void nativeVisualOptions(boolean packs, int filtering, int sharpness, int look, int reflections, int bloom, int effects, int atmosphere, int treatment, int detail);
+    private static native void nativeDisplayOverrides(String overrides);
+    private static native void nativeVisualOptions(boolean packs, int filtering, int sharpness, int look, int reflections, int bloom, int effects, int atmosphere, int treatment, int detail, boolean lockDisplay);
     private static native void nativeResolution(int width, int height);
     private static native void nativeFrameLimit(int framesPerSecond);
     private static native void nativeDisplayRefresh(int hertz);
@@ -286,6 +287,7 @@ public final class GameActivity extends NativeActivity {
         nativeFeedbackSource(GameOptions.get(this,GameOptions.FEEDBACK_SOURCE).equals("physics"));
         nativePhoneFeedback(phoneFeedback.enabled());
         nativeTriggerFallback(GameOptions.get(this, GameOptions.PEDALS).equals("triggers"));
+        nativeDisplayOverrides(GameOptions.displayOverrides(this));
         nativeVisualOptions(GameOptions.get(this, GameOptions.HD_PACKS).equals("on"),
                 Integer.parseInt(GameOptions.get(this, GameOptions.FILTERING)),
                 Integer.parseInt(GameOptions.get(this, GameOptions.SHARPEN)),
@@ -295,7 +297,8 @@ public final class GameActivity extends NativeActivity {
                 Integer.parseInt(GameOptions.get(this, GameOptions.EFFECTS)),
                 Integer.parseInt(GameOptions.get(this, GameOptions.ATMOSPHERE)),
                 Integer.parseInt(GameOptions.get(this, GameOptions.TREATMENT)),
-                Integer.parseInt(GameOptions.get(this, GameOptions.DETAIL)));
+                Integer.parseInt(GameOptions.get(this, GameOptions.DETAIL)),
+                GameOptions.get(this, GameOptions.DISPLAY_OWNER).equals("locked"));
         nativeCpuTextures(launch.getBooleanExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu")));
         String[] loader = launch.getStringArrayExtra("driverLoader");
         if (loader == null || loader.length != 4) loader = GpuDrivers.loaderArguments(this);

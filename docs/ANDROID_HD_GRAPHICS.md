@@ -159,3 +159,36 @@ Two more launcher options:
 
 The override log line used to print "= 1" regardless of the forced value; it now
 prints the actual number.
+
+## Level Of Detail is a preset; the full display map (2026-10-29)
+
+Watching the game's own writes showed the Display page's **Level Of Detail**
+slider is a four-step preset that writes the Customize Display Settings values
+when you leave the page:
+
+| Preset | Values written |
+|---|---|
+| Low | everything 0, `g_performancelevel=1` |
+| Medium | headlights 1, car shadow 2, crowds 1, light glow 1, tint 1, performance 2, world LOD 1 |
+| High | + env map 1, env updates 1, car LOD 1, DOF 1, fog + horizon fog 1, light trails 1, motion blur 1, overbright 1, particles 1, performance 3, road reflection 2, world LOD 2 |
+| Ultra | + bleach bypass 1, env map 2, rain 1, performance 4, road reflection 3 |
+
+The Customize submenu rows map to these keys (observed values in brackets):
+Car Reflection Update Rate → `g_carenvironmentmapupdatedata`;
+Car Reflection Detail → `g_carenvironmentmapenable` (0-2);
+Car Shadow → `g_carshadowenable` (0/1/2, 2 shown as "Neon");
+Car Headlight → `g_carheadlightenable`;
+Car Geometry Detail → `g_carlodlevel` (0-2);
+Crowds → `g_crowdenable`; World Detail → `g_worldlodlevel` (0-2);
+Road Reflection Detail → `g_roadreflectionenable` (0-3);
+Light Trails → `g_lightstreaksenable`; Light Glow → `g_lightglowenable`;
+Particle System → `g_particlesystemenable`; Motion Blur → `g_motionblurenable`;
+Fog → `g_fogenable` + `g_horizonfogenable`; Depth Of Field → `g_depthoffieldenable`;
+Full Screen Anti-Aliasing → `g_fsaalevel` (not persisted by the port);
+Over Bright → `g_overbrightenable`; Bleach (bypass) → `g_bleachbypassenable`;
+Rain → `g_rainenable`; Texture Filtering → `g_texturefiltering`; Vsync → `g_vsyncon`.
+
+The launcher now has a **Game display settings** section: a Detail preset picker
+(Low/Medium/High/Ultra applying exactly the table above) plus one row per
+setting. With "In-game display menu: Ignored", the game's own page still shows
+the launcher values but its writes are discarded, so the two cannot conflict.

@@ -1039,3 +1039,14 @@ with Detail=Maximum: 87.4 avg / 54.2 1% low / 51,678 draw calls vs 95.5 avg /
 the game's Display "Level Of Detail" row writes (expected g_performancelevel,
 default 1=Medium) and whether it also writes the world/car LOD keys — needs one
 manual change in the game's menu, then a registry diff.
+
+## 2026-10-29: full display mapping + launcher display section
+
+Mapped every Customize Display Settings row to its registry key by changing
+values in the game and diffing android_registry.dat (writes flush when leaving
+the Display page). LOD is a 4-step preset; the captured bundles are in
+docs/ANDROID_HD_GRAPHICS.md. Added a "Game display settings" launcher group:
+Detail preset picker (applies the captured bundle to the individual rows) plus
+17 individual settings, and the locked mode ignores all g_* writes. Phone went
+off Wi-Fi before on-device verification of the new UI; next: reconnect, apply
+High, confirm the override log and a benchmark screenshot.

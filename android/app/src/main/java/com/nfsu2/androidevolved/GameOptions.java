@@ -21,7 +21,31 @@ final class GameOptions {
     }
 
     static final String RESOLUTION = "resolution", FPS = "fps", FRAME_PACE = "frame_pace", WIDESCREEN = "widescreen", LATENCY = "latency",
-            FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", BLOOM = "bloom", LOOK = "lighting_look", EFFECTS = "night_effects", ATMOSPHERE = "atmosphere", TREATMENT = "treatment", DETAIL = "detail", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", INTRO = "intro", LANGUAGE = "language";
+            FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", BLOOM = "bloom", LOOK = "lighting_look", EFFECTS = "night_effects", ATMOSPHERE = "atmosphere", TREATMENT = "treatment", DETAIL = "detail", DISPLAY_OWNER = "display_owner", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", INTRO = "intro", LANGUAGE = "language",
+            DISPLAY_PRESET = "display_preset", WORLD_DETAIL = "world_detail", CAR_DETAIL = "car_detail",
+            CAR_SHADOW = "car_shadow", CAR_HEADLIGHT = "car_headlight", CAR_ENV_DETAIL = "car_env_detail",
+            CAR_ENV_UPDATE = "car_env_update", ROAD_REFLECT = "road_reflect_detail", CROWD = "crowd",
+            LIGHT_TRAILS = "light_trails", LIGHT_GLOW = "light_glow", PARTICLES = "particles",
+            MOTION_BLUR = "motion_blur", FOG = "fog", DOF = "dof", OVERBRIGHT = "overbright",
+            BLEACH = "bleach", RAIN = "rain", PERF_LEVEL = "perf_level", TINT = "tint_level";
+
+    /** Launcher row -> the game registry key it overrides (game = use the saved setting). */
+    static final String[][] DISPLAY_MAP = {
+            {WORLD_DETAIL, "g_worldlodlevel"}, {CAR_DETAIL, "g_carlodlevel"},
+            {CAR_SHADOW, "g_carshadowenable"}, {CAR_HEADLIGHT, "g_carheadlightenable"},
+            {CAR_ENV_DETAIL, "g_carenvironmentmapenable"}, {CAR_ENV_UPDATE, "g_carenvironmentmapupdatedata"},
+            {ROAD_REFLECT, "g_roadreflectionenable"}, {CROWD, "g_crowdenable"},
+            {LIGHT_TRAILS, "g_lightstreaksenable"}, {LIGHT_GLOW, "g_lightglowenable"},
+            {PARTICLES, "g_particlesystemenable"}, {MOTION_BLUR, "g_motionblurenable"},
+            {FOG, "g_fogenable"}, {DOF, "g_depthoffieldenable"},
+            {OVERBRIGHT, "g_overbrightenable"}, {BLEACH, "g_bleachbypassenable"},
+            {RAIN, "g_rainenable"},
+    };
+
+    static boolean isDisplayOption(Option option) {
+        for (String[] map : DISPLAY_MAP) if (map[0].equals(option.key)) return true;
+        return false;
+    }
 
     static final Option[] ALL = {
             new Option(FEEDBACK_SOURCE, "Phone feedback source", "physics",
@@ -42,12 +66,50 @@ final class GameOptions {
                     new String[] {"0", "1", "2", "3", "4"},
                     new String[] {"Original", "Night lighting + balanced color", "Neon night · cool shadows",
                             "Filmic night · soft highlights", "Midnight · deepest blacks"}),
+            new Option(DISPLAY_OWNER, "In-game display menu", "locked",
+                    new String[] {"locked", "game"},
+                    new String[] {"Ignored · launcher owns the look", "Editable · saves to game settings"}),
             new Option(TREATMENT, "Visual treatment", "0",
                     new String[] {"0", "1", "2"},
                     new String[] {"Original", "Bleach bypass", "Bleach + depth of field"}),
             new Option(DETAIL, "Detail level", "0",
                     new String[] {"0", "1", "2"},
                     new String[] {"Original (game setting)", "High", "Maximum"}),
+            new Option(WORLD_DETAIL, "World detail", "game",
+                    new String[] {"game", "0", "1", "2"}, new String[] {"Game setting", "Low", "Medium", "High"}),
+            new Option(CAR_DETAIL, "Car geometry detail", "game",
+                    new String[] {"game", "0", "1", "2"}, new String[] {"Game setting", "Low", "Medium", "High"}),
+            new Option(CAR_SHADOW, "Car shadow", "game",
+                    new String[] {"game", "0", "1", "2"}, new String[] {"Game setting", "Off", "Soft", "Neon"}),
+            new Option(CAR_HEADLIGHT, "Car headlights", "game",
+                    new String[] {"game", "0", "1"}, new String[] {"Game setting", "Off", "On"}),
+            new Option(CAR_ENV_DETAIL, "Car reflection detail", "game",
+                    new String[] {"game", "0", "1", "2"}, new String[] {"Game setting", "Off", "Low", "High"}),
+            new Option(CAR_ENV_UPDATE, "Car reflection updates", "game",
+                    new String[] {"game", "0", "1"}, new String[] {"Game setting", "Off", "On"}),
+            new Option(ROAD_REFLECT, "Road reflection detail", "game",
+                    new String[] {"game", "0", "1", "2", "3"},
+                    new String[] {"Game setting", "Off", "Low", "Medium", "High"}),
+            new Option(CROWD, "Crowds", "game",
+                    new String[] {"game", "0", "1"}, new String[] {"Game setting", "Off", "On"}),
+            new Option(LIGHT_TRAILS, "Light trails", "game",
+                    new String[] {"game", "0", "1"}, new String[] {"Game setting", "Off", "On"}),
+            new Option(LIGHT_GLOW, "Light glow", "game",
+                    new String[] {"game", "0", "1"}, new String[] {"Game setting", "Off", "On"}),
+            new Option(PARTICLES, "Particle system", "game",
+                    new String[] {"game", "0", "1"}, new String[] {"Game setting", "Off", "On"}),
+            new Option(MOTION_BLUR, "Motion blur", "game",
+                    new String[] {"game", "0", "1"}, new String[] {"Game setting", "Off", "On"}),
+            new Option(FOG, "Fog and horizon haze", "game",
+                    new String[] {"game", "0", "1"}, new String[] {"Game setting", "Off", "On"}),
+            new Option(DOF, "Depth of field", "game",
+                    new String[] {"game", "0", "1"}, new String[] {"Game setting", "Off", "On"}),
+            new Option(OVERBRIGHT, "Over bright", "game",
+                    new String[] {"game", "0", "1"}, new String[] {"Game setting", "Off", "On"}),
+            new Option(BLEACH, "Bleach bypass", "game",
+                    new String[] {"game", "0", "1"}, new String[] {"Game setting", "Off", "On"}),
+            new Option(RAIN, "Rain", "game",
+                    new String[] {"game", "0", "1"}, new String[] {"Game setting", "Off", "On"}),
             new Option(ATMOSPHERE, "Atmosphere", "0",
                     new String[] {"0", "1", "2"},
                     new String[] {"Original", "Fog and horizon haze", "Fog + rain"}),
@@ -107,6 +169,68 @@ final class GameOptions {
 
     static void set(Context context, String key, String value) {
         prefs(context).edit().putString(key, value).apply();
+    }
+
+
+    /** The game's own Display > Level Of Detail slider, captured from its writes. */
+    static void applyDisplayPreset(Context context, String preset) {
+        SharedPreferences.Editor e = prefs(context).edit();
+        e.putString(DISPLAY_PRESET, preset);
+        // Bundles would fight the individual rows, so presets clear them.
+        e.putString(LOOK, "0").putString(EFFECTS, "0").putString(ATMOSPHERE, "0")
+                .putString(TREATMENT, "0").putString(DETAIL, "0").putString(REFLECTIONS, "0")
+                .putString(DISPLAY_OWNER, "locked");
+        String[][] low = {
+                {WORLD_DETAIL, "0"}, {CAR_DETAIL, "0"}, {CAR_SHADOW, "0"}, {CAR_HEADLIGHT, "0"},
+                {CAR_ENV_DETAIL, "0"}, {CAR_ENV_UPDATE, "0"}, {ROAD_REFLECT, "0"},
+                {CROWD, "0"}, {LIGHT_TRAILS, "0"}, {LIGHT_GLOW, "0"}, {PARTICLES, "0"},
+                {MOTION_BLUR, "0"}, {FOG, "0"}, {DOF, "0"}, {OVERBRIGHT, "0"},
+                {BLEACH, "0"}, {RAIN, "0"}, {PERF_LEVEL, "1"}, {TINT, "0"},
+        };
+        for (String[] row : low) e.putString(row[0], row[1]);
+        if (preset.equals("medium") || preset.equals("high") || preset.equals("ultra")) {
+            e.putString(WORLD_DETAIL, "1").putString(CAR_SHADOW, "2").putString(CAR_HEADLIGHT, "1")
+                    .putString(CROWD, "1").putString(LIGHT_GLOW, "1").putString(TINT, "1")
+                    .putString(PERF_LEVEL, "2");
+        }
+        if (preset.equals("high") || preset.equals("ultra")) {
+            e.putString(WORLD_DETAIL, "2").putString(CAR_DETAIL, "1").putString(CAR_ENV_DETAIL, "1")
+                    .putString(CAR_ENV_UPDATE, "1").putString(ROAD_REFLECT, "2")
+                    .putString(LIGHT_TRAILS, "1").putString(PARTICLES, "1")
+                    .putString(MOTION_BLUR, "1").putString(FOG, "1").putString(DOF, "1")
+                    .putString(OVERBRIGHT, "1").putString(PERF_LEVEL, "3");
+        }
+        if (preset.equals("ultra")) {
+            e.putString(CAR_ENV_DETAIL, "2").putString(ROAD_REFLECT, "3").putString(RAIN, "1")
+                    .putString(BLEACH, "1").putString(PERF_LEVEL, "4");
+        }
+        e.apply();
+    }
+
+    static String displayPresetLabel(Context context) {
+        String preset = prefs(context).getString(DISPLAY_PRESET, "low");
+        switch (preset) {
+            case "low": return "Low";
+            case "medium": return "Medium";
+            case "high": return "High";
+            case "ultra": return "Ultra";
+            default: return "Custom";
+        }
+    }
+
+    static String displayOverrides(Context context) {
+        StringBuilder text = new StringBuilder();
+        for (String[] map : DISPLAY_MAP) {
+            String value = get(context, map[0]);
+            if (value.equals("game")) continue;
+            text.append(map[1]).append('=').append(value).append(',');
+            if (map[0].equals(FOG)) text.append("g_horizonfogenable=").append(value).append(',');
+        }
+        String perf = prefs(context).getString(PERF_LEVEL, "game");
+        if (!perf.equals("game")) text.append("g_performancelevel=").append(perf).append(',');
+        String tint = prefs(context).getString(TINT, "game");
+        if (!tint.equals("game")) text.append("g_tintingenable=").append(tint).append(',');
+        return text.toString();
     }
 
     static PhonePreset phonePreset(Context context) {
