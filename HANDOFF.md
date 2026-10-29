@@ -1144,3 +1144,13 @@ forward=0.00, so the visible jump is likely an AI car or animation catch-up.
 The benchmark ran uncapped on a 120 Hz panel (late frames 2792/4707). Next:
 repeat at 60 FPS / steady pace and trace the guest clock; consider clamping the
 guest frame delta or pre-warming shaders/assets before the intro.
+
+### Race intro hitch: root cause
+
+The 549 ms intro frame aligns with the synchronous read of the 118 MB
+TRACKS/STREAML4RA.BUN and the IntroNis06 bundle; HD texture installs near the
+256 MiB budget add roughly 285 ms. With HD packs off the worst intro frame is
+94 ms after a 264 ms base track load. Capping to 60 FPS does not remove it.
+Next fix: cache or memory-map large .bun files / prefetch the track bundle
+before the intro starts, and consider deferring HD installs while the intro
+streams. Settings used for the test (60 FPS, HD off) were restored afterwards.
