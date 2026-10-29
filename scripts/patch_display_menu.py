@@ -17,7 +17,6 @@ Run after ``scripts/run_lift.py lift ...`` (or use ``RELIFT=1`` with
 """
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -35,24 +34,29 @@ LABELS = {
 def patch(text: str) -> tuple[str, int]:
     changed = 0
     for label, where in LABELS.items():
-        marker = f"/* {where}: Display category removed"
-        if marker in text:
+        start = text.find(label + ":\n")
+        if start < 0:
             continue
-        pattern = re.compile(
-            rf"(?P<label>{label}:\n)"
-            r"(?P<body>    edx = MEM32\(esi\);.*?"
-            r"    RECOMP_ICALL\(MEM32\(edx \+ 0x18\)\);.*?"
-            r"    RECOMP_FLAGS_IN\(\);\n)",
-            re.S,
-        )
+        # The item append call is the last statement in this block; the next
+        # item starts with its 0x48-byte allocation.
+        end = text.find("PUSH32(esp, 0x48u);", start)
+        if end < 0:
+            continue
+        block = text[start:end]
+        if "RECOMP_ICALL(MEM32(edx + 0x18));" not in block:
+            continue  # already patched (either comment variant)
+        add_end = block.find("RECOMP_FLAGS_IN();")
+        if add_end < 0:
+            continue
+        add_end += len("RECOMP_FLAGS_IN();\n")
         replacement = (
-            rf"\g<label>"
-            rf"    /* {where}: Display category removed. The item is still built\n"
-            rf"       above so the SEH cleanup state stays valid, but it is never\n"
-            rf"       parented into the carousel. The launcher owns display settings. */\n"
+            f"{label}:\n"
+            f"    /* {where}: Display category removed. The item is still built\n"
+            f"       above so the SEH cleanup state stays valid, but it is never\n"
+            f"       parented into the carousel. The launcher owns display settings. */\n"
         )
-        text, n = pattern.subn(replacement, text, count=1)
-        changed += n
+        text = text[:start] + replacement + text[start + add_end:]
+        changed += 1
     return text, changed
 
 
