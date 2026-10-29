@@ -1007,3 +1007,15 @@ Verification status: the disconnect was reproduced on the phone (01:19:50) with
 the old build. Post-fix route-change test is pending: no A2DP device was
 connected during the session (Buds disconnected; A2DP suspended), so toggling
 Bluetooth changed no media route. Build with the fix is installed on the phone.
+
+## 2026-10-29: black levels, car reflections, game-side night effects
+
+Complaints: dark areas too bright; cars look matte. Registry dump showed the
+game had `g_carenvironmentmapupdatedata=0` (env map enabled but never filled),
+and our look presets still lifted shadows. Fixes: force env-map updates with
+Reflections; retune Night/Neon grading and add Midnight; new Night effects
+option forcing glow/streaks/tinting/particles/crowd/overbright (+motion blur at
+level 2); fixed LOOK>1 not enabling night lighting. Phone benchmark after:
+Midnight+effects 91.0 avg / 54.7 1% low / 49,370 calls; Night+motion blur 97.8 /
+60.0 / 46,439. Screenshots in /tmp/opencode/vis_midnight_*.png and
+vis_nightfx2_*.png.

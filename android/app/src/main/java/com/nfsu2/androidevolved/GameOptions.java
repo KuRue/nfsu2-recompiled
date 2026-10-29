@@ -21,7 +21,7 @@ final class GameOptions {
     }
 
     static final String RESOLUTION = "resolution", FPS = "fps", FRAME_PACE = "frame_pace", WIDESCREEN = "widescreen", LATENCY = "latency",
-            FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", BLOOM = "bloom", LOOK = "lighting_look", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", INTRO = "intro", LANGUAGE = "language";
+            FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", BLOOM = "bloom", LOOK = "lighting_look", EFFECTS = "night_effects", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", INTRO = "intro", LANGUAGE = "language";
 
     static final Option[] ALL = {
             new Option(FEEDBACK_SOURCE, "Phone feedback source", "physics",
@@ -39,9 +39,13 @@ final class GameOptions {
             new Option(BLOOM, "Bloom and glow", "0",
                     new String[] {"0", "1", "2"}, new String[] {"Off", "Subtle", "Strong"}),
             new Option(LOOK, "Lighting look", "0",
-                    new String[] {"0", "1", "2", "3"},
+                    new String[] {"0", "1", "2", "3", "4"},
                     new String[] {"Original", "Night lighting + balanced color", "Neon night · cool shadows",
-                            "Filmic night · soft highlights"}),
+                            "Filmic night · soft highlights", "Midnight · deepest blacks"}),
+            new Option(EFFECTS, "Night effects", "0",
+                    new String[] {"0", "1", "2"},
+                    new String[] {"Original", "Glow, light streaks, tinting, particles",
+                            "…plus motion blur"}),
             new Option(REFLECTIONS, "Reflections", "0",
                     new String[] {"0", "1"}, new String[] {"Original resolution", "On · 2× mirror and car resolution"}),
             new Option(RESOLUTION, "Internal resolution", "75",

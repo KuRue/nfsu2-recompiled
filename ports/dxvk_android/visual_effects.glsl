@@ -3,39 +3,54 @@
 // never changes scene rendering.
 float nfsLuma(vec3 color) { return dot(color, vec3(0.2126, 0.7152, 0.0722)); }
 
-// Look presets: 0 original, 1 night balanced, 2 neon night, 3 filmic night.
+// Look presets: 0 original, 1 night balanced, 2 neon night, 3 filmic night,
+// 4 midnight (deepest blacks).
 vec3 nfsLook(vec3 color, float preset) {
   if (preset < 0.5) return color;
   float luminance = nfsLuma(color);
   if (preset < 1.5) {
+    // Night: a gentle shadow lift, then a small black point so the picture
+    // does not sit in grey. The old lift alone was why dark areas felt bright.
     float shadows = 1.0 - smoothstep(0.05, 0.55, luminance);
-    vec3 lifted = color + 0.055 * sqrt(max(color, vec3(0.0))) * (1.0 - color) * shadows;
-    lifted = (lifted - 0.4) * 1.035 + 0.4;
+    vec3 lifted = color + 0.018 * sqrt(max(color, vec3(0.0))) * (1.0 - color) * shadows;
+    lifted = max(lifted - 0.010, vec3(0.0)) / 0.990;
+    lifted = (lifted - 0.4) * 1.045 + 0.4;
     float l = nfsLuma(lifted);
-    return clamp(mix(vec3(l), lifted, 1.035), 0.0, 1.0);
+    return clamp(mix(vec3(l), lifted, 1.045), 0.0, 1.0);
   }
   if (preset < 2.5) {
-    // Neon night: cool shadows, warm highlights, a little more contrast and colour.
+    // Neon night: cool shadows, warm highlights, deeper blacks, more colour.
     vec3 shadowTint = vec3(-0.010, 0.014, 0.052);
     vec3 lightTint = vec3(0.024, 0.006, 0.030);
     vec3 t = color + mix(shadowTint, lightTint, smoothstep(0.15, 0.85, luminance));
-    t = clamp((t - 0.5) * 1.06 + 0.5, 0.0, 1.0);
+    t = clamp((t - 0.5) * 1.075 + 0.5, 0.0, 1.0);
+    t = max(t - 0.020, vec3(0.0)) / 0.980;
     float l = nfsLuma(t);
-    return clamp(mix(vec3(l), t, 1.10), 0.0, 1.0);
+    return clamp(mix(vec3(l), t, 1.11), 0.0, 1.0);
   }
-  // Filmic night: lifted blacks, a soft highlight shoulder, gentle desaturation.
-  vec3 t = color * 0.94 + 0.032;
-  t = t / (1.0 + 0.10 * t) * 1.09;
-  t += vec3(0.014, 0.005, -0.008) * smoothstep(0.5, 1.0, luminance);
+  if (preset < 3.5) {
+    // Filmic: lifted blacks, a soft highlight shoulder, gentle desaturation.
+    vec3 t = color * 0.94 + 0.032;
+    t = t / (1.0 + 0.10 * t) * 1.09;
+    t += vec3(0.014, 0.005, -0.008) * smoothstep(0.5, 1.0, luminance);
+    float l = nfsLuma(t);
+    return clamp(mix(vec3(l), t, 0.94), 0.0, 1.0);
+  }
+  // Midnight: deepest blacks, punchy neon, cool shadows and magenta highlights.
+  vec3 t = color + mix(vec3(-0.012, 0.010, 0.046), vec3(0.022, 0.002, 0.026),
+                       smoothstep(0.15, 0.85, luminance));
+  t = max((t - 0.5) * 1.10 + 0.5, vec3(0.0));
+  t = max(t - 0.032, vec3(0.0)) / 0.968;
   float l = nfsLuma(t);
-  return clamp(mix(vec3(l), t, 0.94), 0.0, 1.0);
+  return clamp(mix(vec3(l), t, 1.13), 0.0, 1.0);
 }
 
 // Keep only bright picture content for the glow taps.
 vec3 nfsBright(vec3 color) { return color * smoothstep(0.58, 0.95, nfsLuma(color)); }
 
 float nfsVignetteAmount(float preset) {
-  return preset < 0.5 ? 0.0 : preset < 1.5 ? 0.05 : preset < 2.5 ? 0.11 : 0.16;
+  return preset < 0.5 ? 0.0 : preset < 1.5 ? 0.05 : preset < 2.5 ? 0.11
+       : preset < 3.5 ? 0.16 : 0.13;
 }
 
 vec3 nfsVignette(vec3 color, vec2 uv, float amount) {

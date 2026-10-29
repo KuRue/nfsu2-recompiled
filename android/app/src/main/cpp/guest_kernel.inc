@@ -365,11 +365,20 @@ void regOpenKeyA(){registryOpen(arg(2),3);}void regOpenKeyExA(){registryOpen(arg
 void regCloseKey(){ret(registryHandles.erase(arg(0))?0:6,1);}
 // Launcher overrides do not replace saved in-game values.
 bool visualRegistryOverride(const std::string& name){
-    auto enabled=[](const char* key){const char* v=std::getenv(key);return v&&std::strcmp(v,"1")==0;};
-    bool night=enabled("NFSU2_NATIVE_LOOK"),reflections=enabled("NFSU2_NATIVE_REFLECTIONS");
-    return (night&&(name=="g_carlightingenable"||name=="g_carheadlightenable"||
-                         name=="g_carshadowenable"||name=="g_lightglowenable"))||
-                 (reflections&&(name=="g_carenvironmentmapenable"||name=="g_roadreflectionenable"));
+    auto number=[](const char* key,int fallback){const char* v=std::getenv(key);return v?std::atoi(v):fallback;};
+    bool night=number("NFSU2_NATIVE_LOOK",0)>0; // any look preset, not only "1"
+    bool reflections=number("NFSU2_NATIVE_REFLECTIONS",0)==1;
+    int effects=number("NFSU2_NATIVE_EFFECTS",0);
+    if(night&&(name=="g_carlightingenable"||name=="g_carheadlightenable"||
+               name=="g_carshadowenable"||name=="g_lightglowenable"))return true;
+    if(effects>=1&&(name=="g_lightstreaksenable"||name=="g_overbrightenable"||
+                    name=="g_tintingenable"||name=="g_particlesystemenable"||name=="g_crowdenable"))return true;
+    if(effects>=2&&name=="g_motionblurenable")return true;
+    // The environment cube is only filled while "update data" is on; without it
+    // car paint samples an empty map and looks matte.
+    if(reflections&&(name=="g_carenvironmentmapenable"||name=="g_roadreflectionenable"||
+                     name=="g_carenvironmentmapupdatedata"))return true;
+    return false;
 }
 void regQueryValueExA(){
     auto name=lower(guestString(arg(1)));NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Registry query %08x value=%s",arg(0),name.c_str());

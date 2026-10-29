@@ -92,3 +92,30 @@ benchmark before keeping Strong.
 
 These are display-referred grading effects, not new light sources, shadow maps,
 ambient occlusion or a physical lighting overhaul.
+
+## Deeper blacks, car reflections and the game's own night effects (2026-10-29, later)
+
+Reading the game's saved registry (`/sdcard/nfsu2/android_registry.dat`) showed
+every visual feature off by default, including `g_carenvironmentmapenable` **and
+`g_carenvironmentmapupdatedata`** — the port force-enabled the env map but never
+its updates, so car paint sampled an empty cube and looked matte. The launcher's
+Reflections switch now forces the update flag too.
+
+`Lighting look` presets were retuned: Night lifts shadows far less and applies a
+small black point; Neon deepens blacks and raises contrast/saturation; a new
+**Midnight** preset goes furthest (black point 3.2%, contrast 1.10, saturation
+1.13, cool shadows, magenta highlights). Vignette follows the preset.
+
+New **Night effects** option (Off / Glow, light streaks, tinting, particles /
+…plus motion blur) forces the game's own `g_lightstreaksenable`,
+`g_overbrightenable`, `g_tintingenable`, `g_particlesystemenable`,
+`g_crowdenable` and, at level 2, `g_motionblurenable`. These are the original
+game's effects, not new rendering code. Also fixed: night lighting/car lights
+were only enabled when the look value was exactly 1, so Neon/Filmic never turned
+them on.
+
+Measured on the phone (benchmark, same scene): Midnight + effects + reflections
+update 91.0 FPS average, 1% low 54.7, 49,370 draw calls/frame; Night + motion
+blur 97.8 FPS, 1% low 60.0, 46,439 calls (baseline without effects: ~117 FPS,
+42k calls). Drop to 85% resolution or turn effects off if that matters more than
+the look.
