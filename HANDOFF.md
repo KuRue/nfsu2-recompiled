@@ -1067,3 +1067,26 @@ concrete display defaults (High), "Game setting" sentinels removed. Benchmark
 result dialog re-themed with the neon graph; in-race overlay recoloured.
 Verified on device (screenshots in /tmp/opencode/neon_*.png).
 Next: in-game Display menu removal/disable (RE), remaining toasts, theme polish.
+
+## 2026-10-29: in-game Display menu removed
+
+The Options carousels are built in SPEED2.EXE code, not in FrontB.lzc. Guest
+0x4B6230 is the frontend Options carousel (Audio, Display, Gameplay, Player,
+Controls, Trailers, Credits, plus conditional LAN/Online Options); guest
+0x4C3000 is the pause-menu carousel (Audio, Display, Gameplay, Player). The
+localized labels are case-insensitive hashes; "Display" is 0x4204D527. The
+Display screen hash 0x8A006328 occurs only in those two constructors, so
+dropping the carousel entry makes the page unreachable.
+
+The Android build compiles the static recompiled C in src/recomp/gen. That
+directory is gitignored, so the removal is applied by
+scripts/patch_display_menu.py after every lift (wired into RELIFT=1
+scripts/rebuild-run.sh and documented in README). It keeps the Display item
+constructed for the SEH cleanup state and skips only the append call; the
+orphan is 0x48 bytes per screen construction.
+
+Verified in a quick race:
+- frontend Options: Audio -> Gameplay -> Player (no Display)
+- pause Options: Audio -> Gameplay (no Display)
+Screenshots: /tmp/opencode/opt_next1.png, /tmp/opencode/pause_opts2.png.
+The launcher stays on the lime-green theme with the amber benchmark accent.

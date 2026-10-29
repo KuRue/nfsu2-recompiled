@@ -224,6 +224,10 @@ python scripts/run_lift.py catalog work/SPEED2.analysis.exe work/seeds_all.json 
 # 5. Lift assembly to portable C (~90 s) -> src/recomp/gen/
 python scripts/run_lift.py lift work/SPEED2.analysis.exe work/catalog.json src/recomp/gen
 
+# 5b. Remove the in-game Display category from both Options carousels
+#     (the launcher owns display settings; must run after every lift)
+python scripts/patch_display_menu.py
+
 # 6. Build and run native Windows host
 scripts/build.sh
 scripts/run.sh [--fullscreen]
