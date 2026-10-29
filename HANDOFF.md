@@ -956,3 +956,13 @@ entries, 133 MB vs 68 MB). Delete app/build/intermediates/apk/debug then
 rebuild to repack.
 
 Release: ready; waiting for the user's publish approval.
+
+## 2026-10-29: v0.14.13 published
+
+Release: https://github.com/KuRue/nfsu2-recompiled/releases/tag/v0.14.13
+Tag v0.14.13 (annotated) -> 7ec05d3 on android/phone-presets.
+Asset NFSU2-AndroidEvolved-v0.14.13-arm64.apk, 68,618,911 bytes,
+sha256 6ec21f90ccbf54a725c0f94d48e90dc76126c49c3557cb589bfc730b4d2696d3
+(digest matches the tested APK; download URL returns HTTP 200).
+First fork release, debug-signed dev build (com.nfsu2.androidevolved.dev),
+installs beside upstream.
