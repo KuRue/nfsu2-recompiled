@@ -178,7 +178,10 @@ public final class LauncherActivity extends Activity {
                 new int[] {0xFF060D08, 0xFF0B2210, 0xFF060D08}));
         LinearLayout columns = new LinearLayout(this);
         columns.setPadding(dp(24), dp(10), dp(24), dp(10));
-        screen.addView(columns, new FrameLayout.LayoutParams(-1, -1));
+        // Phones use the full width; tablets centre a readable two-pane block
+        // instead of stretching the cards across the whole screen.
+        int contentWidth = Math.min(getResources().getDisplayMetrics().widthPixels, dp(1200));
+        screen.addView(columns, new FrameLayout.LayoutParams(contentWidth, -1, Gravity.CENTER_HORIZONTAL));
 
         // Left: logo, game files and PLAY.
         LinearLayout left = new LinearLayout(this);

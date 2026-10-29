@@ -1115,3 +1115,10 @@ persisted in touch_layouts_v1 as bar.expanded, defaults collapsed, and hides
 while the control editor is open. Bar buttons use separate v2...bar.<scan> ids
 so old saved layouts cannot scatter them.
 Verified on device: collapsed cockpit, expanded bar, pause from the bar.
+
+## 2026-10-29: tablet width cap
+
+The launcher's two-pane content is capped at 1200dp and centred on wide
+screens. Phones still use the full width. Tested with a 2560x1600 / 240dpi
+display override: the cards no longer stretch edge to edge; the phone layout
+was re-checked at 2340x1080 / 450dpi and is unchanged.
