@@ -6,6 +6,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.view.View;
 import android.widget.TextView;
 
@@ -19,12 +20,14 @@ final class MenuTheme {
         if (body == null) body = c.getResources().getFont(R.font.menu_body);
         return display ? oblique : body;
     }
-    static GradientDrawable panel(Context c) {return panel(c,R.color.menu_sheet);}
+    static Drawable panel(Context c) {return panel(c,R.color.menu_sheet);}
     static Drawable filePanel(Context c) {return surface(c,color(c,R.color.menu_file_background),0xFF626B5D,1);}
-    static GradientDrawable popupPanel(Context c) {return panel(c,R.color.menu_popup_sheet);}
-    private static GradientDrawable panel(Context c,int color) {
-        GradientDrawable d = new GradientDrawable();
-        d.setColor(color(c,color));d.setCornerRadius(dp(c,5));return d;
+    static Drawable popupPanel(Context c) {return panel(c,R.color.menu_popup_sheet);}
+    private static Drawable panel(Context c,int color) {
+        GradientDrawable frame=new GradientDrawable();frame.setColor(0xFF101010);frame.setCornerRadius(dp(c,10));
+        GradientDrawable sheet=new GradientDrawable();sheet.setColor(color(c,color));sheet.setCornerRadius(dp(c,6));
+        LayerDrawable layers=new LayerDrawable(new Drawable[]{frame,sheet});
+        int border=dp(c,4);layers.setLayerInset(1,border,border,border,border);return layers;
     }
     private static GradientDrawable surface(Context c,int fill,int stroke,int width) {
         GradientDrawable d=new GradientDrawable();d.setColor(fill);d.setCornerRadius(dp(c,6));
@@ -53,7 +56,8 @@ final class MenuTheme {
     static void heading(TextView text) {
         Context c=text.getContext();text.setTypeface(font(c,true));text.setTextSize(20);
         text.setTextColor(color(c,R.color.menu_lime));text.setLetterSpacing(0);
-        text.setPadding(dp(c,10),dp(c,4),dp(c,10),dp(c,5));text.setBackground(surface(c,0xFF292929,0,0));
+        text.setBackground(surface(c,0xFF101010,0,0));
+        text.setPadding(dp(c,10),dp(c,4),dp(c,10),dp(c,5));text.setAccessibilityHeading(true);
     }
     /** A static header divider. Position markers belong on interactive sliders only. */
     static View divider(Context c) {

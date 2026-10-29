@@ -1219,3 +1219,17 @@ Debug build passed and installed on 192.168.1.169:40615. Home screenshot checked
 /tmp/nfsu2-midgray-launcher.png: rounded headers, contrasting checks and Play fit on screen.
 Body/secondary contrast on composited sheets is 4.66/4.53:1; file text 10.33:1. No game settings,
 input behavior or gameplay code changed. Font remains the licensed approximation from prior pass.
+
+## 2026-10-29: integrated black panel frames and dynamic submenu heading
+
+User requested black borders with titles in them, plus replacing Options with the open
+submenu name. MenuTheme now draws rounded black 4dp outer frames around gray sheets.
+Title bands join the frame rather than floating inset; content padding is separate. The
+same frame/header structure is used by home, left contextual panels and value pickers.
+Right header refreshes through a shared group-title mapping (Options at root, current group
+inside). Color/font preferences and dot-free dividers retained.
+
+Debug build passed, installed and visually checked on 192.168.1.169:40615. Verified home,
+Visual settings and Controls titles, framed vibration picker, Back dismissal and return home.
+No game option changed. Screenshots: /tmp/nfsu2-framed-home.png,
+/tmp/nfsu2-framed-submenu.png and /tmp/nfsu2-framed-picker.png. No gameplay code changed.

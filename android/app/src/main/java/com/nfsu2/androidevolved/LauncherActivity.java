@@ -95,7 +95,7 @@ public final class LauncherActivity extends Activity {
         OPTION_INFO.put("Bleach bypass", new String[] {"High-contrast film look.", "1", "0"});
         OPTION_INFO.put("Rain", new String[] {"Rain over the city.", "2", "1"});
     }
-    private TextView status;
+    private TextView status, optionsTitle;
     private Button play, access, playArrow;
     private boolean playAfterProbe, checkingUpdates, resumed, resumeNextLaunch;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -215,15 +215,16 @@ public final class LauncherActivity extends Activity {
         LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(-1, -2);
         cardParams.topMargin = dp(8);
         leftHome.addView(card, cardParams);
-        card.addView(menuHeading("Game Files"));
+        panelHeading(card,"Game Files");
         card.addView(MenuTheme.divider(this),new LinearLayout.LayoutParams(-1,dp(10)));
         status = label("", 13, TEXT, false);
-        status.setPadding(0, dp(4), 0, dp(6));
+        status.setPadding(dp(10), dp(4), dp(10), dp(6));
         card.addView(status);
         checksList = new LinearLayout(this);
         checksList.setOrientation(LinearLayout.VERTICAL);
         checksList.setBackground(MenuTheme.filePanel(this));checksList.setPadding(dp(10),dp(5),dp(10),dp(5));
-        card.addView(checksList);
+        LinearLayout.LayoutParams checksParams=new LinearLayout.LayoutParams(-1,-2);
+        checksParams.leftMargin=checksParams.rightMargin=dp(10);checksParams.bottomMargin=dp(4);card.addView(checksList,checksParams);
 
         play = actionButton("Play", true);
         play.setOnClickListener(view -> play());
@@ -251,14 +252,15 @@ public final class LauncherActivity extends Activity {
         LinearLayout.LayoutParams rightParams = new LinearLayout.LayoutParams(0, -1, 1f);
         rightParams.leftMargin = dp(24);
         columns.addView(right, rightParams);
-        right.addView(menuHeading("Options"));
+        optionsTitle=panelHeading(right,"Options");
         right.addView(MenuTheme.divider(this),new LinearLayout.LayoutParams(-1,dp(10)));
         TextView note = label("Applied the next time you press PLAY.", 13, MUTED, false);
-        note.setPadding(0, dp(2), 0, dp(4));
+        note.setPadding(dp(10), dp(2), dp(10), dp(4));
         right.addView(note);
         ScrollView scroll = new ScrollView(this);
         optionsList = new LinearLayout(this);
         optionsList.setOrientation(LinearLayout.VERTICAL);
+        optionsList.setPadding(dp(10),0,dp(10),0);
         scroll.addView(optionsList);
         right.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
         return screen;
@@ -299,6 +301,7 @@ public final class LauncherActivity extends Activity {
     private Dialog dialog;
 
     private void refreshOptions() {
+        optionsTitle.setText(groupTitle(openGroup));
         optionsList.removeAllViews();
         if (openGroup != null) { buildGroup(openGroup); return; }
         PhonePreset preset = GameOptions.phonePreset(this);
@@ -311,6 +314,19 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Saves", backupSummary(), () -> openGroup("saves")));
         optionsList.addView(optionRow("Support", "Updates · diagnostics",
                 () -> openGroup("support")));
+    }
+
+    private String groupTitle(String key) {
+        if(key==null)return "Options";
+        switch(key){
+            case "graphics": return "Visual settings";
+            case "display": return "Display detail";
+            case "controls": return "Controls";
+            case "game": return "Game";
+            case "saves": return "Saves";
+            case "support": return "Support";
+            default: return "Options";
+        }
     }
 
     private void openGroup(String key) { openGroup = key; refreshOptions(); updateLeftPane(); }
@@ -432,9 +448,7 @@ public final class LauncherActivity extends Activity {
                              java.util.function.Consumer<String> set) {
         LinearLayout card = card();
         card.setPadding(dp(20), dp(14), dp(20), dp(16));card.setBackground(MenuTheme.popupPanel(this));
-        TextView heading = menuHeading(title);
-        heading.setPadding(dp(10),dp(4),dp(10),dp(8));
-        card.addView(heading);
+        panelHeading(card,title);
         int index = java.util.Arrays.asList(values).indexOf(current);
         for (int i = 0; i < labels.length; i++) {
             final String value = values[i];
@@ -453,7 +467,7 @@ public final class LauncherActivity extends Activity {
             row.setLayoutParams(lp);
             card.addView(row);
         }
-        LinearLayout footer=new LinearLayout(this);footer.setGravity(Gravity.END);
+        LinearLayout footer=new LinearLayout(this);footer.setGravity(Gravity.END);footer.setPadding(dp(10),0,dp(10),dp(4));
         Button cancel=actionButton("Back",false);cancel.setOnClickListener(v->{if(dialog!=null)dialog.dismiss();});
         footer.addView(cancel,new LinearLayout.LayoutParams(dp(112),dp(48)));
         LinearLayout.LayoutParams footerParams=new LinearLayout.LayoutParams(-1,-2);footerParams.topMargin=dp(12);card.addView(footer,footerParams);
@@ -928,22 +942,22 @@ public final class LauncherActivity extends Activity {
         if (openGroup == null) { leftHome.setVisibility(View.VISIBLE); leftInfo.setVisibility(View.GONE); return; }
         leftHome.setVisibility(View.GONE); leftInfo.setVisibility(View.VISIBLE);
         leftInfo.removeAllViews();
-        String title; String text;
+        String title=groupTitle(openGroup); String text;
         switch (openGroup) {
-            case "graphics": title = "Visual settings"; text = "Resolution, frame rate and the game's own display effects. Changes apply the next time you press PLAY."; break;
-            case "display": title = "Display detail"; text = "The same switches as the game's Customize page. The preset fills them in; individual rows override it."; break;
-            case "controls": title = "Controls"; text = "Touch layout, triggers and vibration."; break;
-            case "game": title = "Game"; text = "Language and the online server."; break;
-            case "saves": title = "Saves"; text = "Back up or restore career saves."; break;
-            case "support": title = "Support"; text = "Updates, logs and diagnostics."; break;
-            default: title = "Options"; text = "";
+            case "graphics": text = "Resolution, frame rate and the game's own display effects. Changes apply the next time you press PLAY."; break;
+            case "display": text = "The same switches as the game's Customize page. The preset fills them in; individual rows override it."; break;
+            case "controls": text = "Touch layout, triggers and vibration."; break;
+            case "game": text = "Language and the online server."; break;
+            case "saves": text = "Back up or restore career saves."; break;
+            case "support": text = "Updates, logs and diagnostics."; break;
+            default: text = "";
         }
-        leftInfo.addView(menuHeading(title));
+        panelHeading(leftInfo,title);
         TextView body = label(text, 13, MUTED, false);
-        body.setPadding(0, dp(8), 0, dp(10));
+        body.setPadding(dp(10), dp(8), dp(10), dp(10));
         leftInfo.addView(body);
         TextView hint = label("Tap a setting to see what it costs.", 12, MUTED, false);
-        leftInfo.addView(hint);
+        hint.setPadding(dp(10),0,dp(10),dp(6));leftInfo.addView(hint);
     }
 
     private void showOptionInfo(String title) {
@@ -953,9 +967,9 @@ public final class LauncherActivity extends Activity {
         int gpu = info != null ? Integer.parseInt(info[1]) : 0;
         int cpu = info != null ? Integer.parseInt(info[2]) : 0;
         leftInfo.removeAllViews();
-        leftInfo.addView(menuHeading(title));
+        panelHeading(leftInfo,title);
         TextView body = label(text, 13, MUTED, false);
-        body.setPadding(0, dp(8), 0, dp(12));
+        body.setPadding(dp(10), dp(8), dp(10), dp(12));
         leftInfo.addView(body);
         addImpactBar(leftInfo, "GPU", gpu);
         addImpactBar(leftInfo, "CPU", cpu);
@@ -969,7 +983,7 @@ public final class LauncherActivity extends Activity {
     private void addImpactBar(LinearLayout parent, String name, int level) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(0, dp(3), 0, dp(3));
+        row.setPadding(dp(10), dp(3), dp(10), dp(3));
         TextView caption = label(name, 11, MUTED, true);
         caption.setLetterSpacing(.12f);
         row.addView(caption, new LinearLayout.LayoutParams(dp(40), -2));
@@ -1060,7 +1074,13 @@ public final class LauncherActivity extends Activity {
         return t;
     }
 
-    private TextView menuHeading(String title) { TextView text=label(title,20,ACCENT,true);MenuTheme.heading(text);return text; }
+    /** Title occupies the panel's black top frame, rather than floating inside the gray sheet. */
+    private TextView panelHeading(LinearLayout panel,String title) {
+        TextView text=label(title,20,ACCENT,true);MenuTheme.heading(text);
+        panel.setPadding(dp(4),dp(4),dp(4),dp(8));
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);params.bottomMargin=dp(8);
+        panel.addView(text,params);return text;
+    }
 
     private void message(String title, String text) {
         new AlertDialog.Builder(this, R.style.NeonDialog)

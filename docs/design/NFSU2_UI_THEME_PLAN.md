@@ -9,7 +9,7 @@ Scope: app-owned launcher, menus, dialogs, overlays and controls. No app changes
 
 The all-dark revision was farther from the desired look. Return toward silver-gray menu
 sheets, but darker than the initial pale version, over the dark neutral backdrop. Use dark
-readable text on these medium-gray sheets, with rounded dark header containers and lime titles.
+readable text on these medium-gray sheets, with rounded black frames and lime titles integrated into their top bands.
 Game-file checks get a distinct dark inset, light-gray labels and colored status glyphs so
 these do not blend into their parent sheet. Preserve outlined actions and separate focus states.
 Static header dividers remain plain: dots belong only on actual interactive slider thumbs.
@@ -138,3 +138,15 @@ screens and overlay performance remain to verify.
 This is foundations + launcher/picker styling only. The original navigation structure remains;
 icon-category navigation, backdrop/logotype, all framework dialogs, racing controls/editor,
 benchmark overlays and HUD-specific typography are subsequent passes. No gameplay code changed.
+
+
+## Integrated panel frames and submenu titles — 2026-10-29
+
+Panels now have rounded 4dp black outer frames, with their title in the continuous black top
+band. Shared heading layout keeps the title flush with the frame and pads the gray content
+separately. This applies to launcher panels, contextual information and value pickers.
+The right-hand header is driven by the same group-title mapping as the contextual pane:
+Options at the root; Visual settings, Display detail, Controls, Game, Saves or Support inside
+the corresponding submenu. Refreshing a value does not reset the title to Options.
+Build passed and installed; home, Visual settings, Controls, picker layout and Back navigation
+checked on the S25 Ultra. No game settings were changed.
