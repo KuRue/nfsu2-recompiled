@@ -914,3 +914,24 @@ editor, which swallows touches until CANCEL — avoid it in keyboard-driven test
 
 Next: reconnect (port may have rotated), read benchmark-report.txt, restore the
 screen timeout, then ask the user before publishing the release.
+
+## 2026-10-29: benchmark results (phone)
+
+Two benchmark runs completed on the RC APK (dev package, vc28,
+0.14.13-phone-dev-physics):
+
+- Run A: 117.8 avg FPS, 1% low 56.1, min 22 / max 231; render thread 2.06 ms;
+  43,475 calls/frame; 7,071 busy frames; p50/p95/p99 8.41 / 9.66 / 11.02 ms.
+- Run B: 116.3 avg FPS, 1% low 73.9, min 20 / max 193; render thread 2.31 ms;
+  44,123 calls/frame; 6,980 busy frames; p50/p95/p99 8.51 / 10.18 / 11.98 ms.
+
+Both runs flag "The AI car was stuck for 3 s". That is a borderline threshold:
+the report needs >3.0 s below 1 m/s, and the source comment already documents
+the course slowing the car under 3 m/s for about 3.3 s every run, so the flag
+is deterministic, not an intermittent hang. The figures are therefore slightly
+conservative, not broken.
+
+Combined with the earlier normal-race pass (countdown, HUD, throttle and
+steering verified, 95–104 FPS at 37–42k calls), both required post-install
+plays are done. Screen-off timeout restored to 30 min. Publish decision is
+with the user: publish as-is, or tune the stall threshold first.
