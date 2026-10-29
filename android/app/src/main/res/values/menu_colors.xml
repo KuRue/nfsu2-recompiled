@@ -5,6 +5,7 @@
     <color name="menu_sheet">#B8A9AFA6</color>
     <color name="menu_popup_sheet">#D09FA69C</color>
     <color name="menu_ink">#171B17</color>
+    <color name="menu_row_ink">#0C100C</color>
     <color name="menu_secondary">#191E18</color>
     <color name="menu_lime">#C6E78B</color>
     <color name="menu_white">#E8E8E8</color>

@@ -23,7 +23,6 @@ final class MenuTheme {
     static Drawable filePanel(Context c) {return surface(c,color(c,R.color.menu_file_background),0xFF626B5D,1);}
     static Drawable popupPanel(Context c) {return panel(c,R.color.menu_popup_sheet);}
     private static Drawable panel(Context c,int color) {return surface(c,color(c,color),0,0);}
-    static Drawable valueBackground(Context c) {return surface(c,0xCB262A24,0,0);}
     static ColorStateList valueText(Context c) {
         return new ColorStateList(new int[][]{{-android.R.attr.state_enabled},{}},new int[]{color(c,R.color.menu_disabled),color(c,R.color.menu_lime)});
     }
@@ -37,12 +36,12 @@ final class MenuTheme {
         // White inner/action focus remains distinguishable from the persistent lime selection.
         d.addState(new int[]{android.R.attr.state_focused},surface(c,0xFF41463B,color(c,R.color.menu_white),2));
         d.addState(new int[]{android.R.attr.state_pressed},surface(c,0xFF41463B,lime,2));
-        d.addState(new int[]{},surface(c,selected?0xFF41463B:0x00000000,selected?lime:0,selected?2:0));
+        d.addState(new int[]{},surface(c,selected?0xFF41463B:0x16000000,selected?lime:0,selected?2:0));
         return d;
     }
     static ColorStateList rowText(Context c,boolean selected) {
         return new ColorStateList(new int[][]{{-android.R.attr.state_enabled},{android.R.attr.state_focused},{android.R.attr.state_pressed},{}},
-            new int[]{color(c,R.color.menu_disabled),color(c,R.color.menu_lime),color(c,R.color.menu_lime),color(c,selected?R.color.menu_lime:R.color.menu_ink)});
+            new int[]{color(c,R.color.menu_disabled),color(c,R.color.menu_lime),color(c,R.color.menu_lime),color(c,selected?R.color.menu_lime:R.color.menu_row_ink)});
     }
     static Drawable action(Context c,boolean primary) {
         StateListDrawable d=new StateListDrawable();int lime=color(c,R.color.menu_lime),white=color(c,R.color.menu_white);

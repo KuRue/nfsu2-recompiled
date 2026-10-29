@@ -98,7 +98,8 @@ public final class LauncherActivity extends Activity {
     private TextView status, optionsTitle, submenuBack;
     private MenuPanel infoPanel;
     private ScrollView optionsScroll;
-    private Button play, access, playArrow;
+    private GlowActionButton play;
+    private Button access, playArrow;
     private boolean playAfterProbe, checkingUpdates, resumed, resumeNextLaunch;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -150,6 +151,7 @@ public final class LauncherActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         resumed = true;
+        if(play!=null)play.setActive(true);
         refresh();
         main.removeCallbacks(sessionRefresh);main.postDelayed(sessionRefresh,2000);
         showPendingBenchmark();
@@ -165,6 +167,7 @@ public final class LauncherActivity extends Activity {
 
     @Override protected void onPause() {
         resumed = false;
+        if(play!=null)play.setActive(false);
         main.removeCallbacks(sessionRefresh);
         super.onPause();
     }
@@ -223,7 +226,7 @@ public final class LauncherActivity extends Activity {
         LinearLayout.LayoutParams checksParams=new LinearLayout.LayoutParams(-1,-2);
         checksParams.leftMargin=checksParams.rightMargin=dp(10);checksParams.bottomMargin=dp(4);card.addView(checksList,checksParams);
 
-        play = actionButton("Play", true);
+        play = new GlowActionButton(this);play.setText("Play");
         play.setOnClickListener(view -> play());
         LinearLayout playRow = new LinearLayout(this);
         playRow.addView(play, new LinearLayout.LayoutParams(0, dp(54), 1f));
@@ -1027,7 +1030,7 @@ public final class LauncherActivity extends Activity {
         row.setClickable(true);row.setOnClickListener(v -> onClick.run());
         TextView caption=label(title,16,TEXT,true);caption.setDuplicateParentStateEnabled(true);caption.setTextColor(MenuTheme.rowText(this,false));
         row.addView(caption,new LinearLayout.LayoutParams(0,-2,1f));
-        TextView current=label(value,16,TEXT,true);current.setDuplicateParentStateEnabled(true);current.setTextColor(MenuTheme.valueText(this));current.setBackground(MenuTheme.valueBackground(this));current.setPadding(dp(8),dp(4),dp(8),dp(4));
+        TextView current=label(value,16,TEXT,true);current.setDuplicateParentStateEnabled(true);current.setTextColor(MenuTheme.valueText(this));current.setPadding(dp(4),dp(2),dp(4),dp(2));current.setShadowLayer(MenuTheme.dp(this,1.5f),0,MenuTheme.dp(this,.75f),0xE6000000);
         current.setGravity(Gravity.END);row.addView(current,new LinearLayout.LayoutParams(0,-2,1f));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.topMargin = dp(5);

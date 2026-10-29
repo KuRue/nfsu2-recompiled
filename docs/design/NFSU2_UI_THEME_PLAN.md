@@ -13,6 +13,9 @@ readable text on these medium-gray sheets, with rounded black frames and lime ti
 Game-file checks get a distinct dark inset, light-gray labels and colored status glyphs so
 these do not blend into their parent sheet. Preserve outlined actions and separate focus states.
 Static header dividers remain plain: dots belong only on actual interactive slider thumbs.
+Option values have no separate background pills: whole rows are slightly darker than the gray
+sheet, with lime value text and a small dark drop shadow. Play/Resume uses a green pulse and
+moving shimmer inspired by the title-screen prompt.
 This latest refinement supersedes the preceding all-dark panel/light-body-text direction.
 
 ## Findings
@@ -171,3 +174,23 @@ value highlights, transparent minimap picker, top-Back preset picker, dismissal 
 home. No options were changed. Final debug build and phone source checks pass. Main body/secondary
 contrast over the plain dark backdrop measures 4.84/4.71:1. Future image backdrops must be checked
 again because transparent surfaces composite differently over different scenes.
+
+
+## Play/Resume glow and full-row backgrounds — 2026-10-29
+
+GlowActionButton gives the existing Play/Resume action a 2.8-second green halo pulse, moving
+surface highlight and text shimmer. Both labels use the same view. It schedules only its own
+redraw at 34ms intervals, cancels callbacks when paused/hidden/disabled/detached or unfocused,
+and remains static when Android disables animations. Cached gradients/paint avoid per-frame
+shader allocation; halo uses layered strokes rather than a software/full-screen blur.
+
+Removed separate value-background pills. Default rows use a subtle black overlay across the
+whole row; captions are darker for contrast and lime values have a small dark drop shadow.
+Selected/focused/pressed states remain separate, including existing controller focus frames.
+
+Debug build/source checks passed and installed on SM-S938U1. Home and submenu appearance
+checked. A roughly 3.2s gfxinfo window rendered 95 frames, no janky frames, 5ms CPU 95th and
+3ms GPU 95th percentiles. With Play hidden in Visual settings, a separate 3.2s idle window
+rendered zero frames. These are brief launcher checks, not sustained game/battery measurements.
+No game was launched and Resume text/system-animation-disable were not separately exercised.
+Preview recording: /tmp/nfsu2-play-shimmer.mp4; still: /tmp/nfsu2-glow-home.png.

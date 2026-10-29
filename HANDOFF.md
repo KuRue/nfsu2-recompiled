@@ -1253,3 +1253,22 @@ Back at top. No preference changed. Source checks passed after popup restructuri
 resource-only dialog-opacity adjustment also built. Screenshots under /tmp/nfsu2-panel-* and
 /tmp/nfsu2-picker-pinned-top.png. No gameplay code changed. Tablet/large-font/full physical
 Backbone verification and the broader remaining theme migration are still outstanding.
+
+## 2026-10-29: title-prompt-inspired Play shimmer and shadowed values
+
+Added GlowActionButton for Play/Resume: 2.8s pulse/sweep cycle, green text halo/border and moving
+text/surface highlights. Same view handles both labels. UI callback is capped at 34ms, stops
+when activity paused, hidden by submenu, disabled, detached or window unfocused, and checks
+Android's animator-enabled setting. Static fallback when motion disabled. No software layer
+or full-screen blur; gradients/paints cached. No game code/preferences changed.
+
+User disliked per-variable dark pills: removed them, made whole normal rows slightly darker
+and added a small dark shadow behind lime values. Captions darker for legibility. Selection,
+pressed and controller-focus states retained. Theme plan updated so pills are not reintroduced.
+
+Build/source checks passed; installed on 192.168.1.169:40615. Home/values checked visually.
+Brief gfxinfo check: 95 frames/~3.2s, 0 janky, CPU p95 5ms/GPU p95 3ms. Separate hidden-in-submenu
+idle check: 0 frames/~3.2s. Returned home and recorded animation, then stopped recorder.
+/tmp/nfsu2-play-shimmer.mp4 and /tmp/nfsu2-glow-home.png are previews. No game launched, no
+Resume-state or system-animation-disable test performed; the shared draw/lifecycle code covers
+those paths but real checks remain. These measurements do not establish game/battery impact.
