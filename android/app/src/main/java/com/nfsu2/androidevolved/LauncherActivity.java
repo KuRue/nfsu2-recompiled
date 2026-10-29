@@ -41,11 +41,12 @@ import java.util.concurrent.Executors;
 public final class LauncherActivity extends Activity {
     private static final int REQUEST_DRIVER_ZIP = 45, REQUEST_DRIVER_PROBE = 46, REQUEST_SAVE_ZIP = 47;
     private int benchmarkSeconds;
-    // Underground neon: violet primary, cyan secondary on deep night.
-    private static final int ACCENT = 0xFFB45CFF;
-    private static final int CYAN = 0xFF35E3FF;
-    private static final int TEXT = 0xFFF2F0FF;
-    private static final int MUTED = 0xFF9A97B8;
+    // NFSU2: electric blue and nitrous orange on deep navy.
+    private static final int ACCENT = 0xFF35A8FF;
+    private static final int CYAN = 0xFFEAF6FF;
+    private static final int ORANGE = 0xFFFF9E1B;
+    private static final int TEXT = 0xFFEAF2FF;
+    private static final int MUTED = 0xFF7E93AD;
     /** {label, guest language name, LANGUAGES/<file>.bin}. */
     private static final String[][] LANGUAGES = {
         {"Español", "Spanish", "Spanish"}, {"English", "English UK", "English"},
@@ -56,7 +57,49 @@ public final class LauncherActivity extends Activity {
         {"繁體中文", "Chinese (Traditional)", "Chinese"}, {"ไทย", "Thai", "Thailand"}
     };
 
-    private LinearLayout checksList, optionsList;
+    private LinearLayout checksList, optionsList, leftHome, leftInfo;
+
+    /** title -> {one-line explanation, GPU cost 0-3, CPU cost 0-3}. */
+    private static final java.util.Map<String, String[]> OPTION_INFO = new java.util.HashMap<>();
+    static {
+        OPTION_INFO.put("Benchmark", new String[] {"Runs a fixed 60-second AI race and reports frame times. Nothing changes until you apply the result.", "0", "0"});
+        OPTION_INFO.put("Performance preset", new String[] {"Resolution, frame cap and buffering chosen together. Lower raises frame rate and saves heat.", "2", "1"});
+        OPTION_INFO.put("Vulkan driver", new String[] {"Use the system driver or an imported Adreno driver.", "0", "0"});
+        OPTION_INFO.put("Frame rate limit", new String[] {"Caps how many frames the game draws; lower runs cooler.", "1", "2"});
+        OPTION_INFO.put("Frame pace", new String[] {"Even slices of the display, or the exact selected cap.", "0", "1"});
+        OPTION_INFO.put("Widescreen", new String[] {"Corrected HUD and camera for wide screens.", "0", "0"});
+        OPTION_INFO.put("Minimap", new String[] {"Where the radar sits on screen.", "0", "0"});
+        OPTION_INFO.put("Intro", new String[] {"Play or skip the intro movies.", "0", "0"});
+        OPTION_INFO.put("Texture packs", new String[] {"HD HUD and world textures. More memory and bandwidth.", "2", "0"});
+        OPTION_INFO.put("Texture filtering", new String[] {"Anisotropic filtering keeps roads sharp at a distance.", "2", "0"});
+        OPTION_INFO.put("Sharpening", new String[] {"Adds contrast at edges in the final pass.", "1", "0"});
+        OPTION_INFO.put("Bloom and glow", new String[] {"Soft glow around bright lights and neon.", "2", "0"});
+        OPTION_INFO.put("Lighting look", new String[] {"Colour grading and the game's car lighting.", "1", "1"});
+        OPTION_INFO.put("Visual treatment", new String[] {"Bleach-bypass film look and depth of field.", "2", "1"});
+        OPTION_INFO.put("Night effects", new String[] {"Light trails, particles, tinting and crowd.", "3", "1"});
+        OPTION_INFO.put("Atmosphere", new String[] {"Fog and rain over the city.", "1", "1"});
+        OPTION_INFO.put("Reflections", new String[] {"Car environment map and road reflections.", "3", "1"});
+        OPTION_INFO.put("Internal resolution", new String[] {"Render scale. The biggest single cost and the biggest win for frame rate.", "3", "0"});
+        OPTION_INFO.put("Level of detail preset", new String[] {"The game's own four-step display preset. Fills the individual rows below.", "3", "2"});
+        OPTION_INFO.put("Display detail", new String[] {"World and car detail, shadows, effects and reflections.", "3", "2"});
+        OPTION_INFO.put("World detail", new String[] {"More city geometry and objects.", "3", "2"});
+        OPTION_INFO.put("Car geometry", new String[] {"Higher-detail car models.", "2", "1"});
+        OPTION_INFO.put("Car shadow", new String[] {"Car shadow quality; Neon is the showiest.", "2", "0"});
+        OPTION_INFO.put("Headlights", new String[] {"Headlights and their light cones.", "1", "0"});
+        OPTION_INFO.put("Reflection detail", new String[] {"Size of the car reflection cube.", "3", "0"});
+        OPTION_INFO.put("Reflection updates", new String[] {"Refresh the car reflections with the scene.", "2", "1"});
+        OPTION_INFO.put("Road reflections", new String[] {"Wet-road reflection resolution.", "3", "0"});
+        OPTION_INFO.put("Crowds", new String[] {"People on the sidewalks.", "1", "2"});
+        OPTION_INFO.put("Light trails", new String[] {"The neon streaks behind cars.", "1", "0"});
+        OPTION_INFO.put("Light glow", new String[] {"Glow around light sources.", "1", "0"});
+        OPTION_INFO.put("Particles", new String[] {"Sparks, smoke and dust.", "2", "1"});
+        OPTION_INFO.put("Motion blur", new String[] {"Speed blur while driving.", "2", "0"});
+        OPTION_INFO.put("Fog", new String[] {"Distance fog and horizon haze.", "1", "0"});
+        OPTION_INFO.put("Depth of field", new String[] {"Blurs far background.", "2", "0"});
+        OPTION_INFO.put("Over bright", new String[] {"Brighter highlights.", "1", "0"});
+        OPTION_INFO.put("Bleach bypass", new String[] {"High-contrast film look.", "1", "0"});
+        OPTION_INFO.put("Rain", new String[] {"Rain over the city.", "2", "1"});
+    }
     private TextView status;
     private Button play, access, playArrow;
     private boolean playAfterProbe, checkingUpdates, resumed, resumeNextLaunch;
@@ -132,7 +175,7 @@ public final class LauncherActivity extends Activity {
     private View buildScreen() {
         FrameLayout screen = new FrameLayout(this);
         screen.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {0xFF07070F, 0xFF0D0A1A, 0xFF120A24}));
+                new int[] {0xFF03070F, 0xFF061225, 0xFF0A0A18}));
         LinearLayout columns = new LinearLayout(this);
         columns.setPadding(dp(24), dp(10), dp(24), dp(10));
         screen.addView(columns, new FrameLayout.LayoutParams(-1, -1));
@@ -160,10 +203,18 @@ public final class LauncherActivity extends Activity {
         header.addView(titles);
         left.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
+        leftHome = new LinearLayout(this);
+        leftHome.setOrientation(LinearLayout.VERTICAL);
+        left.addView(leftHome, new LinearLayout.LayoutParams(-1, -2));
+        leftInfo = new LinearLayout(this);
+        leftInfo.setOrientation(LinearLayout.VERTICAL);
+        leftInfo.setVisibility(View.GONE);
+        left.addView(leftInfo, new LinearLayout.LayoutParams(-1, -2));
+
         LinearLayout card = card();
         LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(-1, -2);
         cardParams.topMargin = dp(8);
-        left.addView(card, cardParams);
+        leftHome.addView(card, cardParams);
         card.addView(label("GAME FILES", 12, ACCENT, true));
         status = label("", 13, TEXT, false);
         status.setPadding(0, dp(4), 0, dp(6));
@@ -185,13 +236,13 @@ public final class LauncherActivity extends Activity {
         playRow.addView(playArrow, arrowParams);
         LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(-1, -2);
         playParams.topMargin = dp(8);
-        left.addView(playRow, playParams);
+        leftHome.addView(playRow, playParams);
 
         access = actionButton("Allow access to Internal storage/nfsu2", false);
         access.setOnClickListener(view -> requestAccess());
         LinearLayout.LayoutParams accessParams = new LinearLayout.LayoutParams(-1, dp(46));
         accessParams.topMargin = dp(10);
-        left.addView(access, accessParams);
+        leftHome.addView(access, accessParams);
 
         // Right: options.
         LinearLayout right = card();
@@ -259,9 +310,9 @@ public final class LauncherActivity extends Activity {
                 () -> openGroup("support")));
     }
 
-    private void openGroup(String key) { openGroup = key; refreshOptions(); }
+    private void openGroup(String key) { openGroup = key; refreshOptions(); updateLeftPane(); }
 
-    private void closeGroup() { openGroup = null; refreshOptions(); }
+    private void closeGroup() { openGroup = null; refreshOptions(); updateLeftPane(); }
 
     @Override public void onBackPressed() {
         if (openGroup != null) { closeGroup(); return; }
@@ -316,9 +367,10 @@ public final class LauncherActivity extends Activity {
                 optionsList.addView(backRow("‹  Back"));
                 String[] labels = {"Low", "Medium", "High", "Ultra"};
                 String[] values = {"low", "medium", "high", "ultra"};
-                optionsList.addView(cycleRow("Detail preset · Level Of Detail", labels, values,
-                        GameOptions.prefs(this).getString(GameOptions.DISPLAY_PRESET, "low"), "Low",
+                optionsList.addView(cycleRow("Level of detail preset", labels, values,
+                        GameOptions.prefs(this).getString(GameOptions.DISPLAY_PRESET, "high"), "Low",
                         value -> { GameOptions.applyDisplayPreset(this, value); refreshOptions(); }));
+                optionsList.addView(sectionDivider("INDIVIDUAL SETTINGS"));
                 for (GameOptions.Option option : GameOptions.ALL)
                     if (GameOptions.isDisplayOption(option))
                         optionsList.addView(optionCycleRow(option));
@@ -369,7 +421,7 @@ public final class LauncherActivity extends Activity {
                           java.util.function.Consumer<String> set) {
         int index = java.util.Arrays.asList(values).indexOf(current);
         return optionRow(title, index < 0 ? fallback : labels[index],
-                () -> chooseValue(title, labels, values, current, fallback, set));
+                () -> { showOptionInfo(title); chooseValue(title, labels, values, current, fallback, set); });
     }
 
     /** Launcher-styled value picker: dark green card, green check on the current value. */
@@ -387,7 +439,7 @@ public final class LauncherActivity extends Activity {
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(dp(12), dp(10), dp(12), dp(10));
             GradientDrawable bg = new GradientDrawable();
-            bg.setColor(i == index ? 0x33B45CFF : 0x14B45CFF);
+            bg.setColor(i == index ? 0x3335A8FF : 0x1435A8FF);
             bg.setCornerRadius(dp(10));
             row.setBackground(bg);
             row.setClickable(true);
@@ -846,20 +898,103 @@ public final class LauncherActivity extends Activity {
         checksList.addView(row);
     }
 
+    /** Divider with a small caption, used to separate presets from individual rows. */
+    private View sectionDivider(String text) {
+        LinearLayout block = new LinearLayout(this);
+        block.setOrientation(LinearLayout.VERTICAL);
+        block.setPadding(0, dp(14), 0, dp(2));
+        View line = new View(this);
+        line.setBackgroundColor(0x331E3A5F);
+        block.addView(line, new LinearLayout.LayoutParams(-1, dp(1)));
+        TextView title = label(text, 10, MUTED, true);
+        title.setLetterSpacing(.14f);
+        title.setPadding(dp(2), dp(8), 0, dp(2));
+        block.addView(title);
+        return block;
+    }
+
+    /** Contextual left pane: what the current group is, then each setting's cost. */
+    private void updateLeftPane() {
+        if (leftHome == null || leftInfo == null) return;
+        if (openGroup == null) { leftHome.setVisibility(View.VISIBLE); leftInfo.setVisibility(View.GONE); return; }
+        leftHome.setVisibility(View.GONE); leftInfo.setVisibility(View.VISIBLE);
+        leftInfo.removeAllViews();
+        String title; String text;
+        switch (openGroup) {
+            case "graphics": title = "Visual settings"; text = "Resolution, frame rate and the game's own display effects. Changes apply the next time you press PLAY."; break;
+            case "display": title = "Display detail"; text = "The same switches as the game's Customize page. The preset fills them in; individual rows override it."; break;
+            case "controls": title = "Controls"; text = "Touch layout, triggers and vibration."; break;
+            case "game": title = "Game"; text = "Language and the online server."; break;
+            case "saves": title = "Saves"; text = "Back up or restore career saves."; break;
+            case "support": title = "Support"; text = "Updates, logs and diagnostics."; break;
+            default: title = "Options"; text = "";
+        }
+        leftInfo.addView(label(title.toUpperCase(java.util.Locale.US), 12, ACCENT, true));
+        TextView body = label(text, 13, MUTED, false);
+        body.setPadding(0, dp(8), 0, dp(10));
+        leftInfo.addView(body);
+        TextView hint = label("Tap a setting to see what it costs.", 12, MUTED, false);
+        hint.setAlpha(.85f);
+        leftInfo.addView(hint);
+    }
+
+    private void showOptionInfo(String title) {
+        if (leftInfo == null || openGroup == null) return;
+        String[] info = OPTION_INFO.get(title);
+        String text = info != null ? info[0] : "Applies the next time you press PLAY.";
+        int gpu = info != null ? Integer.parseInt(info[1]) : 0;
+        int cpu = info != null ? Integer.parseInt(info[2]) : 0;
+        leftInfo.removeAllViews();
+        leftInfo.addView(label(title.toUpperCase(java.util.Locale.US), 12, ACCENT, true));
+        TextView body = label(text, 13, MUTED, false);
+        body.setPadding(0, dp(8), 0, dp(12));
+        leftInfo.addView(body);
+        addImpactBar(leftInfo, "GPU", gpu);
+        addImpactBar(leftInfo, "CPU", cpu);
+        if (gpu == 0 && cpu == 0) {
+            TextView none = label("Negligible frame cost", 12, MUTED, false);
+            none.setPadding(0, dp(6), 0, 0);
+            leftInfo.addView(none);
+        }
+    }
+
+    private void addImpactBar(LinearLayout parent, String name, int level) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(3), 0, dp(3));
+        TextView caption = label(name, 11, MUTED, true);
+        caption.setLetterSpacing(.12f);
+        row.addView(caption, new LinearLayout.LayoutParams(dp(40), -2));
+        for (int i = 0; i < 3; i++) {
+            View cell = new View(this);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setColor(i < level ? (name.equals("GPU") ? ACCENT : ORANGE) : 0x221E3A5F);
+            bg.setCornerRadius(dp(3));
+            cell.setBackground(bg);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(26), dp(7));
+            lp.rightMargin = dp(4);
+            row.addView(cell, lp);
+        }
+        TextView cost = label(level == 0 ? "none" : level == 1 ? "low" : level == 2 ? "medium" : "high", 11,
+                level >= 3 ? ORANGE : MUTED, false);
+        cost.setPadding(dp(8), 0, 0, 0);
+        row.addView(cost);
+        parent.addView(row);
+    }
+
     /** The benchmark entry: distinct cyan accent card, last result underneath. */
     private View benchmarkRow() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.VERTICAL);
         row.setPadding(dp(16), dp(12), dp(16), dp(13));
         GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {0x3335E3FF, 0x33B45CFF});
+                new int[] {0x33FF9E1B, 0x1A35A8FF});
         bg.setCornerRadius(dp(14));
-        bg.setStroke(dp(1), 0xAA35E3FF);
+        bg.setStroke(dp(1), 0xAAFF9E1B);
         row.setBackground(bg);
         row.setClickable(true);
-        row.setOnClickListener(v -> confirmBenchmark());
-        row.addView(label("BENCHMARK", 11, CYAN, true));
-        row.addView(label("Run the 60-second AI race  ›", 15, TEXT, false));
+        row.setOnClickListener(v -> { showOptionInfo("Benchmark"); confirmBenchmark(); });
+        row.addView(label("BENCHMARK", 11, ORANGE, true));
         String last = GameOptions.prefs(this).getString("benchmark_last", "");
         if (!last.isEmpty()) {
             TextView subtitle = label(last, 12, MUTED, false);
@@ -881,7 +1016,7 @@ public final class LauncherActivity extends Activity {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(12), dp(8), dp(12), dp(8));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0x14B45CFF);
+        bg.setColor(0x1435A8FF);
         bg.setCornerRadius(dp(12));
         row.setBackground(bg);
         row.setClickable(true);
@@ -901,9 +1036,9 @@ public final class LauncherActivity extends Activity {
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(12), dp(16), dp(12));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0xCC121226);
+        bg.setColor(0xCC0B1526);
         bg.setCornerRadius(dp(18));
-        bg.setStroke(dp(1), 0x55B45CFF);
+        bg.setStroke(dp(1), 0x551E3A5F);
         card.setBackground(bg);
         return card;
     }
@@ -917,7 +1052,7 @@ public final class LauncherActivity extends Activity {
         b.setTypeface(Typeface.DEFAULT_BOLD);
         b.setLetterSpacing(primary ? .12f : 0f);
         GradientDrawable bg = primary
-                ? new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[] {0xFFB45CFF, 0xFF35E3FF})
+                ? new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[] {0xFF1E6BFF, 0xFF35D0FF})
                 : new GradientDrawable();
         if (!primary) { bg.setColor(0x22FFFFFF); bg.setStroke(dp(1), 0x55FFFFFF); }
         bg.setCornerRadius(dp(14));
