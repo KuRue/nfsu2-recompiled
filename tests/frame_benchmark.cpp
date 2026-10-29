@@ -135,8 +135,8 @@ int main(){
         run.begin(start);
         auto at=start;for(unsigned i=0;i<=40;++i){run.speed(at,i<20?30.f:0.5f);at+=milliseconds(100);}
         require(std::fabs(run.stalledSeconds()-2.1)<0.01&&!run.stalled(),"21 slow samples 100 ms apart");
-        for(unsigned i=0;i<20;++i){at+=milliseconds(100);run.speed(at,0.5f);}
-        require(run.stalled(),"over three seconds is a stall");
+        for(unsigned i=0;i<30;++i){at+=milliseconds(100);run.speed(at,0.5f);}
+        require(run.stalled(),"over four and a half seconds is a stall");
     }
     std::puts("Frame benchmark passed");
 }

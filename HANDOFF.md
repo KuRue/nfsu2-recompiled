@@ -935,3 +935,24 @@ Combined with the earlier normal-race pass (countdown, HUD, throttle and
 steering verified, 95–104 FPS at 37–42k calls), both required post-install
 plays are done. Screen-off timeout restored to 30 min. Publish decision is
 with the user: publish as-is, or tune the stall threshold first.
+
+## 2026-10-29: benchmark stall flag fixed in both layers and verified
+
+The "AI car was stuck" warning was firing every run because the course itself
+slows the car under 1 m/s for 3.0-4.4 s. The limit is now 4.5 s in
+frame_benchmark.h AND in BenchmarkReport.summary() (the dialog message was
+hardcoded at >3 s, so the C++ constant alone changed nothing user-visible).
+frame_benchmark.cpp and BenchmarkReportTest.java updated: 4.0 s must not warn,
+5.0 s must. Host checks pass (python3 scripts/check_phone_source.py).
+
+Phone verification on the rebuilt RC (SHA-256
+6ec21f90ccbf54a725c0f94d48e90dc76126c49c3557cb589bfc730b4d2696d3,
+68,618,911 bytes): clean dialog, no warning. Average 117.0 FPS, 1% low 82.1,
+min 39 / max 212 FPS, render thread 2.37 ms, 42,715 calls/frame, 7,023 busy
+frames, p50/p95/p99/max 8.49 / 9.95 / 11.00 / 25.92 ms, late 14 / 7023.
+
+Build gotcha: incremental packaging can leave a ~65 MB hole in the APK (same
+entries, 133 MB vs 68 MB). Delete app/build/intermediates/apk/debug then
+rebuild to repack.
+
+Release: ready; waiting for the user's publish approval.

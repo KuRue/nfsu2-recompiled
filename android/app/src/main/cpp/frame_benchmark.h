@@ -134,11 +134,13 @@ public:
     }
     // Car speed in m/s while recording. Time below kStallSpeed counts as stalled: the AI
     // stuck on a wall drags the figures down, so the report flags it. The course itself slows
-    // the car under 3 m/s for about 3.3 s every run (phone, 2026-10-27), so only a near stop
-    // counts. Recording starts once the car passes kMovingSpeed after the countdown.
+    // the car under 3 m/s for about 3.3 s every run (phone, 2026-10-27), with the sub-1 m/s
+    // part measured at 3.0-3.4 s on 2026-10-29 — the old 3.0 s limit flagged every run as
+    // stuck. 4.5 s keeps a real wall-stuck AI visible while clearing that slow corner.
+    // Recording starts once the car passes kMovingSpeed after the countdown.
     static constexpr float kStallSpeed=1.f;
     static constexpr float kMovingSpeed=3.f;
-    static constexpr double kStallLimitMs=3000;
+    static constexpr double kStallLimitMs=4500;
     void speed(Clock::time_point now,float metresPerSecond){
         if(phase_!=Phase::Recording){lastSpeedAt_={};return;}
         if(lastSpeedAt_!=Clock::time_point{}&&std::isfinite(metresPerSecond)&&metresPerSecond<kStallSpeed)

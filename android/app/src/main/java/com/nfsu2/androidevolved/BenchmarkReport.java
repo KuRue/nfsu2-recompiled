@@ -30,7 +30,10 @@ public final class BenchmarkReport {
 
     public String summary() {
         StringBuilder text = new StringBuilder();
-        if (stalled > 3)
+        // Matches kStallLimitMs in frame_benchmark.h: the course itself slows the
+        // car under 1 m/s for ~3.0-4.4 s every run, so only a longer near-stop is
+        // the AI being stuck (measured on the phone, 2026-10-29).
+        if (stalled > 4.5)
             text.append(String.format(Locale.US, "The AI car was stuck for %.0f s, which lowers these figures. Run the benchmark again for a fair result.\n\n", stalled));
         if (averageFps > 0)
             text.append(String.format(Locale.US, "Average %.1f FPS, 1%% low %.1f FPS\n", averageFps, lowFps));

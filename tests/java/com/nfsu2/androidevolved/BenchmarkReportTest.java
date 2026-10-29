@@ -37,6 +37,11 @@ public final class BenchmarkReportTest {
         check(badTimeline);
         BenchmarkReport stuck = BenchmarkReport.parse(text + "stalled 7.5\n");
         check(stuck.stalled == 7.5 && stuck.summary().contains("stuck for 8 s") && report.stalled == 0);
+        // The course's own slow corner reaches ~4.4 s on the phone; it must not read as stuck.
+        BenchmarkReport slowCorner = BenchmarkReport.parse(text + "stalled 4.0\n");
+        check(!slowCorner.summary().contains("was stuck"));
+        BenchmarkReport wallStuck = BenchmarkReport.parse(text + "stalled 5.0\n");
+        check(wallStuck.summary().contains("stuck for 5 s"));
         boolean rejected = false;
         try { BenchmarkReport.parse("not a report\n"); }
         catch (IllegalArgumentException error) { rejected = true; }
