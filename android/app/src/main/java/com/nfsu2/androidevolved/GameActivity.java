@@ -275,6 +275,7 @@ public final class GameActivity extends NativeActivity {
             benchmarkWindow = new PopupWindow(benchmarkOverlay, ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT, false);
             benchmarkWindow.setTouchable(false);
+            benchmarkWindow.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
         }
         if (benchmarkSeconds > 0) nativeBenchmark(benchmarkSeconds,
                 new java.io.File(getFilesDir(), "benchmark-report.txt").getAbsolutePath(),

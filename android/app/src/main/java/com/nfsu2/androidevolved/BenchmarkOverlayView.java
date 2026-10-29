@@ -29,7 +29,9 @@ public final class BenchmarkOverlayView extends LinearLayout {
         int pad = Math.round(10 * density);
         setPadding(pad, Math.round(8 * density), pad, Math.round(6 * density));
         GradientDrawable background = new GradientDrawable();
-        background.setColor(0xC0060D08); background.setCornerRadius(10 * density);
+        background.setColor(0xE60B1526);
+        background.setCornerRadius(12 * density);
+        background.setStroke(Math.max(1, Math.round(density)), 0x668EE03A);
         setBackground(background);
         figures = new Figures(context);
         addView(figures, new LayoutParams(Math.round(250 * density), Math.round(80 * density)));
@@ -55,12 +57,12 @@ public final class BenchmarkOverlayView extends LinearLayout {
 
         Figures(Context context) {
             super(context);
-            title.setColor(0xFFF2FFF0); title.setTextSize(9.5f * density); title.setTypeface(Typeface.DEFAULT_BOLD); title.setLetterSpacing(0.14f);
+            title.setColor(0xFF8EE03A); title.setTextSize(9.5f * density); title.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD)); title.setLetterSpacing(0.14f);
             timer.setColor(0xFF8FA88F); timer.setTextSize(9.5f * density); timer.setTypeface(Typeface.MONOSPACE); timer.setTextAlign(Paint.Align.RIGHT);
-            big.setColor(Color.WHITE); big.setTextSize(28 * density); big.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-            unit.setColor(0xFF8FA88F); unit.setTextSize(9 * density);
-            label.setColor(0xFF8FA88F); label.setTextSize(8 * density); label.setLetterSpacing(0.06f);
-            value.setColor(Color.WHITE); value.setTextSize(13 * density); value.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+            big.setColor(Color.WHITE); big.setTextSize(28 * density); big.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
+            unit.setColor(0xFF8FA88F); unit.setTextSize(9 * density); unit.setTypeface(Typeface.create("sans-serif-condensed", Typeface.NORMAL));
+            label.setColor(0xFF8FA88F); label.setTextSize(8 * density); label.setLetterSpacing(0.06f); label.setTypeface(Typeface.create("sans-serif-condensed", Typeface.NORMAL));
+            value.setColor(Color.WHITE); value.setTextSize(13 * density); value.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
             track.setColor(0x33ffffff); progress.setColor(0xFF8EE03A); rule.setColor(0x338EE03A);
         }
 

@@ -33,7 +33,7 @@ public final class BenchmarkGraphView extends View {
         line.setStrokeJoin(Paint.Join.ROUND);
         grid.setColor(0x26ffffff); grid.setStrokeWidth(1f * density);
         target.setColor(0xAAFFC857); target.setStrokeWidth(1f * density);
-        axis.setColor(0xff8FA88F); axis.setTextSize(7.5f * density);
+        axis.setColor(0xff8FA88F); axis.setTextSize(7.5f * density); axis.setTypeface(android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.NORMAL));
     }
 
     /** points holds FIELDS floats per quarter second, starting at offset. goalFps 0 hides the cap line. */

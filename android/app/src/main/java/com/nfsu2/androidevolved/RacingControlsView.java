@@ -62,11 +62,12 @@ final class RacingControlsView extends View {
         final int scan, shape, color;
         final RectF original;
         final boolean utility;
+        boolean docked;
         String id;
         int held;
         float steering;
         Control(float x, float y, float w, float h, int shape, String icon, int scan, int color, boolean utility) {
-            area = new RectF(x, y, x+w, y+h); original=new RectF(area); this.shape=shape; this.icon=icon; this.scan=scan; this.color=color; this.utility=utility;
+            area = new RectF(x, y, x+w, y+h); original=new RectF(area); this.shape=shape; this.icon=icon; this.scan=scan; this.color=color; this.utility=utility; this.docked=utility;
         }
     }
     RacingControlsView(Context context, Keys keys, Runnable textInput, Runnable configureTilt, Runnable configureFrameLimit) {
@@ -89,6 +90,7 @@ final class RacingControlsView extends View {
         // v2: icon layout; positions saved for the old captioned buttons do not apply.
         // Bar buttons use a separate id so old saved layouts cannot scatter them.
         c.id="v2."+(racing?"race."+(style.equals("classic")?"":style+"."):"menu.")+(utility?"bar.":"")+scan;
+        c.docked=layouts.getBoolean(c.id+".docked",utility);
         float factor=layouts.getFloat(c.id+".size",1);
         float cx=layouts.getFloat(c.id+".x",c.area.centerX()/(getWidth()/scale))*(getWidth()/scale);
         float cy=layouts.getFloat(c.id+".y",c.area.centerY()/(getHeight()/scale))*(getHeight()/scale);
@@ -175,7 +177,28 @@ final class RacingControlsView extends View {
             add(w-176,bottom-62,56,"back",1);
             add(w/2-23,bottom-46,46,"keyboard",TEXT);
         }
+        layoutDock();
         invalidate();
+    }
+
+    /** Place every button that is currently docked in the top bar. */
+    private void layoutDock() {
+        float bx=70, by=editing?120:16, bs=42, gap=5;
+        int i=0;
+        for(Control c:controls) {
+            if(c.scan==BAR||!c.docked)continue;
+            c.area.set(bx+(bs+gap)*i,by,bx+(bs+gap)*i+bs,by+bs);
+            i++;
+        }
+        if(i>0) {
+            float right=bx+(bs+gap)*(i-1)+bs;
+            barArea.set(64,by-4,right+6,by+bs+4);
+        } else if(editing&&racing) {
+            // Keep a visible drop target even when every docked button was pulled out.
+            barArea.set(64,by-4,bx+bs+6,by+bs+4);
+        } else {
+            barArea.setEmpty();
+        }
     }
 
     // ---- Drawing -----------------------------------------------------------------------------------------
@@ -185,7 +208,7 @@ final class RacingControlsView extends View {
         if(hiddenByGamepad&&!editing)return;
         canvas.save(); canvas.scale(scale,scale);
         if(editing)canvas.drawColor(0x55000000);
-        if(racing&&barExpanded&&!editing) {
+        if(racing&&(barExpanded||editing)&&!barArea.isEmpty()) {
             fill.setColor(0xB30B1526);
             line.setColor(0x668EE03A);
             line.setStrokeWidth(1.5f);
@@ -193,7 +216,7 @@ final class RacingControlsView extends View {
             canvas.drawRoundRect(barArea,16,16,line);
         }
         for(Control c:controls) {
-            if(c.utility&&(!barExpanded||editing))continue;
+            if(c.docked&&!barExpanded&&!editing)continue;
             drawControl(canvas,c);
         }
         if(editing) {
@@ -337,7 +360,7 @@ final class RacingControlsView extends View {
     // ---- Editor ------------------------------------------------------------------------------------------
 
     private void resizeSelected(float change) {
-        if(selected==null)return;
+        if(selected==null||selected.docked)return;
         float factor=Math.max(.55f,Math.min(2.5f,selected.area.width()/selected.original.width()+change));
         float cx=selected.area.centerX(),cy=selected.area.centerY();
         float w=selected.original.width()*factor,h=selected.original.height()*factor;
@@ -345,7 +368,8 @@ final class RacingControlsView extends View {
     }
     private void saveLayout() {
         SharedPreferences.Editor save=layouts.edit();
-        for(Control c:controls)save.putFloat(c.id+".x",c.area.centerX()/(getWidth()/scale))
+        for(Control c:controls)save.putBoolean(c.id+".docked",c.docked)
+                .putFloat(c.id+".x",c.area.centerX()/(getWidth()/scale))
                 .putFloat(c.id+".y",c.area.centerY()/(getHeight()/scale))
                 .putFloat(c.id+".size",c.area.width()/c.original.width());
         save.apply();
@@ -357,7 +381,7 @@ final class RacingControlsView extends View {
             if(x>=w/2-65&&x<=w/2+65&&y>=70&&y<=106) {showOptions();return true;}
             if(y>=18&&y<=58) {
                 boolean handled=true;
-                if(x>=w/2-250&&x<=w/2-150) {for(Control c:controls)c.area.set(c.original);selected=null;}
+                if(x>=w/2-250&&x<=w/2-150) {for(Control c:controls){c.area.set(c.original);c.docked=c.utility;}layoutDock();selected=null;}
                 else if(x>=w/2-142&&x<=w/2-102)resizeSelected(-.1f);
                 else if(x>=w/2-94&&x<=w/2-54)resizeSelected(.1f);
                 else if(x>=w/2-46&&x<=w/2+58) {saveLayout();editing=false;layoutControls();}
@@ -370,9 +394,35 @@ final class RacingControlsView extends View {
         } else if(action==MotionEvent.ACTION_MOVE&&selected!=null&&dragPointer>=0) {
             int i=e.findPointerIndex(dragPointer);
             if(i>=0) {x=e.getX(i)/scale;y=e.getY(i)/scale;selected.area.offset(x-dragX,y-dragY);clamp(selected);dragX=x;dragY=y;}
-        } else if(action==MotionEvent.ACTION_CANCEL||action==MotionEvent.ACTION_UP||
-                (action==MotionEvent.ACTION_POINTER_UP&&e.getPointerId(index)==dragPointer))dragPointer=-1;
+        } else if(action==MotionEvent.ACTION_UP||
+                (action==MotionEvent.ACTION_POINTER_UP&&e.getPointerId(index)==dragPointer)) {
+            if(selected!=null&&dragPointer>=0)dropSelected();
+            dragPointer=-1;
+        } else if(action==MotionEvent.ACTION_CANCEL)dragPointer=-1;
         invalidate();return true;
+    }
+
+    /** A docked button is hidden in play; dropping it outside the bar keeps it on screen. */
+    private boolean canDock(Control c) {
+        return racing&&c.scan!=BAR&&c.shape==ROUND&&c.scan!=0xcb&&c.scan!=0xcd;
+    }
+    private void dropSelected() {
+        Control c=selected;selected=null;
+        if(c==null)return;
+        if(!canDock(c)) {
+            if(racing&&barArea.contains(c.area.centerX(),c.area.centerY())) {
+                c.area.set(c.original);clamp(c);
+            }
+            invalidate();return;
+        }
+        boolean into=barArea.contains(c.area.centerX(),c.area.centerY());
+        c.docked=into;
+        if(!into) {
+            float cx=c.area.centerX(),cy=c.area.centerY();
+            float w=c.original.width(),h=c.original.height();
+            c.area.set(cx-w/2,cy-h/2,cx+w/2,cy+h/2);clamp(c);
+        }
+        layoutDock();invalidate();
     }
     private void showOptions() {
         new AlertDialog.Builder(getContext(), R.style.NeonDialog).setTitle("Control options")
@@ -400,7 +450,7 @@ final class RacingControlsView extends View {
                 JSONObject data=new JSONObject();data.put("style",style);
                 for(Control c:controls) {JSONObject item=new JSONObject();
                     item.put("x",c.area.centerX()/(getWidth()/scale));item.put("y",c.area.centerY()/(getHeight()/scale));
-                    item.put("size",c.area.width()/c.original.width());data.put(c.id,item);}
+                    item.put("size",c.area.width()/c.original.width());item.put("docked",c.docked);data.put(c.id,item);}
                 layouts.edit().putString("preset."+(racing?"race.":"menu.")+value,data.toString()).apply();
                 saveLayout();NeonToast.show(getContext(),"Layout saved: "+value,Toast.LENGTH_SHORT);dialog.dismiss();
             }catch(org.json.JSONException exception) {name.setError("Could not save the layout");}
@@ -417,7 +467,8 @@ final class RacingControlsView extends View {
                 style=data.getString("style");SharedPreferences.Editor save=layouts.edit().putString("style",style);
                 java.util.Iterator<String> ids=data.keys();while(ids.hasNext()) {String id=ids.next();if(id.equals("style"))continue;
                     JSONObject item=data.getJSONObject(id);save.putFloat(id+".x",(float)item.getDouble("x"))
-                            .putFloat(id+".y",(float)item.getDouble("y")).putFloat(id+".size",(float)item.getDouble("size"));}
+                            .putFloat(id+".y",(float)item.getDouble("y")).putFloat(id+".size",(float)item.getDouble("size"));
+                    save.putBoolean(id+".docked",item.optBoolean("docked",id.contains(".bar.")));}
                 save.apply();layoutControls();
             }catch(org.json.JSONException exception) {NeonToast.show(getContext(),"Could not load the layout",Toast.LENGTH_SHORT);}
         }).setNegativeButton("Cancel",null).show();
@@ -429,7 +480,7 @@ final class RacingControlsView extends View {
     private Control hit(float x,float y) {
         x/=scale;y/=scale;Control best=null;double bestDistance=Double.MAX_VALUE;
         for(Control c:controls) {
-            if(c.utility&&(!barExpanded||editing))continue;
+            if(c.docked&&!barExpanded&&!editing)continue;
             float cx=c.area.centerX(),cy=c.area.centerY();
             double d;
             if(c.shape==PEDAL) {
@@ -507,7 +558,7 @@ final class RacingControlsView extends View {
                 if(c.scan==BAR) {barExpanded=!barExpanded;layouts.edit().putBoolean("bar.expanded",barExpanded).apply();releaseAll();}
                 else if(c.scan==MODE) {racing=!racing;layoutControls();}
                 else if(c.scan==TEXT) {releaseAll();textInput.run();}
-                else if(c.scan==EDIT) {releaseAll();editing=true;selected=null;}
+                else if(c.scan==EDIT) {releaseAll();editing=true;selected=null;layoutControls();}
                 performClick();
             }
             if(action==MotionEvent.ACTION_UP)releaseAll();  // the last finger left

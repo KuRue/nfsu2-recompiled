@@ -1122,3 +1122,25 @@ The launcher's two-pane content is capped at 1200dp and centred on wide
 screens. Phones still use the full width. Tested with a 2560x1600 / 240dpi
 display override: the cards no longer stretch edge to edge; the phone layout
 was re-checked at 2340x1080 / 450dpi and is unchanged.
+
+## 2026-10-29: dock drag + benchmark panel polish
+
+The control editor now treats the expanded bar as a dock. While editing, the
+dock moves below the toolbar and any round utility button can be dragged into
+it (hidden until expanded) or out of it (always visible). Docked state and
+positions are saved with the normal layout and named layouts; the expander and
+steering/pedals stay on screen. Verified pause out -> free button -> save ->
+pause back into the dock.
+
+Benchmark live panel: lime border, lime BENCHMARK title, condensed type, dark
+green panel, transparent popup background. The result dialog and graph were
+already themed.
+
+## Race intro hitch (open)
+
+Normal quick race, uncapped FPS: frame log shows 272 ms and 545 ms frames
+during the intro car sequence; the 1 Hz player physics log stays at
+forward=0.00, so the visible jump is likely an AI car or animation catch-up.
+The benchmark ran uncapped on a 120 Hz panel (late frames 2792/4707). Next:
+repeat at 60 FPS / steady pace and trace the guest clock; consider clamping the
+guest frame delta or pre-warming shaders/assets before the intro.
