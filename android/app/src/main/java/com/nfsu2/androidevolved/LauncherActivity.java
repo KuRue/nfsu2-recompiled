@@ -632,6 +632,7 @@ public final class LauncherActivity extends Activity {
         if (report.averageFps > 0)
             GameOptions.prefs(this).edit().putString("benchmark_last",
                     String.format(java.util.Locale.US, "%.1f avg · %.1f 1%% low", report.averageFps, report.lowFps)).apply();
+        refreshOptions();
         AlertDialog.Builder dialog = new AlertDialog.Builder(this, R.style.NeonDialog)
                 .setTitle("Benchmark results").setNegativeButton(report.canApply() ? "Keep settings" : "OK", null);
         if (report.timeline.length == 0) dialog.setMessage(report.summary());
