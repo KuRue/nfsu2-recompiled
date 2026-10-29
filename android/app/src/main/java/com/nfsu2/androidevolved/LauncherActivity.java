@@ -492,6 +492,8 @@ public final class LauncherActivity extends Activity {
     private void chooseOnlineServer() {
         android.widget.EditText input = new android.widget.EditText(this);
         input.setSingleLine(true);
+        input.setTextColor(0xFFF2FFF0);
+        input.setHintTextColor(0xFF8FA88F);
         input.setText(GameOptions.onlineServer(this));
         input.setSelection(input.getText().length());
         input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
@@ -642,7 +644,7 @@ public final class LauncherActivity extends Activity {
                 new String[] {"resume", "fresh"}, resumeNextLaunch ? "resume" : "fresh", "resume",
                 mode -> {
                     if(mode.equals("resume")){resumeNextLaunch=true;launch();}
-                    else new AlertDialog.Builder(this).setTitle("Restart game?")
+                    else new AlertDialog.Builder(this, R.style.NeonDialog).setTitle("Restart game?")
                         .setMessage("The current live session will end. Unsaved progress will be lost.")
                         .setPositiveButton("Restart",(dialog,which)->{resumeNextLaunch=false;launch();})
                         .setNegativeButton("Cancel",null).show();

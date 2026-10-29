@@ -3,6 +3,9 @@
     <style name="NeonDialog" parent="android:Theme.Material.Dialog.Alert">
         <item name="android:windowBackground">@drawable/dialog_neon</item>
         <item name="android:colorAccent">@color/neon_violet</item>
+        <item name="android:colorControlActivated">@color/neon_violet</item>
+        <item name="android:colorControlNormal">@color/neon_muted</item>
+        <item name="android:colorControlHighlight">#338EE03A</item>
         <item name="android:textColorPrimary">@color/neon_text</item>
         <item name="android:textColorSecondary">@color/neon_muted</item>
         <item name="android:fontFamily">sans-serif-condensed</item>

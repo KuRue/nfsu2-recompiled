@@ -1090,3 +1090,17 @@ Verified in a quick race:
 - pause Options: Audio -> Gameplay (no Display)
 Screenshots: /tmp/opencode/opt_next1.png, /tmp/opencode/pause_opts2.png.
 The launcher stays on the lime-green theme with the amber benchmark accent.
+
+## 2026-10-29: themed dialogs and toasts
+
+Every remaining stock AlertDialog now uses R.style.NeonDialog: graphics cache
+reset/ready/error, restart-game confirmation, tilt steering, frame-rate limit,
+type-in-the-game, control options, driving style, and save/load layout. The
+dialog theme now sets colorControlActivated/Normal/Highlight so checkboxes,
+radio buttons and SeekBars are lime instead of Material blue; the programmatic
+forms set explicit text and hint colours.
+
+Replaced the five remaining Toast.makeText calls with NeonToast: a small dark
+green card with a lime border and the same typography. Verified on device:
+cache reset dialog, control options, tilt steering (lime controls), frame-rate
+limit, save-layout input, and the no-saved-layouts toast.

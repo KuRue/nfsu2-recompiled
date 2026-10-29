@@ -88,19 +88,19 @@ public final class GameActivity extends NativeActivity {
         }
     }
     private void showTiltOptions() {
-        if(tiltSensor==null) {Toast.makeText(this,"This device has no accelerometer",Toast.LENGTH_LONG).show();return;}
+        if(tiltSensor==null) {NeonToast.show(this,"This device has no accelerometer",Toast.LENGTH_LONG);return;}
         android.content.SharedPreferences options=getSharedPreferences("touch_layouts_v1",MODE_PRIVATE);
         LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(24),dp(8),dp(24),dp(8));
-        CheckBox enabled=new CheckBox(this);enabled.setText("Steer by tilting the phone");enabled.setChecked(tiltEnabled);form.addView(enabled);
-        CheckBox invert=new CheckBox(this);invert.setText("Invert steering");invert.setChecked(tiltInvert);form.addView(invert);
-        TextView label=new TextView(this);label.setText("Sensitivity: "+tiltSensitivity+"×");form.addView(label);
-        android.widget.SeekBar sensitivity=new android.widget.SeekBar(this);sensitivity.setMax(30);sensitivity.setProgress(Math.round(tiltSensitivity*10)-10);form.addView(sensitivity);
+        CheckBox enabled=new CheckBox(this);enabled.setText("Steer by tilting the phone");enabled.setChecked(tiltEnabled);enabled.setTextColor(0xFFF2FFF0);enabled.setButtonTintList(android.content.res.ColorStateList.valueOf(0xFF8EE03A));form.addView(enabled);
+        CheckBox invert=new CheckBox(this);invert.setText("Invert steering");invert.setChecked(tiltInvert);invert.setTextColor(0xFFF2FFF0);invert.setButtonTintList(android.content.res.ColorStateList.valueOf(0xFF8EE03A));form.addView(invert);
+        TextView label=new TextView(this);label.setText("Sensitivity: "+tiltSensitivity+"×");label.setTextColor(0xFFF2FFF0);form.addView(label);
+        android.widget.SeekBar sensitivity=new android.widget.SeekBar(this);sensitivity.setMax(30);sensitivity.setProgress(Math.round(tiltSensitivity*10)-10);sensitivity.setProgressTintList(android.content.res.ColorStateList.valueOf(0xFF8EE03A));sensitivity.setThumbTintList(android.content.res.ColorStateList.valueOf(0xFF8EE03A));sensitivity.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0x332A4A2A));form.addView(sensitivity);
         sensitivity.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
             public void onStartTrackingTouch(android.widget.SeekBar bar) {}public void onStopTrackingTouch(android.widget.SeekBar bar) {}
             public void onProgressChanged(android.widget.SeekBar bar,int progress,boolean user) {label.setText("Sensitivity: "+((progress+10)/10f)+"×");}
         });
-        TextView help=new TextView(this);help.setText("Hold the phone in your playing position when applying. Tilt steers left/right; the pedals remain touch controls.");form.addView(help);
-        new AlertDialog.Builder(this).setTitle("Tilt steering").setView(form)
+        TextView help=new TextView(this);help.setText("Hold the phone in your playing position when applying. Tilt steers left/right; the pedals remain touch controls.");help.setTextColor(0xFF8FA88F);form.addView(help);
+        new AlertDialog.Builder(this, R.style.NeonDialog).setTitle("Tilt steering").setView(form)
                 .setPositiveButton("Apply and calibrate",(dialog,which)->{
                     tiltEnabled=enabled.isChecked();tiltInvert=invert.isChecked();tiltSensitivity=(sensitivity.getProgress()+10)/10f;
                     options.edit().putBoolean("tilt.enabled",tiltEnabled).putBoolean("tilt.invert",tiltInvert).putFloat("tilt.sensitivity",tiltSensitivity).apply();
@@ -186,7 +186,7 @@ public final class GameActivity extends NativeActivity {
         GameOptions.Option option=GameOptions.find(GameOptions.FPS);
         String saved=GameOptions.get(this,GameOptions.FPS);int selected=0;
         for(int i=0;i<option.values.length;i++)if(option.values[i].equals(saved))selected=i;
-        new AlertDialog.Builder(this).setTitle(option.title)
+        new AlertDialog.Builder(this, R.style.NeonDialog).setTitle(option.title)
                 .setSingleChoiceItems(option.labels,selected,(dialog,which)->{
                     GameOptions.set(this,GameOptions.FPS,option.values[which]);
                     nativeFrameLimit(Integer.parseInt(option.values[which]));dialog.dismiss();
@@ -196,6 +196,8 @@ public final class GameActivity extends NativeActivity {
     private void showTextInput() {
         EditText name = new EditText(this);
         name.setSingleLine(true);
+        name.setTextColor(0xFFF2FFF0);
+        name.setHintTextColor(0xFF8FA88F);
         name.setHint("Name, email, or password");
         name.setFilters(new InputFilter[]{new InputFilter.LengthFilter(40)});
         name.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD |
@@ -203,9 +205,10 @@ public final class GameActivity extends NativeActivity {
         name.setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         CheckBox replace = new CheckBox(this);
         replace.setText("Replace the current text");replace.setChecked(true);
+        replace.setTextColor(0xFFF2FFF0);replace.setButtonTintList(android.content.res.ColorStateList.valueOf(0xFF8EE03A));
         LinearLayout form = new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(20), 0, dp(20), 0);form.addView(name);form.addView(replace);
-        AlertDialog dialog = new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.NeonDialog)
                 .setTitle("Type in the game")
                 .setView(form)
                 .setNegativeButton("Cancel", null)
@@ -469,7 +472,7 @@ public final class GameActivity extends NativeActivity {
                     && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
         if (!allowed && !requested) {
             requested = true;
-            Toast.makeText(this, "Allow file access to read the nfsu2 folder in internal storage", Toast.LENGTH_LONG).show();
+            NeonToast.show(this, "Allow file access to read the nfsu2 folder in internal storage", Toast.LENGTH_LONG);
             if (Build.VERSION.SDK_INT >= 30) {
                 startActivity(new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
                         Uri.parse("package:" + getPackageName())));
