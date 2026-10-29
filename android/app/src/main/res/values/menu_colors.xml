@@ -2,8 +2,8 @@
 <resources>
     <!-- Medium silver-gray sheets over a dark-gray backdrop; contrasting file-status inset. -->
     <color name="menu_background">#242424</color>
-    <color name="menu_sheet">#F2858B83</color>
-    <color name="menu_popup_sheet">#FA858B83</color>
+    <color name="menu_sheet">#B8A9AFA6</color>
+    <color name="menu_popup_sheet">#D09FA69C</color>
     <color name="menu_ink">#171B17</color>
     <color name="menu_secondary">#191E18</color>
     <color name="menu_lime">#C6E78B</color>
@@ -12,7 +12,7 @@
     <color name="menu_warning">#261503</color>
     <color name="menu_error">#330B15</color>
     <color name="menu_success">#BBD98D</color>
-    <color name="menu_file_background">#303430</color>
+    <color name="menu_file_background">#CE303430</color>
     <color name="menu_file_warning">#E8C17B</color>
     <color name="menu_file_error">#EE9292</color>
 </resources>

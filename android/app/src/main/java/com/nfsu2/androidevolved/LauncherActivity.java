@@ -95,7 +95,9 @@ public final class LauncherActivity extends Activity {
         OPTION_INFO.put("Bleach bypass", new String[] {"High-contrast film look.", "1", "0"});
         OPTION_INFO.put("Rain", new String[] {"Rain over the city.", "2", "1"});
     }
-    private TextView status, optionsTitle;
+    private TextView status, optionsTitle, submenuBack;
+    private MenuPanel infoPanel;
+    private ScrollView optionsScroll;
     private Button play, access, playArrow;
     private boolean playAfterProbe, checkingUpdates, resumed, resumeNextLaunch;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -198,25 +200,20 @@ public final class LauncherActivity extends Activity {
         titles.setOrientation(LinearLayout.VERTICAL);
         titles.setPadding(dp(14), 0, 0, 0);
         titles.addView(label("Need for Speed Underground 2", 23, getColor(R.color.menu_white), true));
-        titles.addView(label("PC game · native Android port", 13, getColor(R.color.menu_white), false));
+        titles.addView(label("Android Evolved Recomp", 13, getColor(R.color.menu_white), false));
         header.addView(titles);
         left.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
         leftHome = new LinearLayout(this);
         leftHome.setOrientation(LinearLayout.VERTICAL);
         left.addView(leftHome, new LinearLayout.LayoutParams(-1, -2));
-        leftInfo = new LinearLayout(this);
-        leftInfo.setOrientation(LinearLayout.VERTICAL);
-        leftInfo.setBackground(MenuTheme.panel(this));leftInfo.setPadding(dp(12),dp(10),dp(12),dp(10));
-        leftInfo.setVisibility(View.GONE);
-        left.addView(leftInfo, new LinearLayout.LayoutParams(-1, -2));
+        infoPanel=new MenuPanel(this,"",false);leftInfo=infoPanel.body();infoPanel.setVisibility(View.GONE);
+        LinearLayout.LayoutParams infoParams=new LinearLayout.LayoutParams(-1,-2);infoParams.topMargin=dp(8);
+        left.addView(infoPanel,infoParams);
 
-        LinearLayout card = card();
-        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(-1, -2);
-        cardParams.topMargin = dp(8);
-        leftHome.addView(card, cardParams);
-        panelHeading(card,"Game Files");
-        card.addView(MenuTheme.divider(this),new LinearLayout.LayoutParams(-1,dp(10)));
+        MenuPanel files=new MenuPanel(this,"Game Files",false);LinearLayout card=files.body();
+        LinearLayout.LayoutParams cardParams=new LinearLayout.LayoutParams(-1,-2);cardParams.topMargin=dp(8);
+        leftHome.addView(files,cardParams);
         status = label("", 13, TEXT, false);
         status.setPadding(dp(10), dp(4), dp(10), dp(6));
         card.addView(status);
@@ -247,22 +244,16 @@ public final class LauncherActivity extends Activity {
         accessParams.topMargin = dp(10);
         leftHome.addView(access, accessParams);
 
-        // Right: options.
-        LinearLayout right = card();
-        LinearLayout.LayoutParams rightParams = new LinearLayout.LayoutParams(0, -1, 1f);
-        rightParams.leftMargin = dp(24);
-        columns.addView(right, rightParams);
-        optionsTitle=panelHeading(right,"Options");
-        right.addView(MenuTheme.divider(this),new LinearLayout.LayoutParams(-1,dp(10)));
-        TextView note = label("Applied the next time you press PLAY.", 13, MUTED, false);
-        note.setPadding(dp(10), dp(2), dp(10), dp(4));
-        right.addView(note);
-        ScrollView scroll = new ScrollView(this);
-        optionsList = new LinearLayout(this);
-        optionsList.setOrientation(LinearLayout.VERTICAL);
-        optionsList.setPadding(dp(10),0,dp(10),0);
-        scroll.addView(optionsList);
-        right.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
+        // Header and Back remain outside the scrolling options list.
+        MenuPanel right=new MenuPanel(this,"Options",false);right.fillBody();
+        LinearLayout.LayoutParams rightParams=new LinearLayout.LayoutParams(0,-1,1f);rightParams.leftMargin=dp(24);
+        columns.addView(right,rightParams);optionsTitle=right.titleView();
+        LinearLayout optionsBody=right.body();
+        submenuBack=backRow("‹  Back");submenuBack.setVisibility(View.GONE);
+        LinearLayout.LayoutParams backParams=new LinearLayout.LayoutParams(-1,-2);backParams.bottomMargin=dp(8);
+        optionsBody.addView(submenuBack,backParams);
+        optionsScroll=new ScrollView(this);optionsList=new LinearLayout(this);optionsList.setOrientation(LinearLayout.VERTICAL);
+        optionsScroll.addView(optionsList);optionsBody.addView(optionsScroll,new LinearLayout.LayoutParams(-1,0,1f));
         return screen;
     }
 
@@ -302,6 +293,7 @@ public final class LauncherActivity extends Activity {
 
     private void refreshOptions() {
         optionsTitle.setText(groupTitle(openGroup));
+        submenuBack.setVisibility(openGroup==null?View.GONE:View.VISIBLE);
         optionsList.removeAllViews();
         if (openGroup != null) { buildGroup(openGroup); return; }
         PhonePreset preset = GameOptions.phonePreset(this);
@@ -329,9 +321,9 @@ public final class LauncherActivity extends Activity {
         }
     }
 
-    private void openGroup(String key) { openGroup = key; refreshOptions(); updateLeftPane(); }
+    private void openGroup(String key) { openGroup = key; refreshOptions(); updateLeftPane(); optionsScroll.scrollTo(0,0); }
 
-    private void closeGroup() { openGroup = null; refreshOptions(); updateLeftPane(); }
+    private void closeGroup() { openGroup = null; refreshOptions(); updateLeftPane(); optionsScroll.scrollTo(0,0); }
 
     @Override public void onBackPressed() {
         if (openGroup != null) { closeGroup(); return; }
@@ -346,8 +338,6 @@ public final class LauncherActivity extends Activity {
     private void buildGroup(String key) {
         switch (key) {
             case "graphics": {
-                TextView back = backRow("‹  Back");
-                optionsList.addView(back);
                 optionsList.addView(benchmarkRow());
                 if (android.os.Process.is64Bit()) {
                     List<GpuDrivers.Driver> drivers = GpuDrivers.list(this);
@@ -383,7 +373,6 @@ public final class LauncherActivity extends Activity {
                 break;
             }
             case "display": {
-                optionsList.addView(backRow("‹  Back"));
                 String[] labels = {"Low", "Medium", "High", "Ultra"};
                 String[] values = {"low", "medium", "high", "ultra"};
                 optionsList.addView(cycleRow("Level of detail preset", labels, values,
@@ -396,14 +385,12 @@ public final class LauncherActivity extends Activity {
                 break;
             }
             case "controls":
-                optionsList.addView(backRow("‹  Back"));
                 for (GameOptions.Option option : GameOptions.ALL)
                     if (isControlOption(option) && !GameOptions.isDisplayOption(option))
                         optionsList.addView(optionCycleRow(option));
                 optionsList.addView(optionRow("Test phone vibration", "Brief handset pulse", () -> {if(!PhoneFeedback.test(this))message("Phone vibration", "This device has no vibration motor.");}));
                 break;
             case "game": {
-                optionsList.addView(backRow("‹  Back"));
                 List<String[]> found = allowed() ? languages() : new ArrayList<>();
                 if (!found.isEmpty()) {
                     String[] values = new String[found.size()], labels = new String[found.size()];
@@ -416,12 +403,10 @@ public final class LauncherActivity extends Activity {
                 break;
             }
             case "saves":
-                optionsList.addView(backRow("‹  Back"));
                 optionsList.addView(optionRow("Backup career saves", backupSummary(), this::backupSaves));
                 optionsList.addView(optionRow("Restore career saves", "From a backup ZIP", this::restoreSaves));
                 break;
             case "support":
-                optionsList.addView(backRow("‹  Back"));
                 optionsList.addView(optionRow("Check for updates",
                         checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
                 optionsList.addView(optionRow("Report a problem", "Full log for GitHub", () -> prepareReport(null)));
@@ -446,9 +431,10 @@ public final class LauncherActivity extends Activity {
     /** Silver menu sheet with an outlined lime selection and separate controller focus. */
     private void chooseValue(String title, String[] labels, String[] values, String current, String fallback,
                              java.util.function.Consumer<String> set) {
-        LinearLayout card = card();
-        card.setPadding(dp(20), dp(14), dp(20), dp(16));card.setBackground(MenuTheme.popupPanel(this));
-        panelHeading(card,title);
+        MenuPanel pickerPanel=new MenuPanel(this,title,true);pickerPanel.fillBody();
+        LinearLayout pickerBody=pickerPanel.body();
+        Button cancel=actionButton("‹  Back",true);
+        LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);
         int index = java.util.Arrays.asList(values).indexOf(current);
         for (int i = 0; i < labels.length; i++) {
             final String value = values[i];
@@ -467,27 +453,30 @@ public final class LauncherActivity extends Activity {
             row.setLayoutParams(lp);
             card.addView(row);
         }
-        LinearLayout footer=new LinearLayout(this);footer.setGravity(Gravity.END);footer.setPadding(dp(10),0,dp(10),dp(4));
-        Button cancel=actionButton("Back",false);cancel.setOnClickListener(v->{if(dialog!=null)dialog.dismiss();});
-        footer.addView(cancel,new LinearLayout.LayoutParams(dp(112),dp(48)));
-        LinearLayout.LayoutParams footerParams=new LinearLayout.LayoutParams(-1,-2);footerParams.topMargin=dp(12);card.addView(footer,footerParams);
-        ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(Color.TRANSPARENT);
-        scroll.addView(card);
         final Dialog picker = new Dialog(this);
-        picker.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        picker.setContentView(scroll);
+        cancel.setOnClickListener(v->picker.dismiss());
+        LinearLayout.LayoutParams backParams=new LinearLayout.LayoutParams(-1,-2);backParams.bottomMargin=dp(8);
+        pickerBody.addView(cancel,backParams);
+        ScrollView scroll=new ScrollView(this);scroll.addView(card);
+        pickerBody.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
+        picker.requestWindowFeature(Window.FEATURE_NO_TITLE);picker.setContentView(pickerPanel);
         picker.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
         picker.getWindow().setDimAmount(0.6f);
-        picker.show();
-        picker.getWindow().setLayout(Math.min(dp(520),getResources().getDisplayMetrics().widthPixels-dp(48)),-2);
+        int width=Math.min(dp(520),getResources().getDisplayMetrics().widthPixels-dp(48));
+        int available=getResources().getDisplayMetrics().heightPixels-dp(32);
+        int contentWidth=View.MeasureSpec.makeMeasureSpec(width-dp(28),View.MeasureSpec.EXACTLY);
+        card.measure(contentWidth,View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
+        cancel.measure(contentWidth,View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
+        pickerPanel.titleView().measure(View.MeasureSpec.makeMeasureSpec(width-dp(8),View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
+        int desired=card.getMeasuredHeight()+cancel.getMeasuredHeight()+pickerPanel.titleView().getMeasuredHeight()+dp(36);
+        picker.show();picker.getWindow().setLayout(width,Math.min(available,desired));
         dialog = picker;
     }
 
     /** Section header that returns to the category list. */
     private TextView backRow(String text) {
         TextView back = label(text,20,ACCENT,true);
-        back.setBackground(MenuTheme.action(this,false));back.setMinimumHeight(dp(48));back.setFocusable(true);
+        back.setBackground(MenuTheme.action(this,true));back.setMinimumHeight(dp(48));back.setFocusable(true);
         back.setGravity(Gravity.CENTER_VERTICAL);back.setPadding(dp(10),dp(4),dp(10),dp(4));
         back.setClickable(true);
         back.setOnClickListener(v -> closeGroup());
@@ -939,12 +928,12 @@ public final class LauncherActivity extends Activity {
     /** Contextual left pane: what the current group is, then each setting's cost. */
     private void updateLeftPane() {
         if (leftHome == null || leftInfo == null) return;
-        if (openGroup == null) { leftHome.setVisibility(View.VISIBLE); leftInfo.setVisibility(View.GONE); return; }
-        leftHome.setVisibility(View.GONE); leftInfo.setVisibility(View.VISIBLE);
+        if (openGroup == null) { leftHome.setVisibility(View.VISIBLE); infoPanel.setVisibility(View.GONE); return; }
+        leftHome.setVisibility(View.GONE); infoPanel.setVisibility(View.VISIBLE);
         leftInfo.removeAllViews();
         String title=groupTitle(openGroup); String text;
         switch (openGroup) {
-            case "graphics": text = "Resolution, frame rate and the game's own display effects. Changes apply the next time you press PLAY."; break;
+            case "graphics": text = "Resolution, frame rate and the game's own display effects."; break;
             case "display": text = "The same switches as the game's Customize page. The preset fills them in; individual rows override it."; break;
             case "controls": text = "Touch layout, triggers and vibration."; break;
             case "game": text = "Language and the online server."; break;
@@ -952,7 +941,7 @@ public final class LauncherActivity extends Activity {
             case "support": text = "Updates, logs and diagnostics."; break;
             default: text = "";
         }
-        panelHeading(leftInfo,title);
+        infoPanel.setTitle(title);
         TextView body = label(text, 13, MUTED, false);
         body.setPadding(dp(10), dp(8), dp(10), dp(10));
         leftInfo.addView(body);
@@ -963,11 +952,11 @@ public final class LauncherActivity extends Activity {
     private void showOptionInfo(String title) {
         if (leftInfo == null || openGroup == null) return;
         String[] info = OPTION_INFO.get(title);
-        String text = info != null ? info[0] : "Applies the next time you press PLAY.";
+        String text = info != null ? info[0] : "Choose a value from the menu.";
         int gpu = info != null ? Integer.parseInt(info[1]) : 0;
         int cpu = info != null ? Integer.parseInt(info[2]) : 0;
         leftInfo.removeAllViews();
-        panelHeading(leftInfo,title);
+        infoPanel.setTitle(title);
         TextView body = label(text, 13, MUTED, false);
         body.setPadding(dp(10), dp(8), dp(10), dp(12));
         leftInfo.addView(body);
@@ -1038,20 +1027,12 @@ public final class LauncherActivity extends Activity {
         row.setClickable(true);row.setOnClickListener(v -> onClick.run());
         TextView caption=label(title,16,TEXT,true);caption.setDuplicateParentStateEnabled(true);caption.setTextColor(MenuTheme.rowText(this,false));
         row.addView(caption,new LinearLayout.LayoutParams(0,-2,1f));
-        TextView current=label(value,16,TEXT,true);current.setDuplicateParentStateEnabled(true);current.setTextColor(MenuTheme.rowText(this,false));
+        TextView current=label(value,16,TEXT,true);current.setDuplicateParentStateEnabled(true);current.setTextColor(MenuTheme.valueText(this));current.setBackground(MenuTheme.valueBackground(this));current.setPadding(dp(8),dp(4),dp(8),dp(4));
         current.setGravity(Gravity.END);row.addView(current,new LinearLayout.LayoutParams(0,-2,1f));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.topMargin = dp(5);
         row.setLayoutParams(lp);
         return row;
-    }
-
-    private LinearLayout card() {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(16), dp(12), dp(16), dp(12));
-        card.setBackground(MenuTheme.panel(this));
-        return card;
     }
 
     private Button actionButton(String text, boolean primary) {
@@ -1072,14 +1053,6 @@ public final class LauncherActivity extends Activity {
         t.setTextColor(color);
         t.setTypeface(MenuTheme.font(this,bold));t.setLetterSpacing(0);
         return t;
-    }
-
-    /** Title occupies the panel's black top frame, rather than floating inside the gray sheet. */
-    private TextView panelHeading(LinearLayout panel,String title) {
-        TextView text=label(title,20,ACCENT,true);MenuTheme.heading(text);
-        panel.setPadding(dp(4),dp(4),dp(4),dp(8));
-        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);params.bottomMargin=dp(8);
-        panel.addView(text,params);return text;
     }
 
     private void message(String title, String text) {

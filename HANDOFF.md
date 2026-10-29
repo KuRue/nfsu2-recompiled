@@ -1233,3 +1233,23 @@ Debug build passed, installed and visually checked on 192.168.1.169:40615. Verif
 Visual settings and Controls titles, framed vibration picker, Back dismissal and return home.
 No game option changed. Screenshots: /tmp/nfsu2-framed-home.png,
 /tmp/nfsu2-framed-submenu.png and /tmp/nfsu2-framed-picker.png. No gameplay code changed.
+
+## 2026-10-29: pinned Back, lime values and separate rounded translucent bodies
+
+Implemented user's layout refinements in native launcher:
+- Shared MenuPanel separates the translucent black title/frame from the gray body; body has
+  four rounded corners. Frame drawing excludes the body region, avoiding opaque black underlay
+  and the previous inverted-looking top corners. Original header divider replaced by a gap.
+- Submenu and picker Back is pinned above its own scrolling list, with a lime default outline.
+- Setting values are lime on dark translucent fields. Group title tracking is retained.
+- Info panel and Game Files panel share the same 8dp header margin. Subtitle changed to
+  Android Evolved Recomp; removed the global apply-on-play note and its generic info fallback.
+- Main sheets alpha B8, popup sheets D0, frame CC; classic dialog background CE neutral dark.
+
+Build/source checks pass. Installed and checked on 192.168.1.169:40615. Swiped inside the right
+list: contents advanced from benchmark/driver to minimap/synchronization while Back stayed
+fixed. Checked home/info alignment, rounded corners, minimap transparency and preset picker
+Back at top. No preference changed. Source checks passed after popup restructuring; final
+resource-only dialog-opacity adjustment also built. Screenshots under /tmp/nfsu2-panel-* and
+/tmp/nfsu2-picker-pinned-top.png. No gameplay code changed. Tablet/large-font/full physical
+Backbone verification and the broader remaining theme migration are still outstanding.

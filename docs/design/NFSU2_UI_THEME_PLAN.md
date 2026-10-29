@@ -150,3 +150,24 @@ Options at the root; Visual settings, Display detail, Controls, Game, Saves or S
 the corresponding submenu. Refreshing a value does not reset the title to Options.
 Build passed and installed; home, Visual settings, Controls, picker layout and Back navigation
 checked on the S25 Ultra. No game settings were changed.
+
+## Separate translucent sheets and pinned navigation — 2026-10-29
+
+Latest user refinements implemented:
+- Back is above, not inside, the scrolling list in submenus and value pickers; default outline
+  is lime. Root Options hides Back. Submenu navigation resets the list to the top.
+- Current values are lime on small translucent dark fields, separating values from row captions.
+- Left contextual panel and home Game Files panel both start 8dp beneath the same logo/header.
+- Subtitle is exactly Android Evolved Recomp. The global apply-on-play note is removed.
+- The old header rail is replaced by a small black gap and distinct content-sheet corners.
+- MenuPanel owns a rounded translucent black title/frame and a separate gray body with all four
+  corners rounded. Its frame painter leaves a matching hole behind the body: gray is not painted
+  over an opaque black rectangle, so transparency and the corner shape remain correct.
+- Main/popup gray alpha is 184/208 of 255; outer black frame alpha is 204. Existing framework
+  dialog background also changed from nearly opaque green-black to translucent neutral dark.
+
+Verified on phone: home and submenu geometry, pinned Back while scrolling Visual settings,
+value highlights, transparent minimap picker, top-Back preset picker, dismissal and returning
+home. No options were changed. Final debug build and phone source checks pass. Main body/secondary
+contrast over the plain dark backdrop measures 4.84/4.71:1. Future image backdrops must be checked
+again because transparent surfaces composite differently over different scenes.
