@@ -192,3 +192,19 @@ The launcher now has a **Game display settings** section: a Detail preset picker
 (Low/Medium/High/Ultra applying exactly the table above) plus one row per
 setting. With "In-game display menu: Ignored", the game's own page still shows
 the launcher values but its writes are discarded, so the two cannot conflict.
+
+## Verified on the phone (2026-10-29)
+
+Preset High applied from the launcher writes world 2, car geometry 1, car shadow
+2, env map 1 + updates, road reflections 2, light trails/glow/particles/motion
+blur/fog/DOF/overbright on, performance 3, tint 1. The game log shows
+`Display overrides: g_worldlodlevel=2,g_carlodlevel=1,...` and
+`Visual override g_worldlodlevel = 2` for each key, so the runtime receives
+them. Changing a value in the game's own Customize page while locked leaves
+`android_registry.dat` byte-identical — the in-game menu cannot fight the
+launcher.
+
+Benchmark with preset High plus the Midnight look and Subtle bloom:
+77.8 FPS average, 1% low 37.4, 55,185 draw calls/frame, render thread 4.15 ms.
+That is the heaviest configuration measured; 85% resolution or a lower preset
+buys back frame rate.

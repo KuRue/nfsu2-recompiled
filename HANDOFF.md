@@ -1050,3 +1050,11 @@ Detail preset picker (applies the captured bundle to the individual rows) plus
 17 individual settings, and the locked mode ignores all g_* writes. Phone went
 off Wi-Fi before on-device verification of the new UI; next: reconnect, apply
 High, confirm the override log and a benchmark screenshot.
+
+## 2026-10-29: display presets verified on device
+
+High preset from the launcher: override log confirms world 2 / car 1 / shadow 2
+/ env 1 / road 2 / perf 3; in-game edits while locked leave android_registry.dat
+unchanged. Benchmark with High + Midnight + bloom: 77.8 avg / 37.4 1% low /
+55,185 calls (heaviest config). Grading now stacks with presets (individual
+rows take precedence over the older bundle switches).

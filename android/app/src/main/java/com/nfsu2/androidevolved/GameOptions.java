@@ -176,10 +176,9 @@ final class GameOptions {
     static void applyDisplayPreset(Context context, String preset) {
         SharedPreferences.Editor e = prefs(context).edit();
         e.putString(DISPLAY_PRESET, preset);
-        // Bundles would fight the individual rows, so presets clear them.
-        e.putString(LOOK, "0").putString(EFFECTS, "0").putString(ATMOSPHERE, "0")
-                .putString(TREATMENT, "0").putString(DETAIL, "0").putString(REFLECTIONS, "0")
-                .putString(DISPLAY_OWNER, "locked");
+        // Grading stays; the individual display rows already take precedence
+        // over the older bundle switches, so presets and looks stack.
+        e.putString(DISPLAY_OWNER, "locked");
         String[][] low = {
                 {WORLD_DETAIL, "0"}, {CAR_DETAIL, "0"}, {CAR_SHADOW, "0"}, {CAR_HEADLIGHT, "0"},
                 {CAR_ENV_DETAIL, "0"}, {CAR_ENV_UPDATE, "0"}, {ROAD_REFLECT, "0"},
