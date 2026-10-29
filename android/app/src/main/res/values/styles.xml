@@ -9,7 +9,24 @@
         <item name="android:textColorPrimary">@color/neon_text</item>
         <item name="android:textColorSecondary">@color/neon_muted</item>
         <item name="android:fontFamily">sans-serif-condensed</item>
-        <item name="android:windowMinWidthMajor">78%</item>
-        <item name="android:windowMinWidthMinor">78%</item>
+        <item name="android:windowMinWidthMajor">68%</item>
+        <item name="android:windowMinWidthMinor">68%</item>
+        <item name="android:textAppearanceLarge">@style/NeonDialogTitle</item>
+        <item name="android:textAppearanceMedium">@style/NeonDialogBody</item>
+        <item name="android:textAppearanceSmall">@style/NeonDialogSmall</item>
+    </style>
+
+    <style name="NeonDialogTitle" parent="android:TextAppearance.Material.Title">
+        <item name="android:fontFamily">sans-serif-condensed</item>
+        <item name="android:textColor">@color/neon_violet</item>
+        <item name="android:textSize">22sp</item>
+    </style>
+    <style name="NeonDialogBody" parent="android:TextAppearance.Material.Body1">
+        <item name="android:fontFamily">sans-serif-condensed</item>
+        <item name="android:textColor">@color/neon_text</item>
+    </style>
+    <style name="NeonDialogSmall" parent="android:TextAppearance.Material.Body2">
+        <item name="android:fontFamily">sans-serif-condensed</item>
+        <item name="android:textColor">@color/neon_muted</item>
     </style>
 </resources>

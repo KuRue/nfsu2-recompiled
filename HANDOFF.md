@@ -1167,3 +1167,11 @@ while adb screenrecord was active; an instrumented run without recording had a
 Keep the prefetch for cold starts; if the visual vibration still happens
 without recording, capture it phone-side together with the track/car/FPS/HD
 settings.
+
+## 2026-10-29: dialog width/typography polish
+
+The NeonDialog theme now uses a 68% minimum width instead of 78%, so alert
+dialogs are less oversized on the phone. Added condensed title/body text
+appearance styles for the framework dialog list/body where the platform reads
+them; the AlertDialog title itself still uses the framework's own style.
+Verified the narrower cache-reset dialog and the themed benchmark panel.
