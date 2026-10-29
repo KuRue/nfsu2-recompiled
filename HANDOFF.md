@@ -1154,3 +1154,16 @@ TRACKS/STREAML4RA.BUN and the IntroNis06 bundle; HD texture installs near the
 Next fix: cache or memory-map large .bun files / prefetch the track bundle
 before the intro starts, and consider deferring HD installs while the intro
 streams. Settings used for the test (60 FPS, HD off) were restored afterwards.
+
+## 2026-10-29: race asset prefetch + intro measurement
+
+Added a background prefetch for large read-only .bun/.big/.pak/.lzc assets when
+the game opens them, plus a persistent `.android_last_track` marker so the last
+track bundle is warmed at the next game start. Instrumented run: the 113 MiB
+track bundle prefetch completed in 80 ms, HD installs measured 0-44 ms, and no
+guest read exceeded 5 ms. The earlier 549-575 ms intro stalls only reproduced
+while adb screenrecord was active; an instrumented run without recording had a
+50 ms worst intro frame and the player physics log stayed at forward=0.00.
+Keep the prefetch for cold starts; if the visual vibration still happens
+without recording, capture it phone-side together with the track/car/FPS/HD
+settings.

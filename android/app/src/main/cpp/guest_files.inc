@@ -29,6 +29,69 @@ bool discCheckSwitch(const std::filesystem::path& path){
 // Where each open handle came from, for a capture: path relative to the game root and access.
 struct FileOrigin{std::string relative;uint32_t access=0;};
 std::map<uint32_t,FileOrigin> fileOrigins;
+#if defined(__ANDROID__)
+// Race intro assets are opened and read synchronously on the guest thread. The
+// 118 MB track .BUN alone can block a frame for over half a second. Warm the
+// page cache from a low-priority worker as soon as the file is opened, so the
+// guest's normal read() hits resident pages instead of waiting on storage.
+std::mutex prefetchGuard;
+std::map<std::string,std::chrono::steady_clock::time_point> prefetchedAssets;
+std::atomic<int> prefetchRunning{0};
+void prefetchLargeAsset(const std::filesystem::path& path){
+    std::error_code error;auto size=std::filesystem::file_size(path,error);
+    if(error||size<8ull*1024*1024||size>512ull*1024*1024)return;
+    auto extension=lower(path.extension().string());
+    if(extension!=".bun"&&extension!=".big"&&extension!=".pak"&&extension!=".lzc")return;
+    const auto now=std::chrono::steady_clock::now();std::string key=path.string();
+    {
+        std::lock_guard<std::mutex> lock(prefetchGuard);
+        auto found=prefetchedAssets.find(key);
+        if(found!=prefetchedAssets.end()&&now-found->second<std::chrono::seconds(20))return;
+        if(prefetchRunning.load()>=2)return;
+        prefetchedAssets[key]=now;++prefetchRunning;
+    }
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Asset prefetch start %s (%.1f MiB)",path.filename().string().c_str(),size/1048576.0);
+    std::thread([path]{
+        auto started=std::chrono::steady_clock::now();setpriority(PRIO_PROCESS,0,10);
+        int descriptor=::open(path.c_str(),O_RDONLY|O_CLOEXEC);
+        if(descriptor>=0){
+#ifdef POSIX_FADV_WILLNEED
+            posix_fadvise(descriptor,0,0,POSIX_FADV_WILLNEED);
+#endif
+            std::vector<uint8_t> buffer(4u*1024u*1024u);off_t offset=0;
+            while(::pread(descriptor,buffer.data(),buffer.size(),offset)>0)offset+=off_t(buffer.size());
+            ::close(descriptor);
+        }
+        auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-started).count();
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Asset prefetch done %s %lld ms",path.filename().string().c_str(),(long long)elapsed);
+        --prefetchRunning;
+    }).detach();
+}
+// Remember the last track bundle the game streamed and warm it on the next
+// launch. The file is small and keeps the 118 MB read out of the intro.
+std::string lastTrackWritten;
+void rememberTrackAsset(const std::filesystem::path& path){
+    try{
+        auto relative=path.lexically_relative(std::filesystem::weakly_canonical(hostGameRoot));
+        auto first=relative.begin();
+        if(first==relative.end()||lower(first->string())!="tracks")return;
+        if(lower(path.extension().string())!=".bun")return;
+        auto value=relative.generic_string();if(value==lastTrackWritten)return;lastTrackWritten=value;
+        std::ofstream out(std::filesystem::path(hostGameRoot)/".android_last_track",std::ios::binary|std::ios::trunc);
+        out<<value;
+    }catch(...){}
+}
+void warmLastTrackAsset(){
+    try{
+        std::ifstream in(std::filesystem::path(hostGameRoot)/".android_last_track",std::ios::binary);
+        std::string relative;std::getline(in,relative);if(relative.empty())return;
+        auto root=std::filesystem::weakly_canonical(hostGameRoot);
+        auto path=std::filesystem::weakly_canonical(root/relative);
+        for(const auto& part:path.lexically_relative(root))if(part=="..")return;
+        prefetchLargeAsset(path);
+    }catch(...){}
+}
+#endif
 bool closeGuestFile(uint32_t handle){auto file=fileHandles.find(handle);if(file==fileHandles.end())return false;::close(file->second);fileHandles.erase(file);fileOrigins.erase(handle);return true;}
 void fileType(){
     uint32_t handle=arg(0);
@@ -61,7 +124,11 @@ void createFile(){
     int descriptor=disposition==3&&!(access&0x40000000u)&&discCheckSwitch(path) ? ::open("/dev/null",O_RDONLY|O_CLOEXEC) : ::open(path.c_str(),options|O_CLOEXEC,0600);
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest file %s access=%x disposition=%u",path.filename().string().c_str(),access,disposition);
     if(descriptor<0){lastError=fileError();ret(UINT32_MAX,7);return;}uint32_t handle=nextFileHandle++;fileHandles.emplace(handle,descriptor);
-    fileOrigins[handle]=FileOrigin{path.lexically_relative(std::filesystem::weakly_canonical(hostGameRoot)).generic_string(),access};lastError=(disposition==2||disposition==4)&&existed?183:0;ret(handle,7);
+    fileOrigins[handle]=FileOrigin{path.lexically_relative(std::filesystem::weakly_canonical(hostGameRoot)).generic_string(),access};
+#if defined(__ANDROID__)
+    if(options==O_RDONLY){prefetchLargeAsset(path);rememberTrackAsset(path);}
+#endif
+    lastError=(disposition==2||disposition==4)&&existed?183:0;ret(handle,7);
 }
 #ifdef NFS_RESUMABLE
 // Restore: reopen each captured handle by path with its access, at its position. Never creates
@@ -88,7 +155,12 @@ void createFile(){
 #endif
 void readFile(){
     auto file=fileHandles.find(arg(0));if(file==fileHandles.end()){lastError=6;ret(0,5);return;}if(arg(4))throw GuestStop("Overlapped ReadFile pending");
-    if(arg(3))write32(arg(3),0);ssize_t count;do{count=::read(file->second,ptr(arg(1),arg(2)),arg(2));}while(count<0&&errno==EINTR);
+    if(arg(3))write32(arg(3),0);
+    auto started=std::chrono::steady_clock::now();
+    ssize_t count;do{count=::read(file->second,ptr(arg(1),arg(2)),arg(2));}while(count<0&&errno==EINTR);
+    auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-started).count();
+    if(elapsed>=40||arg(2)>=1024u*1024u){auto origin=fileOrigins.find(arg(0));
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest read %s %u bytes %lld ms",origin!=fileOrigins.end()?origin->second.relative.c_str():"?",arg(2),(long long)elapsed);}
     if(count<0){lastError=fileError();ret(0,5);return;}if(arg(3))write32(arg(3),count);ret(1,5);
 }
 void writeFile(){

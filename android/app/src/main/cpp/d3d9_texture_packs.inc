@@ -44,6 +44,7 @@ void installPackedTexture(uint32_t address,nfs_tex::Pack* pack,const nfs_tex::En
     uint64_t replacementBytes=nfs_tex::bytes(e->w,e->h,format,e->levels);
     uint64_t originalBytes=nfs_tex::bytes(desc.Width,desc.Height,desc.Format,texture->GetLevelCount());
     if(!replacementBytes||packedTextures.size()>=4096||replacementBytes+originalBytes>texturePackBudget-packedBytes){device->Release();return;}
+    auto started=std::chrono::steady_clock::now();
     IDirect3DTexture9* replacement=nullptr;
     HRESULT status=device->CreateTexture(e->w,e->h,e->levels,0,format,D3DPOOL_MANAGED,&replacement,nullptr);device->Release();
     if(FAILED(status))return;
@@ -77,7 +78,8 @@ void installPackedTexture(uint32_t address,nfs_tex::Pack* pack,const nfs_tex::En
         try{packedOriginals.emplace(key,inserted.first->second.get());}
         catch(...){packedTextures.erase(inserted.first);throw;}
         packedBytes+=replacementBytes+originalBytes;
-        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","HD texture %08x %ux%u -> %ux%u, resident budget %.1f MiB",address,e->ow,e->oh,e->w,e->h,packedBytes/1048576.0);
+        auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-started).count();
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","HD texture %08x %ux%u -> %ux%u, resident budget %.1f MiB, %lld ms",address,e->ow,e->oh,e->w,e->h,packedBytes/1048576.0,(long long)elapsed);
     }catch(const std::exception& error){if(replacement)replacement->Release();NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","HD texture fallback: %s",error.what());}
 }
 void texturePackUpload(uint32_t address,uint32_t level){

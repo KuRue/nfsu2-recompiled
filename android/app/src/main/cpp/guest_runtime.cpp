@@ -46,6 +46,7 @@
 #include <filesystem>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/resource.h>
 #include <cerrno>
 #include <deque>
 #ifdef __ANDROID__
@@ -1620,6 +1621,9 @@ std::string connectGuestRuntime(const char* executable) {
         memory=std::make_unique<GuestMemory>();
         guestExecutable=executable;
         hostGameRoot=std::string(executable); hostGameRoot=hostGameRoot.substr(0,hostGameRoot.find_last_of('/'));
+#if defined(__ANDROID__)
+        warmLastTrackAsset();
+#endif
         g_mem_base=reinterpret_cast<ptrdiff_t>(memory->base());
         testGuestHeaps(*memory);
         NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest heaps passed ownership, realloc preservation, zero tail, in-place failure and reuse checks");
