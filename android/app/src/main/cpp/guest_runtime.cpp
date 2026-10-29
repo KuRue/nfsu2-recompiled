@@ -625,6 +625,7 @@ void serviceGuestSoundTick();
 // (0x603327, JOY_EVENT_AUTO_PILOT 0xB5) still sets the requested mode at player+0x230,
 // but no control is bound to that event. 0x8900AC is the player; +0x22C is its current
 // mode (2 car racing, 4 auto pilot). The property is read every 2 s.
+uint32_t callGuest(uint32_t va,const uint32_t* args,size_t count,uint32_t cleanup,bool threadStart);
 void maybeAutopilot(){
 #if defined(__ANDROID__)&&!defined(NFSU2_EXE_F4BB0D99)
     static int wanted=0;static auto lastRead=std::chrono::steady_clock::time_point{};static uint32_t logged=~0u;
@@ -633,8 +634,7 @@ void maybeAutopilot(){
         __system_property_get("debug.nfs.autopilot",value);wanted=std::atoi(value);}
     // A benchmark run always drives itself.
     if(benchmarkSeconds.load(std::memory_order_relaxed))wanted=1;
-    static int dumpWanted=0;if(now-lastRead<std::chrono::milliseconds(50)){char v[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.dumprace",v);dumpWanted=std::atoi(v);}
-    if((!wanted&&!dumpWanted)||!memory||!memory->readable(0x8900acu,4))return;
+    if(!memory||!memory->readable(0x8900acu,4))return;
     auto* base=static_cast<uint8_t*>(memory->base());
     uint32_t player;std::memcpy(&player,base+0x8900acu,4);
     if(!player||!memory->readable(player+0x22cu,8))return;
@@ -650,6 +650,21 @@ void maybeAutopilot(){
                     used+=std::snprintf(line+used,sizeof line-used," %08x",word);}
                 NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSRaceDump","%08x:%s",at,line);}}}
     if(wanted&&mode[0]==2&&mode[1]==2){uint32_t pilot=4;std::memcpy(base+player+0x230u,&pilot,4);}
+    // Experiment: `debug.nfs.showcase 1` switches the player's camera to the game's showcase
+    // camera (sub_00501290(true): camera type 20) once, after the race has been running a while.
+    {static int showcase=-1;static unsigned racingFrames=0;
+        if(showcase<0){char v[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.showcase",v);showcase=std::atoi(v);}
+        if(showcase>0&&mode[0]==2&&++racingFrames==60){
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","showcase camera on");
+            State saved;saved.save();const uint32_t on=1;callGuest(0x501290u,&on,1,0,false);saved.load();showcase=0;
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","showcase camera call returned");}}
+    // Experiment: `debug.nfs.hudcycle 1` steps the HUD mode byte (player+0x28) through 0..3, 2 s each.
+    {static int cycle=-1;static auto since=std::chrono::steady_clock::time_point{};static int shown=-1;
+        if(cycle<0){char v[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.hudcycle",v);cycle=std::atoi(v);}
+        if(cycle>0&&mode[0]==2){auto clock=std::chrono::steady_clock::now();if(since==std::chrono::steady_clock::time_point{})since=clock;
+            int step=int(std::chrono::duration_cast<std::chrono::seconds>(clock-since).count()/3);
+            if(step>=2&&step<6&&memory->writable(player+0x28u,1)){uint8_t hud=uint8_t(step-2);std::memcpy(base+player+0x28u,&hud,1);
+                if(hud!=shown){shown=hud;NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","hud mode %u",hud);}}}}
     autopilotDriving.store(mode[0]==4,std::memory_order_relaxed);
 #endif
 }
