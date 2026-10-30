@@ -1336,3 +1336,11 @@ Saves list, racing HUD/editor and live benchmark panel. The phone dropped adb
 while the benchmark result was finishing, so the result screenshot is missing.
 Remaining: category icon strip/backdrop/logo, preview HUD-off, tablet/large-font
 and full controller traversal.
+
+### HUD dialog contrast fix
+
+HudDialog now overrides the body text to light and the footer actions to lime;
+the silver MenuDialog keeps dark body/actions. Verified the benchmark result
+dialog with a temporary report in the normal format (the launcher deletes it
+after display) and the live panel on the phone. No settings were changed by
+the synthetic report beyond the existing last-benchmark summary.

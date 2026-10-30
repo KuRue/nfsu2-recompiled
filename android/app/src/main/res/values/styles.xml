@@ -52,6 +52,19 @@
         <item name="android:windowBackground">@drawable/dialog_hud</item>
         <item name="android:textColorPrimary">@color/menu_white</item>
         <item name="android:textColorSecondary">@color/menu_disabled</item>
+        <item name="android:textAppearanceMedium">@style/HudDialogBodyText</item>
+        <item name="android:textAppearanceSmall">@style/HudDialogSmallText</item>
+        <item name="android:buttonBarButtonStyle">@style/HudDialogButton</item>
+    </style>
+
+    <style name="HudDialogBodyText" parent="MenuDialogBodyText">
+        <item name="android:textColor">@color/menu_white</item>
+    </style>
+    <style name="HudDialogSmallText" parent="MenuDialogSmallText">
+        <item name="android:textColor">@color/menu_disabled</item>
+    </style>
+    <style name="HudDialogButton" parent="MenuDialogButton">
+        <item name="android:textColor">@color/menu_lime</item>
     </style>
 
     <style name="MenuDialogTitleText" parent="android:TextAppearance.Material.Title">
