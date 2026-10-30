@@ -1767,3 +1767,12 @@ rule could be retested. Two follow-ups are in the build for that next session:
 the client sends an explicit {"t":"lan","on":1} after its hello (a queued
 hello keeps its own messages; this makes the routing state unambiguous), and
 the first five 9999 announcements are logged as "announcement from ...".
+
+## 2026-10-30: armeabi-v7a build
+
+`bash gradlew assembleDebug -PnfsAbi=armeabi-v7a` builds a 76 MB 32-bit APK
+(same sources; arm64 is the default and was saved aside). It installs and
+launches on an Amigo7xESP (Amlogic, Android 12, armeabi-v7a): the launcher and
+Support > Test nfsu2.xyz work, welcome 10.77.14.146 and 2,040 relayed frames.
+The game itself cannot start there: the device has 1.0 GB free and no external
+volume, while the game folder is 3.0 GB; `/sdcard/nfsu2` is absent.
