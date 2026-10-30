@@ -210,8 +210,16 @@ void sleepEx(){
     ret(0,2);
 }
 void exitProcess() {
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest ExitProcess(%u) from %08x",arg(0),g_cur_func);
     guestExitRequestedFlag.store(true,std::memory_order_release);
     throw GuestStop("Guest requested ExitProcess("+std::to_string(arg(0))+") from "+hex(g_cur_func));
+}
+void terminateProcess() {
+    // The game's shutdown helpers call GetCurrentProcess + TerminateProcess.
+    // Treat it as Quit Game instead of stopping on an unimplemented HLE.
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest TerminateProcess(handle=%08x code=%u) from %08x",arg(0),arg(1),g_cur_func);
+    guestExitRequestedFlag.store(true,std::memory_order_release);
+    throw GuestStop("Guest requested TerminateProcess("+std::to_string(arg(1))+") from "+hex(g_cur_func));
 }
 void debugString() {NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest: %s",guestString(arg(0)).c_str());ret(0,1);}
 void deleteGdiObject(){lastError=6;ret(0,1);} // No GDI-created objects are registered yet.
@@ -515,5 +523,5 @@ const std::map<std::string,recomp_func_t> kernelFunctions={
     {"GetTickCount",tickCount},{"QueryPerformanceCounter",performanceCounter},
     {"QueryPerformanceFrequency",performanceFrequency},{"GetSystemTimeAsFileTime",systemFileTime},
     {"FileTimeToLocalFileTime",fileTimeToLocalFileTime},{"FileTimeToSystemTime",fileTimeToSystemTime},
-    {"GetSystemInfo",systemInfo},{"Sleep",sleepShim},{"SleepEx",sleepEx},{"ExitProcess",exitProcess},{"OutputDebugStringA",debugString}
+    {"GetSystemInfo",systemInfo},{"Sleep",sleepShim},{"SleepEx",sleepEx},{"ExitProcess",exitProcess},{"TerminateProcess",terminateProcess},{"OutputDebugStringA",debugString}
 };

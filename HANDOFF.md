@@ -1494,3 +1494,12 @@ installed build and will print the exception code if it happens again.
 GameActivity now sets `android:importantForAutofill="noExcludeDescendants"`.
 The in-game "Type in the game" dialog was triggering Bitwarden's autofill
 sheet over the race; the activity no longer participates in autofill.
+
+## 2026-10-30: Quit Game also covers TerminateProcess
+
+The launcher return was verified through ExitProcess, but the game's shutdown
+helpers can also call GetCurrentProcess + TerminateProcess (guest 0x75D4E2).
+TerminateProcess had no HLE implementation, so that path surfaced as
+"HLE pendiente". It now logs the handle/code, sets the same guest exit request
+and follows the launcher-return path. Built; the phone went offline before this
+APK could be installed and the actual Quit Game button retested.
