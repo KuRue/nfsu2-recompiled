@@ -1605,3 +1605,20 @@ to the Welcome screen; pressing OK went to Create New Account. No account was
 created and no credentials were entered. Further online testing needs an
 account created for/with the server, or the user's existing account entered on
 the phone.
+
+## 2026-10-30: eahub account/server research
+
+eahub.eu runs a-blondel/ea-nation-server (GPL-3.0), an EA Nation emulator
+with its own ACCOUNT/PERSONA database. The game's "EA Account" labels are
+legacy; no ea.com/Origin account is involved.
+
+The project's support table marks Need for Speed: Underground 2 (PC) as
+"✅ 🔒 Currently not public". Its public application.yml has no PC_NFS05
+entry: it lists PS2_NFS05 on 20900 and PC_NFS06 (Most Wanted) on 30920 only.
+The production server still answers on 20920/20921 and serves the public
+welcome/ToS through content.eahub.eu, which is why our test reached the
+welcome screen but the login flow fell back to Create New Account.
+
+Options: ask the EA Nation Hub Discord (discord.gg/fwrQHHxrQQ) about NFSU2 PC
+access, or self-host ea-nation-server locally with a PC_NFS05 config and point
+the launcher's Online server at it. No account was created on eahub.
