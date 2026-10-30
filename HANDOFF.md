@@ -1622,3 +1622,13 @@ welcome screen but the login flow fell back to Create New Account.
 Options: ask the EA Nation Hub Discord (discord.gg/fwrQHHxrQQ) about NFSU2 PC
 access, or self-host ea-nation-server locally with a PC_NFS05 config and point
 the launcher's Online server at it. No account was created on eahub.
+
+## 2026-10-30: nfsu2.xyz server compatibility
+
+nfsu2.xyz is th0mk/nfsu2-web, the PC game recompiled to WebAssembly/WebGPU.
+Its `web/server-rs` server is a custom HTTP/WebSocket multiplayer service for
+the browser client: it serves the page/module/game folder and synchronizes
+browser players. It has no EA Nation account/persona protocol and no EA Nation
+TCP ports. The native port cannot join it by changing onlineServer; the native
+game still speaks EA Nation TCP. Native online therefore needs an EA Nation
+emulator (eahub access or a self-hosted ea-nation-server), not nfsu2.xyz.
