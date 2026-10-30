@@ -1592,3 +1592,16 @@ the launcher value picker from 520dp to 440dp. Verified the side sheet on the
 phone (title screen, game visible on the right, full tab labels). The launcher
 picker was not captured because the device's touch input returned to the home
 screen during the check.
+
+## 2026-10-30: online server reachability test
+
+Using the default onlineServer (eahub.eu), Online reached the community server:
+- pcnfs05.ea.com resolved via eahub.eu to 51.254.141.170;
+- TCP connects to 20921 and 20920 succeeded;
+- content.eahub.eu:80 served the welcome/terms content;
+- the game displayed the EA Nation Hub welcome message.
+The "Use Existing EA Account" path downloaded Terms & Conditions and returned
+to the Welcome screen; pressing OK went to Create New Account. No account was
+created and no credentials were entered. Further online testing needs an
+account created for/with the server, or the user's existing account entered on
+the phone.
