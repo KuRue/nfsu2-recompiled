@@ -1643,3 +1643,23 @@ game instead uses EA Nation TCP and the original LAN UDP. A native "nfsu2.xyz"
 option therefore needs a new WebSocket client and game-network hook, not just
 a different host string. A provider selector for EA Nation and native LAN is
 straightforward; native nfsu2.xyz support is a separate protocol project.
+
+## 2026-10-30: nfsu2.xyz client port is feasible
+
+Correction to the earlier "not compatible" note: the client implementation
+exists and can be ported. nfsu2-web's runtime/web/net_lan.c is the browser's
+virtual-LAN backend (Winsock LAN calls -> virtual IP stack -> NET_KIND_LAN_*
+frames), and web/src/net/index.ts handles the /lan WebSocket, hello, virtual
+address and framing. The server's /lan switch speaks that protocol for LAN,
+free roam and Online.
+
+A native option therefore needs:
+- a WebSocket+TLS client to wss://nfsu2.xyz/lan with the server's Origin and
+  hello/subprotocol;
+- a port of net_lan.c's virtual UDP/TCP/ICMP state machine into the native
+  Winsock HLE (or a shared backend);
+- the page-side framing/hello logic from net/index.ts;
+- testing against the live switch and a browser client.
+
+This is a real feature (multi-day port), not a host/port setting, but it is
+feasible and would unlock nfsu2.xyz LAN/free roam/Online for the native game.
