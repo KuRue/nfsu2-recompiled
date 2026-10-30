@@ -1448,3 +1448,22 @@ RaiseException HLE diagnostic (code/flags/arguments and a clear stop message)
 is in the build; it needs another reproduction to identify the floating-point
 exception code. The phone was offline before the diagnostic APK could be
 tested.
+
+## 2026-10-30: app-owned surfaces themed; LAN/FP diagnostics
+
+The remaining app-owned chrome now uses the same black band / lime heading /
+Barlow typography as the launcher:
+- The in-game startup/status popup is a black rounded band with a lime
+  "NFSU2 Android Evolved" heading and a light body instead of a stock TextView.
+- GpuProbeActivity has a themed title/body/auto-close note.
+- NeonToast uses the silver/black/lime palette and menu body font.
+- Type-in-the-game and tilt-steering forms set the menu body face and size.
+
+Diagnostics for the two open issues:
+- Wi-Fi/Ethernet interfaces are ranked ahead of cellular/VPN/p2p for local
+  gethostbyname and SIO_GET_INTERFACE_LIST, so the game advertises the LAN
+  address. SO_BROADCAST enable/disable now logs as "LAN broadcast ...".
+- RaiseException logs the exception code, flags, argument count and up to eight
+  arguments. `debug.nfs.ignorefpe 1` makes floating-point exception codes
+  (0xC000008C..0xC0000093) return as if handled, for a controlled experiment;
+  it is off by default. The drift-race reproduction still needs the phone.

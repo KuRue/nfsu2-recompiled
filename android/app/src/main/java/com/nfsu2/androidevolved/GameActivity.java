@@ -92,15 +92,15 @@ public final class GameActivity extends NativeActivity {
         if(tiltSensor==null) {NeonToast.show(this,"This device has no accelerometer",Toast.LENGTH_LONG);return;}
         android.content.SharedPreferences options=getSharedPreferences("touch_layouts_v1",MODE_PRIVATE);
         LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(24),dp(8),dp(24),dp(8));
-        CheckBox enabled=new CheckBox(this);enabled.setText("Steer by tilting the phone");enabled.setChecked(tiltEnabled);enabled.setTextColor(MenuTheme.color(this,R.color.menu_ink));enabled.setButtonTintList(android.content.res.ColorStateList.valueOf(MenuTheme.color(this,R.color.menu_lime)));form.addView(enabled);
-        CheckBox invert=new CheckBox(this);invert.setText("Invert steering");invert.setChecked(tiltInvert);invert.setTextColor(MenuTheme.color(this,R.color.menu_ink));invert.setButtonTintList(android.content.res.ColorStateList.valueOf(MenuTheme.color(this,R.color.menu_lime)));form.addView(invert);
-        TextView label=new TextView(this);label.setText("Sensitivity: "+tiltSensitivity+"×");label.setTextColor(MenuTheme.color(this,R.color.menu_ink));form.addView(label);
+        CheckBox enabled=new CheckBox(this);enabled.setText("Steer by tilting the phone");enabled.setChecked(tiltEnabled);enabled.setTypeface(MenuTheme.font(this,false));enabled.setTextSize(15);enabled.setTextColor(MenuTheme.color(this,R.color.menu_ink));enabled.setButtonTintList(android.content.res.ColorStateList.valueOf(MenuTheme.color(this,R.color.menu_lime)));form.addView(enabled);
+        CheckBox invert=new CheckBox(this);invert.setText("Invert steering");invert.setChecked(tiltInvert);invert.setTypeface(MenuTheme.font(this,false));invert.setTextSize(15);invert.setTextColor(MenuTheme.color(this,R.color.menu_ink));invert.setButtonTintList(android.content.res.ColorStateList.valueOf(MenuTheme.color(this,R.color.menu_lime)));form.addView(invert);
+        TextView label=new TextView(this);label.setText("Sensitivity: "+tiltSensitivity+"×");label.setTypeface(MenuTheme.font(this,false));label.setTextSize(15);label.setTextColor(MenuTheme.color(this,R.color.menu_ink));form.addView(label);
         android.widget.SeekBar sensitivity=new android.widget.SeekBar(this);sensitivity.setMax(30);sensitivity.setProgress(Math.round(tiltSensitivity*10)-10);sensitivity.setProgressTintList(android.content.res.ColorStateList.valueOf(MenuTheme.color(this,R.color.menu_lime)));sensitivity.setThumbTintList(android.content.res.ColorStateList.valueOf(MenuTheme.color(this,R.color.menu_lime)));sensitivity.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0x33262626));form.addView(sensitivity);
         sensitivity.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
             public void onStartTrackingTouch(android.widget.SeekBar bar) {}public void onStopTrackingTouch(android.widget.SeekBar bar) {}
             public void onProgressChanged(android.widget.SeekBar bar,int progress,boolean user) {label.setText("Sensitivity: "+((progress+10)/10f)+"×");}
         });
-        TextView help=new TextView(this);help.setText("Hold the phone in your playing position when applying. Tilt steers left/right; the pedals remain touch controls.");help.setTextColor(MenuTheme.color(this,R.color.menu_secondary));form.addView(help);
+        TextView help=new TextView(this);help.setText("Hold the phone in your playing position when applying. Tilt steers left/right; the pedals remain touch controls.");help.setTypeface(MenuTheme.font(this,false));help.setTextSize(13);help.setTextColor(MenuTheme.color(this,R.color.menu_secondary));form.addView(help);
         MenuTheme.dialog(this, "Tilt steering").setView(form)
                 .setPositiveButton("Apply and calibrate",(dialog,which)->{
                     tiltEnabled=enabled.isChecked();tiltInvert=invert.isChecked();tiltSensitivity=(sensitivity.getProgress()+10)/10f;
@@ -308,6 +308,8 @@ public final class GameActivity extends NativeActivity {
     private void showTextInput() {
         EditText name = new EditText(this);
         name.setSingleLine(true);
+        name.setTypeface(MenuTheme.font(this,false));
+        name.setTextSize(16);
         name.setTextColor(MenuTheme.color(this,R.color.menu_ink));
         name.setHintTextColor(MenuTheme.color(this,R.color.menu_secondary));
         name.setHint("Name, email, or password");
@@ -317,6 +319,7 @@ public final class GameActivity extends NativeActivity {
         name.setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         CheckBox replace = new CheckBox(this);
         replace.setText("Replace the current text");replace.setChecked(true);
+        replace.setTypeface(MenuTheme.font(this,false));replace.setTextSize(15);
         replace.setTextColor(MenuTheme.color(this,R.color.menu_ink));replace.setButtonTintList(android.content.res.ColorStateList.valueOf(MenuTheme.color(this,R.color.menu_lime)));
         LinearLayout form = new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(20), 0, dp(20), 0);form.addView(name);form.addView(replace);
@@ -418,15 +421,31 @@ public final class GameActivity extends NativeActivity {
         String[] loader = launch.getStringArrayExtra("driverLoader");
         if (loader == null || loader.length != 4) loader = GpuDrivers.loaderArguments(this);
         nativeGpuDriver(loader[0], loader[1], loader[2], loader[3]);
-        status = new TextView(this);
-        status.setTextColor(Color.WHITE);
-        status.setBackgroundColor(0xb0000000);
-        status.setTextSize(18);
-        status.setPadding(24, 16, 24, 16);
-        status.setText("NFSU2 Android Evolved\nChecking Internal storage/nfsu2…");
         // NativeActivity gives its main window surface to Vulkan; use a separate
-        // non-interactive popup surface for the diagnostic text.
-        statusWindow = new PopupWindow(status, ViewGroup.LayoutParams.WRAP_CONTENT,
+        // non-interactive popup surface for the diagnostic text. Own the whole
+        // panel so it matches the launcher's black band / lime heading / light body.
+        LinearLayout statusPanel = new LinearLayout(this);
+        statusPanel.setOrientation(LinearLayout.VERTICAL);
+        statusPanel.setPadding(dp(18), dp(10), dp(18), dp(12));
+        android.graphics.drawable.GradientDrawable statusBackground = new android.graphics.drawable.GradientDrawable();
+        statusBackground.setColor(0xE6101010);
+        statusBackground.setCornerRadius(dp(6));
+        statusBackground.setStroke(dp(1), MenuTheme.color(this, R.color.menu_lime));
+        statusPanel.setBackground(statusBackground);
+        TextView statusTitle = new TextView(this);
+        statusTitle.setText("NFSU2 Android Evolved");
+        statusTitle.setTypeface(MenuTheme.font(this, true));
+        statusTitle.setTextSize(18);
+        statusTitle.setTextColor(MenuTheme.color(this, R.color.menu_lime));
+        statusPanel.addView(statusTitle);
+        status = new TextView(this);
+        status.setTypeface(MenuTheme.font(this, false));
+        status.setTextColor(0xFFEDEDED);
+        status.setTextSize(15);
+        status.setLineSpacing(dp(2), 1f);
+        status.setText("Checking Internal storage/nfsu2…");
+        statusPanel.addView(status);
+        statusWindow = new PopupWindow(statusPanel, ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT, false);
         statusWindow.setTouchable(false);
         touchControls = new RacingControlsView(this, this::setTouchKey, this::showTextInput,this::showTiltOptions,this::showFrameLimitOptions,this::showGraphicsPanel);
@@ -510,7 +529,7 @@ public final class GameActivity extends NativeActivity {
                 if(statusWindow.isShowing())statusWindow.dismiss();
             } else {
                 statusHidden=false;
-                status.setText("NFSU2 Android Evolved\n" + message);
+                status.setText(message);
                 if (!statusWindow.isShowing() && hasWindowFocus())
                     statusWindow.showAtLocation(getWindow().getDecorView(), Gravity.TOP | Gravity.START, 0, 0);
             }

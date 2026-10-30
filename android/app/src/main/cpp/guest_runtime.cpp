@@ -551,6 +551,16 @@ void raiseException() {
         code,flags,count,arguments,g_cur_func);
     if(arguments&&count<=8)for(uint32_t i=0;i<count;++i)
         if(memory->readable(arguments+i*4,4))NFS_RUNTIME_LOG(ANDROID_LOG_ERROR,"NFSU2","  exception arg[%u]=%08x",i,read32(arguments+i*4));
+    // Development escape hatch for a floating-point exception the Windows CRT
+    // would filter: continue as if the filter handled it, so the next frames
+    // show whether the game state survived. Off by default.
+    if(code>=0xC000008Cu&&code<=0xC0000093u){
+        char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.ignorefpe",value);
+        if(std::atoi(value)){
+            NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Ignoring FP exception %08x for development",code);
+            ret(0,4);return;
+        }
+    }
     throw GuestStop("Guest RaiseException "+hex(code)+" desde "+hex(g_cur_func));
 }
 void getVersion() {

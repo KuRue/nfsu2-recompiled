@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Process;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /**
@@ -19,11 +20,36 @@ public final class GpuProbeActivity extends Activity {
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setGravity(android.view.Gravity.CENTER);
+        panel.setPadding(MenuTheme.dp(this, 28), MenuTheme.dp(this, 20),
+                MenuTheme.dp(this, 28), MenuTheme.dp(this, 20));
+        panel.setBackgroundColor(0xFF101010);
+        TextView title = new TextView(this);
+        title.setText("Vulkan driver test");
+        title.setTypeface(MenuTheme.font(this, true));
+        title.setTextSize(22);
+        title.setTextColor(MenuTheme.color(this, R.color.menu_lime));
+        title.setGravity(android.view.Gravity.CENTER);
+        panel.addView(title);
         TextView status = new TextView(this);
         status.setText("Checking the Vulkan driver…");
-        status.setTextColor(0xFFFFFFFF); status.setTextSize(18);
-        status.setGravity(android.view.Gravity.CENTER); status.setBackgroundColor(0xFF0B0F14);
-        setContentView(status);
+        status.setTypeface(MenuTheme.font(this, false));
+        status.setTextColor(0xFFEDEDED);
+        status.setTextSize(16);
+        status.setGravity(android.view.Gravity.CENTER);
+        status.setPadding(0, MenuTheme.dp(this, 10), 0, 0);
+        panel.addView(status);
+        TextView note = new TextView(this);
+        note.setText("This screen closes automatically.");
+        note.setTypeface(MenuTheme.font(this, false));
+        note.setTextColor(MenuTheme.color(this, R.color.menu_secondary));
+        note.setTextSize(12);
+        note.setGravity(android.view.Gravity.CENTER);
+        note.setPadding(0, MenuTheme.dp(this, 14), 0, 0);
+        panel.addView(note);
+        setContentView(panel);
         Handler main = new Handler(Looper.getMainLooper());
         main.postDelayed(() -> finishReport("{\"probeError\":\"The driver test exceeded 20 seconds\",\"driverLoadFailed\":true}"), 20000);
         String[] loader = GpuDrivers.loaderArguments(this);

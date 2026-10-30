@@ -396,7 +396,10 @@ void socketOption(){
         switch(name){
         case 0x0004:result=set(SOL_SOCKET,SO_REUSEADDR,integer());break;
         case 0x0008:result=set(SOL_SOCKET,SO_KEEPALIVE,integer());break;
-        case 0x0020:{int enabled=integer()?1:0;result=set(SOL_SOCKET,SO_BROADCAST,enabled);if(!result){socket->broadcast=enabled!=0;net::publishLanBroadcasts();}break;}
+        case 0x0020:{int enabled=integer()?1:0;result=set(SOL_SOCKET,SO_BROADCAST,enabled);
+            if(!result){socket->broadcast=enabled!=0;net::publishLanBroadcasts();
+                NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","LAN broadcast %s on socket %08x",enabled?"enabled":"disabled",arg(0));}
+            break;}
         case 0x0100:result=set(SOL_SOCKET,SO_OOBINLINE,integer());break;
         case 0x1001:result=set(SOL_SOCKET,SO_SNDBUF,integer());break;
         case 0x1002:result=set(SOL_SOCKET,SO_RCVBUF,integer());break;

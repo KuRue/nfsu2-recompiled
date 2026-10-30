@@ -18,15 +18,16 @@ final class NeonToast {
         float density = context.getResources().getDisplayMetrics().density;
         TextView view = new TextView(context);
         view.setText(text);
-        view.setTextColor(0xFFF2FFF0);
+        view.setTypeface(MenuTheme.font(context, false));
+        view.setTextColor(0xFFF2F2F2);
         view.setTextSize(13);
         int padH = Math.round(16 * density);
         int padV = Math.round(10 * density);
         view.setPadding(padH, padV, padH, padV);
         GradientDrawable background = new GradientDrawable();
-        background.setColor(0xF20E1A12);
-        background.setCornerRadius(14 * density);
-        background.setStroke(Math.max(1, Math.round(density)), 0x668EE03A);
+        background.setColor(0xF2101010);
+        background.setCornerRadius(6 * density);
+        background.setStroke(Math.max(1, Math.round(density)), MenuTheme.color(context, R.color.menu_lime));
         view.setBackground(background);
 
         Toast toast = new Toast(context);
