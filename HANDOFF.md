@@ -1632,3 +1632,14 @@ browser players. It has no EA Nation account/persona protocol and no EA Nation
 TCP ports. The native port cannot join it by changing onlineServer; the native
 game still speaks EA Nation TCP. Native online therefore needs an EA Nation
 emulator (eahub access or a self-hosted ea-nation-server), not nfsu2.xyz.
+
+## 2026-10-30: nfsu2.xyz protocol scope
+
+The nfsu2.xyz server is not a simple packet relay. Its /lan endpoint is a
+WebSocket virtual LAN switch (`web/server-rs/crates/lan`): virtual addresses,
+hello/resume, friend graph, snapshot bundles and deltas, online races, names
+and keyphrases. The browser client has a matching network shim. The native
+game instead uses EA Nation TCP and the original LAN UDP. A native "nfsu2.xyz"
+option therefore needs a new WebSocket client and game-network hook, not just
+a different host string. A provider selector for EA Nation and native LAN is
+straightforward; native nfsu2.xyz support is a separate protocol project.
