@@ -461,6 +461,19 @@ public final class GameActivity extends NativeActivity {
                         Math.round(16 * getResources().getDisplayMetrics().density), Math.round(16 * getResources().getDisplayMetrics().density));
         });
     }
+    /** The guest's Quit Game action: end the session and show the launcher main menu. */
+    public void onGameExit() {
+        runOnUiThread(() -> {
+            try { stopService(new Intent(this, KeepAliveService.class)); }
+            catch (RuntimeException ignored) {}
+            sessionMarker().delete();
+            if (touchControls != null) touchControls.releaseAll();
+            startActivity(new Intent(this, LauncherActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+            finish();
+        });
+    }
+
     /** Battery temperature, thermal state and panel refresh rate, for the benchmark panel. */
     private String phoneState() {
         StringBuilder text = new StringBuilder();

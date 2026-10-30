@@ -1416,3 +1416,35 @@ Crisp sharpening applied, and no Display entry in Pause Options. The final
 prefs-bundle/ordered-queue build compiles, but the phone dropped wireless adb
 before that exact APK could be installed; re-run the on-device pass when it is
 reachable again.
+
+## 2026-10-30: quit returns to the launcher; LAN interface preference; next list
+
+The guest's Quit Game action now ends the session instead of leaving a dead
+frame:
+- guest_kernel's ExitProcess sets guestExitRequested.
+- The Android host calls GameActivity.onGameExit through JNI, stops
+  KeepAliveService, deletes `.session_running`, and brings LauncherActivity
+  back with CLEAR_TOP.
+- Launcher Resume now requires both the :game process and the session marker,
+  so a quit shows Play even if the process is still winding down.
+Built only; the phone is off the network, so the transition is not yet
+verified on device.
+
+LAN play: the network HLE already covers Winsock sockets, broadcasts, select
+and discovery on UDP 9999. The local-address enumeration now ranks Wi-Fi and
+Ethernet ahead of cellular/VPN/p2p for both gethostbyname(local host) and
+SIO_GET_INTERFACE_LIST, so the game advertises the Wi-Fi address instead of a
+mobile/VPN one. Still needs a phone LAN test (two clients, same AP) and a check
+for AP isolation or a remaining adapter-selection assumption.
+
+Menu theming: pending audit against the established silver/black/lime
+menu vocabulary. The app-owned dialogs already use MenuTheme; the remaining
+candidates are the in-game status overlay, GPU probe, editor toolbar and any
+screen that still falls back to framework chrome. The game's own rendered
+menus are a separate question.
+
+Also pending: the drift-race -> Explore RaiseException seen at 0x766FBE. A
+RaiseException HLE diagnostic (code/flags/arguments and a clear stop message)
+is in the build; it needs another reproduction to identify the floating-point
+exception code. The phone was offline before the diagnostic APK could be
+tested.

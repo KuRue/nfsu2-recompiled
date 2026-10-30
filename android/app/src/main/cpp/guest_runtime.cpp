@@ -213,6 +213,10 @@ std::string guestLanguage="Spanish";
 bool guestWidescreen=true;
 std::atomic<bool> stopRequested{false};
 std::atomic<bool> guestPaused{false};
+// Set when the game calls ExitProcess (its Quit Game action). The Android host
+// finishes GameActivity and returns to the launcher instead of showing a stop
+// overlay and leaving the process on a dead frame.
+std::atomic<bool> guestExitRequestedFlag{false};
 // Paused only by an in-game overlay (the Graphics panel). The Android main
 // loop clears guestPaused on every resumed iteration, so it cannot use that.
 std::atomic<bool> overlayPaused{false};
@@ -537,6 +541,17 @@ uint32_t allocate(uint32_t bytes) {
 void unsupported() {
     uint32_t index = (lastImport-importBase)/16;
     throw GuestStop("HLE pendiente: " + imports.at(index).name + " desde " + hex(g_cur_func));
+}
+// Windows structured exceptions: log the code and arguments instead of stopping
+// with a generic "HLE pending". A floating-point code here points at the CRT's
+// FP filter (0xC000008C..0xC0000093); 0xE06D7363 is a C++ throw.
+void raiseException() {
+    uint32_t code=arg(0), flags=arg(1), count=arg(2), arguments=arg(3);
+    NFS_RUNTIME_LOG(ANDROID_LOG_ERROR,"NFSU2","Guest RaiseException code=%08x flags=%08x count=%u args=%08x from %08x",
+        code,flags,count,arguments,g_cur_func);
+    if(arguments&&count<=8)for(uint32_t i=0;i<count;++i)
+        if(memory->readable(arguments+i*4,4))NFS_RUNTIME_LOG(ANDROID_LOG_ERROR,"NFSU2","  exception arg[%u]=%08x",i,read32(arguments+i*4));
+    throw GuestStop("Guest RaiseException "+hex(code)+" desde "+hex(g_cur_func));
 }
 void getVersion() {
     uint32_t out = arg(0), bytes=read32(out);
@@ -1248,6 +1263,7 @@ recomp_func_t resolveFunction(const std::string& dll, const std::string& name) {
         auto file=fileFunctions.find(name);if(file!=fileFunctions.end())return file->second;
         auto kernel=kernelFunctions.find(name); if(kernel!=kernelFunctions.end()) return kernel->second;
         if (name=="GetVersionExA") return getVersion;
+        if (name=="RaiseException") return raiseException;
         if (name=="GetModuleHandleA") return moduleHandle;
         if (name=="HeapCreate") return heapCreate;
         if (name=="HeapAlloc") return heapAlloc;
@@ -1762,6 +1778,7 @@ std::string connectGuestRuntime(const char* executable) {
     }
 }
 void requestGuestRuntimeStop() {stopRequested=true;}
+bool guestExitRequested() {return guestExitRequestedFlag.load(std::memory_order_acquire);}
 bool guestHasPresented() { return lastPresentMs.load() > 0; }
 void setGuestOverlayPaused(bool paused){
     overlayPaused.store(paused);

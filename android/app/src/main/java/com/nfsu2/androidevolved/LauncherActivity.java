@@ -241,7 +241,7 @@ public final class LauncherActivity extends Activity {
                 : ready ? "Internal storage/nfsu2" : "Copy your game files to Internal storage/nfsu2.");
         // Resume only a live process. A marker alone is not a restorable snapshot.
         lastGameRunning=gameRunning();
-        boolean resumable = ready && lastGameRunning;
+        boolean resumable = ready && lastGameRunning && GameActivity.sessionMarker().isFile();
         resumeNextLaunch = resumable;
         play.setText(resumable ? "Resume" : "Play");
         playArrow.setVisibility(resumable ? View.VISIBLE : View.GONE);

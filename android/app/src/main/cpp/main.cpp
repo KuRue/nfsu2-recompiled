@@ -157,6 +157,17 @@ static void deliverBenchmarkStats(const float* values,unsigned count){
     env->DeleteLocalRef(cls);
     benchmarkApp->activity->vm->DetachCurrentThread();
 }
+static void notifyGameExit(android_app* app) {
+    if (!app || !app->activity || !app->activity->vm || !app->activity->clazz) return;
+    JNIEnv* env = nullptr;
+    if (app->activity->vm->AttachCurrentThread(&env, nullptr) != JNI_OK || !env) return;
+    jclass cls = env->GetObjectClass(app->activity->clazz);
+    jmethodID method = cls ? env->GetMethodID(cls, "onGameExit", "()V") : nullptr;
+    if (method) env->CallVoidMethod(app->activity->clazz, method);
+    if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+    if (cls) env->DeleteLocalRef(cls);
+    app->activity->vm->DetachCurrentThread();
+}
 static void showStatus(android_app* app, const char* message) {
     JNIEnv* env = nullptr;
     if (app->activity->vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
@@ -367,6 +378,7 @@ struct Host {
     Renderer renderer;
     bool resumed = false;
     bool failed = false;
+    bool quitRequested = false;
     bool guestAttempted = false;
     std::string guestStatus;
     GuestBootWorker& guestWorker=processGuestWorker();
@@ -614,6 +626,14 @@ void android_main(android_app* app) {
         if (id >= 0 && source) source->process(app, source);
         applyDisplaySchedule(app);
         applyLanBroadcasts(app);
+        if(guestExitRequested()&&!host.quitRequested){
+            host.quitRequested=true;
+            setGuestPaused(true);
+            host.renderer.stop();
+            __android_log_print(ANDROID_LOG_INFO,"NFSU2","Guest quit requested; returning to the launcher");
+            notifyGameExit(app);
+            break;
+        }
         if(gamepadsRemoved.exchange(false)){gamepad.releaseAll(setPadKey);publishPad();}
         gamepad.setKeyEmulation(!guestGamepadInUse());if(gamepad.refresh(guestDrivingControls(),setPadKey))publishPad();
         if (app->destroyRequested) break;

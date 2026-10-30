@@ -157,16 +157,29 @@ void count(uint32_t handle,Socket& socket,const std::string& peer,bool sent,ssiz
 }
 bool hardError(ssize_t result){return result<0&&errno!=EAGAIN&&errno!=EWOULDBLOCK;}
 bool localName(const std::string& name){return name==localHostName||name=="localhost";}
+// Wi-Fi/Ethernet first: the game advertises the first local address it sees.
+// Cellular, VPN and p2p interfaces must not become the LAN identity.
+int interfaceRank(const char* name){
+    if(!name)return 3;
+    if(std::strncmp(name,"wlan",4)==0)return 0;
+    if(std::strncmp(name,"ap",2)==0||std::strncmp(name,"eth",3)==0)return 1;
+    if(std::strncmp(name,"rmnet",5)==0||std::strncmp(name,"ccmni",5)==0||
+       std::strncmp(name,"tun",3)==0||std::strncmp(name,"p2p",3)==0||std::strncmp(name,"dummy",5)==0)return 4;
+    return 2;
+}
 std::vector<in_addr> interfaceAddresses(bool includeLoopback){
-    std::vector<in_addr> found;ifaddrs* list=nullptr;
+    std::vector<std::pair<int,in_addr>> found;ifaddrs* list=nullptr;
     if(getifaddrs(&list)==0){
         for(auto* entry=list;entry;entry=entry->ifa_next)
             if(entry->ifa_addr&&entry->ifa_addr->sa_family==AF_INET&&(entry->ifa_flags&IFF_UP)&&(includeLoopback||!(entry->ifa_flags&IFF_LOOPBACK)))
-                found.push_back(reinterpret_cast<sockaddr_in*>(entry->ifa_addr)->sin_addr);
+                found.emplace_back(interfaceRank(entry->ifa_name),reinterpret_cast<sockaddr_in*>(entry->ifa_addr)->sin_addr);
         freeifaddrs(list);
     }
-    if(found.empty()){in_addr loopback{};loopback.s_addr=htonl(INADDR_LOOPBACK);found.push_back(loopback);}
-    return found;
+    std::stable_sort(found.begin(),found.end(),[](const auto& a,const auto& b){return a.first<b.first;});
+    std::vector<in_addr> result;result.reserve(found.size());
+    for(const auto& entry:found)result.push_back(entry.second);
+    if(result.empty()){in_addr loopback{};loopback.s_addr=htonl(INADDR_LOOPBACK);result.push_back(loopback);}
+    return result;
 }
 bool endsWith(const std::string& value,const std::string& suffix){
     return value.size()>=suffix.size()&&value.compare(value.size()-suffix.size(),suffix.size(),suffix)==0;
@@ -549,7 +562,7 @@ void wsaIoctl(){
         ret(0,9);return;
     }
     if(code!=0x4004747fu)throw GuestStop("WSAIoctl codigo pendiente: "+hex(code)+" desde "+hex(g_cur_func));
-    std::vector<std::array<uint8_t,76>> rows;ifaddrs* list=nullptr;
+    std::vector<std::pair<int,std::array<uint8_t,76>>> rows;ifaddrs* list=nullptr;
     if(getifaddrs(&list)==0){
         for(auto* entry=list;entry;entry=entry->ifa_next){
             if(!entry->ifa_addr||entry->ifa_addr->sa_family!=AF_INET||!(entry->ifa_flags&IFF_UP))continue;
@@ -558,14 +571,15 @@ void wsaIoctl(){
             std::memcpy(row.data(),&flags,4);
             auto put=[&](size_t offset,const sockaddr* address){if(address&&address->sa_family==AF_INET)std::memcpy(row.data()+offset,address,16);};
             put(4,entry->ifa_addr);put(28,(entry->ifa_flags&IFF_BROADCAST)?entry->ifa_broadaddr:nullptr);put(52,entry->ifa_netmask);
-            rows.push_back(row);
+            rows.emplace_back(net::interfaceRank(entry->ifa_name),row);
         }
         freeifaddrs(list);
     }
+    std::stable_sort(rows.begin(),rows.end(),[](const auto& a,const auto& b){return a.first<b.first;});
     uint32_t bytes=uint32_t(rows.size()*76);
     if(returned)write32(returned,bytes);
     if(!output||capacity<bytes){ret(net::fail(net::wsaEfault),9);return;}
-    for(size_t i=0;i<rows.size();++i)std::memcpy(ptr(output+uint32_t(i)*76,76),rows[i].data(),76);
+    for(size_t i=0;i<rows.size();++i)std::memcpy(ptr(output+uint32_t(i)*76,76),rows[i].second.data(),76);
     ret(0,9);
 }
 // Netbios(NCB*): only adapter enumeration/status (games read the MAC as a machine id).

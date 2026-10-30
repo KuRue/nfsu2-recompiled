@@ -6,6 +6,8 @@
 // entry until the first unsupported host service. Returns an honest status.
 std::string connectGuestRuntime(const char* executable);
 void requestGuestRuntimeStop();
+// True when the guest called ExitProcess; the host returns to the launcher.
+bool guestExitRequested();
 void setGuestPaused(bool paused);
 void setGuestOverlayPaused(bool paused);
 // True once the game has presented at least one frame (i.e. it is live, not booting).
