@@ -26,14 +26,13 @@ final class GraphicsPanel {
     private static final String PRESET = "performance_preset";
     private static final String[][] CATEGORIES = {
             {"Performance", PRESET, GameOptions.RESOLUTION, GameOptions.FPS, GameOptions.FRAME_PACE, GameOptions.LATENCY},
-            {"Effects", GameOptions.BLOOM, GameOptions.LOOK, GameOptions.SHARPEN,
-                    GameOptions.TREATMENT, GameOptions.ATMOSPHERE, GameOptions.EFFECTS},
-            {"Detail", GameOptions.WORLD_DETAIL, GameOptions.CAR_DETAIL, GameOptions.CAR_SHADOW,
-                    GameOptions.CAR_HEADLIGHT, GameOptions.CAR_ENV_DETAIL, GameOptions.CAR_ENV_UPDATE,
-                    GameOptions.ROAD_REFLECT, GameOptions.CROWD, GameOptions.LIGHT_TRAILS,
-                    GameOptions.LIGHT_GLOW, GameOptions.PARTICLES, GameOptions.MOTION_BLUR,
-                    GameOptions.FOG, GameOptions.DOF, GameOptions.OVERBRIGHT, GameOptions.BLEACH,
-                    GameOptions.RAIN},
+            {"Image", GameOptions.LOOK, GameOptions.BLOOM, GameOptions.SHARPEN},
+            {"Scene", "#World", GameOptions.WORLD_DETAIL, GameOptions.CROWD, GameOptions.PARTICLES,
+                    "#Car", GameOptions.CAR_DETAIL, GameOptions.CAR_SHADOW, GameOptions.CAR_HEADLIGHT,
+                    GameOptions.CAR_ENV_DETAIL, GameOptions.CAR_ENV_UPDATE, GameOptions.ROAD_REFLECT,
+                    "#Light & weather", GameOptions.LIGHT_TRAILS, GameOptions.LIGHT_GLOW,
+                    GameOptions.OVERBRIGHT, GameOptions.MOTION_BLUR, GameOptions.FOG,
+                    GameOptions.DOF, GameOptions.BLEACH, GameOptions.RAIN},
             {"Textures", GameOptions.HD_PACKS, GameOptions.FILTERING, GameOptions.REFLECTIONS,
                     GameOptions.TEXTURES},
             {"Display", GameOptions.WIDESCREEN, GameOptions.MINIMAP},
@@ -58,7 +57,6 @@ final class GraphicsPanel {
 
     void show() {
         if (isShowing()) return;
-        GameOptions.syncDisplayBundles(context);
         panel = new MenuPanel(context, "Graphics", true);
         panel.fillBody();
         LinearLayout body = panel.body();
@@ -157,17 +155,32 @@ final class GraphicsPanel {
         list.removeAllViews();
         for (String[] entry : CATEGORIES) {
             if (!entry[0].equals(category)) continue;
-            for (int i = 1; i < entry.length; i++) addRow(entry[i]);
+            for (int i = 1; i < entry.length; i++) {
+                if (entry[i].startsWith("#")) addSection(entry[i].substring(1));
+                else addRow(entry[i]);
+            }
         }
+    }
+
+    private void addSection(String title) {
+        TextView header = new TextView(context);
+        header.setText(title);
+        header.setTextSize(12);
+        header.setTypeface(MenuTheme.font(context, true));
+        header.setTextColor(MenuTheme.color(context, R.color.menu_lime));
+        header.setPadding(MenuTheme.dp(context, 10), MenuTheme.dp(context, 10),
+                MenuTheme.dp(context, 10), MenuTheme.dp(context, 2));
+        header.setAccessibilityHeading(true);
+        list.addView(header);
     }
 
     private void addRow(String key) {
         String title, value, tag = null;
         if (PRESET.equals(key)) {
-            title = "Performance preset";
+            title = "Frame profile";
             PhonePreset preset = GameOptions.phonePreset(context);
             value = preset == null ? "Custom" : preset.label;
-            tag = "RES / FPS";
+            tag = "SETS 3";
         } else {
             GameOptions.Option option = GameOptions.find(key);
             title = option.title;
@@ -183,13 +196,27 @@ final class GraphicsPanel {
         row.setBackground(MenuTheme.row(context, false));
         row.setClickable(true);
         row.setFocusable(true);
+        LinearLayout labels = new LinearLayout(context);
+        labels.setOrientation(LinearLayout.VERTICAL);
         TextView name = new TextView(context);
         name.setText(title);
         name.setTextSize(16);
         name.setTypeface(MenuTheme.font(context, false));
         name.setTextColor(MenuTheme.color(context, R.color.menu_row_ink));
         name.setDuplicateParentStateEnabled(true);
-        row.addView(name, new LinearLayout.LayoutParams(0, -2, 1f));
+        labels.addView(name);
+        String subtitle = subtitle(key);
+        if (subtitle != null) {
+            TextView note = new TextView(context);
+            note.setText(subtitle);
+            note.setTextSize(11);
+            note.setTypeface(MenuTheme.font(context, false));
+            note.setTextColor(MenuTheme.color(context, R.color.menu_secondary));
+            note.setDuplicateParentStateEnabled(true);
+            note.setPadding(0, MenuTheme.dp(context, 1), 0, 0);
+            labels.addView(note);
+        }
+        row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
         if (tag != null) {
             TextView note = new TextView(context);
             note.setText(tag);
@@ -242,7 +269,6 @@ final class GraphicsPanel {
         MenuTheme.singleChoice(builder, context, option.labels, checked, (dialog, which) -> {
             dialog.dismiss();
             String value = option.values[which];
-            GameOptions.setDisplayBundle(context, key, value);
             GameOptions.set(context, key, value);
             listener.graphicsApply(key, value);
             refresh();
@@ -252,10 +278,39 @@ final class GraphicsPanel {
 
     /** Only values that wait for the next launch are called out; everything else is live. */
     private static String tag(String key) {
+        if (key.equals(PRESET)) return "SETS 3";
         if (key.equals(GameOptions.WIDESCREEN) || key.equals(GameOptions.LATENCY)
                 || key.equals(GameOptions.REFLECTIONS) || key.equals(GameOptions.TEXTURES))
             return "NEXT START";
         if (key.equals(GameOptions.HD_PACKS)) return "STREAMING";
+        return null;
+    }
+
+    /** One line saying where the row acts, so presets and concrete rows read differently. */
+    private static String subtitle(String key) {
+        if (key.equals(PRESET)) return "Resolution, FPS, frame queue";
+        if (key.equals(GameOptions.LOOK)) return "Final-image color grade";
+        if (key.equals(GameOptions.BLOOM)) return "Final-image glow";
+        if (key.equals(GameOptions.SHARPEN)) return "Final-image sharpening";
+        if (key.equals(GameOptions.RESOLUTION)) return "Presented buffer size";
+        if (key.equals(GameOptions.FPS) || key.equals(GameOptions.FRAME_PACE)) return "Frame timing";
+        if (key.equals(GameOptions.LATENCY)) return "Back-buffer count";
+        if (key.equals(GameOptions.HD_PACKS)) return "Texture assets";
+        if (key.equals(GameOptions.FILTERING)) return "Sampler filtering";
+        if (key.equals(GameOptions.REFLECTIONS)) return "Reflection render target";
+        if (key.equals(GameOptions.TEXTURES)) return "Texture decode path";
+        if (key.equals(GameOptions.WIDESCREEN) || key.equals(GameOptions.MINIMAP)) return "Display and HUD";
+        if (key.equals(GameOptions.WORLD_DETAIL) || key.equals(GameOptions.CROWD)
+                || key.equals(GameOptions.PARTICLES)) return "World renderer";
+        if (key.equals(GameOptions.CAR_DETAIL) || key.equals(GameOptions.CAR_SHADOW)
+                || key.equals(GameOptions.CAR_HEADLIGHT) || key.equals(GameOptions.CAR_ENV_DETAIL)
+                || key.equals(GameOptions.CAR_ENV_UPDATE) || key.equals(GameOptions.ROAD_REFLECT))
+            return "Car renderer";
+        if (key.equals(GameOptions.LIGHT_TRAILS) || key.equals(GameOptions.LIGHT_GLOW)
+                || key.equals(GameOptions.OVERBRIGHT) || key.equals(GameOptions.MOTION_BLUR)
+                || key.equals(GameOptions.FOG) || key.equals(GameOptions.DOF)
+                || key.equals(GameOptions.BLEACH) || key.equals(GameOptions.RAIN))
+            return "Light and weather";
         return null;
     }
 }

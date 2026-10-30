@@ -1,6 +1,6 @@
 # Graphics settings overhaul — proposal
 
-Status: proposal only, 2026-10-30. No UI or preference changes in this pass.
+Status: implemented 2026-10-30.
 
 ## Why the current screen feels confusing
 
@@ -244,3 +244,27 @@ Keys stay the same; this is a label/IA change, not a preference migration.
    want them later.
 5. Should Minimap stay under Display or move to a separate HUD section?
    Recommendation: Display.
+
+## Implementation notes (2026-10-30)
+
+Implemented:
+- Five tabs: Performance, Image, Scene, Textures, Display.
+- Removed Night effects, Atmosphere and Treatment as settings. Scene now holds
+  the concrete World / Car / Light & weather rows.
+- Renamed Color grade, World LOD, Car LOD, Car reflection detail/updates,
+  Road reflection detail, Reflection resolution (2×), HD texture packs.
+- Frame profile is scoped to resolution, FPS and frame queue and shows Custom
+  after any of those changes.
+- Every row has a subtitle (screen filter, renderer, frame timing, etc.) and
+  the existing LIVE / NEXT START / STREAMING badge.
+- Fog writes both g_fogenable and g_horizonfogenable, replacing the old
+  Atmosphere bundle.
+- Launcher Graphics setup now has Performance, Launch-only and In-game
+  sections. It no longer duplicates live Image/Scene rows or scene bundles;
+  the In-game row is a read-only summary with a "Change in game" action.
+- Intro movies moved to Game.
+- Removed hidden PERF_LEVEL/TINT overrides and the dead display-preset code.
+
+Verified on phone: launcher Graphics setup and In-game summary, Image/Scene
+tabs with World/Car/Light & weather subheaders, and Fog applying both fog
+globals live. Screenshots: /tmp/opencode/overhaul_*.png.

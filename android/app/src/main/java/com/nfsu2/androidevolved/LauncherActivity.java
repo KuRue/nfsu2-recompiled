@@ -248,7 +248,6 @@ public final class LauncherActivity extends Activity {
         play.setEnabled(ready);
         play.setAlpha(ready ? 1f : .45f);
         access.setVisibility(allowed ? View.GONE : View.VISIBLE);
-        GameOptions.syncDisplayBundles(this);
         refreshOptions();
     }
 
@@ -264,7 +263,7 @@ public final class LauncherActivity extends Activity {
         optionsList.removeAllViews();
         if (openGroup != null) { buildGroup(openGroup); return; }
         PhonePreset preset = GameOptions.phonePreset(this);
-        optionsList.addView(optionRow("Visual settings",
+        optionsList.addView(optionRow("Graphics setup",
                 preset == null ? "Custom" : preset.label, () -> openGroup("graphics")));
         optionsList.addView(optionRow("Controls", "Controller",
                 () -> openGroup("controls")));
@@ -278,7 +277,7 @@ public final class LauncherActivity extends Activity {
     private String groupTitle(String key) {
         if(key==null)return "Options";
         switch(key){
-            case "graphics": return "Visual settings";
+            case "graphics": return "Graphics setup";
             case "controls": return "Controls";
             case "game": return "Game";
             case "saves": return "Saves";
@@ -321,15 +320,22 @@ public final class LauncherActivity extends Activity {
                             new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),
                             REQUEST_DRIVER_ZIP)));
                 }
+                optionsList.addView(sectionHeader("Performance"));
                 PhonePreset[] presets = PhonePreset.values();
                 String[] values = new String[presets.length], labels = new String[presets.length];
                 for (int i = 0; i < presets.length; i++) { values[i] = presets[i].name(); labels[i] = presets[i].label; }
                 PhonePreset preset = GameOptions.phonePreset(this);
-                optionsList.addView(cycleRow("Performance preset", labels, values, preset == null ? "" : preset.name(), "Custom",
+                optionsList.addView(cycleRow("Frame profile", labels, values, preset == null ? "" : preset.name(), "Custom",
                         name -> { GameOptions.applyPhonePreset(this, PhonePreset.valueOf(name)); refreshOptions(); }));
-                for (GameOptions.Option option : GameOptions.ALL)
-                    if (!isControlOption(option) && !GameOptions.isDisplayOption(option))
-                        optionsList.addView(optionCycleRow(option));
+                optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.RESOLUTION)));
+                optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.FPS)));
+                optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.LATENCY)));
+                optionsList.addView(sectionHeader("Launch-only"));
+                optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.WIDESCREEN)));
+                optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.REFLECTIONS)));
+                optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.TEXTURES)));
+                optionsList.addView(sectionHeader("In-game"));
+                optionsList.addView(graphicsSummaryRow());
                 optionsList.addView(optionRow("Upscaling", "Unavailable", this::explainUpscaling));
                 optionsList.addView(optionRow("Test driver", "Vulkan features", () -> probeDriver(false)));
                 optionsList.addView(optionRow("Clear shaders", "Rebuild shaders", () -> GraphicsCache.prompt(this)));
@@ -350,6 +356,7 @@ public final class LauncherActivity extends Activity {
                         GameOptions.prefs(this).edit().putString(GameOptions.LANGUAGE, language).apply(); refreshOptions();
                     }));
                 }
+                optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.INTRO)));
                 optionsList.addView(optionRow("Online server", GameOptions.onlineServer(this), this::chooseOnlineServer));
                 break;
             }
@@ -367,7 +374,6 @@ public final class LauncherActivity extends Activity {
 
     private View optionCycleRow(GameOptions.Option option) {
         return cycleRow(option.title, option.labels, option.values, GameOptions.get(this, option.key), GameOptions.get(this, option.key), value -> {
-            GameOptions.setDisplayBundle(this, option.key, value);
             GameOptions.set(this, option.key, value); refreshOptions();
         });
     }
@@ -942,6 +948,50 @@ public final class LauncherActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.bottomMargin = dp(8);
         row.setLayoutParams(lp);
+        return row;
+    }
+
+    /** Non-interactive heading inside a scrolling option group. */
+    private View sectionHeader(String text) {
+        TextView header = label(text, 12, ACCENT, true);
+        header.setPadding(dp(10), dp(10), dp(10), dp(2));
+        header.setAccessibilityHeading(true);
+        return header;
+    }
+
+    /** Read-only summary of the values the in-game Graphics panel owns. */
+    private View graphicsSummaryRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(8), dp(12), dp(8));
+        row.setBackground(MenuTheme.row(this, false));
+        row.setMinimumHeight(dp(56));
+        row.setFocusable(true);
+        row.setClickable(true);
+        row.setOnClickListener(v -> message("In-game graphics",
+                "Open the expanded dock in free roam or a race and tap the monitor icon. "
+                        + "Color grade, Bloom, Sharpening, HD textures, filtering, display and all scene detail are there; "
+                        + "most rows apply live."));
+        LinearLayout labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        TextView title = label("Image and scene", 16, TEXT, true);
+        title.setDuplicateParentStateEnabled(true);
+        title.setTextColor(MenuTheme.rowText(this, false));
+        labels.addView(title);
+        String summary = GameOptions.find(GameOptions.LOOK).label(GameOptions.get(this, GameOptions.LOOK))
+                + " · Bloom " + GameOptions.find(GameOptions.BLOOM).label(GameOptions.get(this, GameOptions.BLOOM))
+                + " · World " + GameOptions.find(GameOptions.WORLD_DETAIL).label(GameOptions.get(this, GameOptions.WORLD_DETAIL));
+        TextView subtitle = label(summary, 12, MUTED, false);
+        subtitle.setDuplicateParentStateEnabled(true);
+        subtitle.setTextColor(MenuTheme.rowText(this, false));
+        subtitle.setPadding(0, dp(2), 0, 0);
+        labels.addView(subtitle);
+        row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView action = label("Change in game  ›", 16, TEXT, true);
+        action.setDuplicateParentStateEnabled(true);
+        action.setTextColor(MenuTheme.valueText(this));
+        row.addView(action);
         return row;
     }
 

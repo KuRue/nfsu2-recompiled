@@ -1544,3 +1544,24 @@ to the final image, no Night effects/Atmosphere/Treatment settings. Scene gets
 World / Car / Light & weather subheaders. Launcher keeps launch-only rows and a
 read-only "Change in game" summary; Intro moves to Game. Dead display presets
 and hidden overrides are removed. Open decisions are listed in the document.
+
+## 2026-10-30: graphics settings overhaul implemented
+
+The approved IA is in place. Panel tabs are now Performance, Image, Scene,
+Textures and Display. Night effects, Atmosphere and Treatment were removed as
+settings; their concrete rows live under Scene > World / Car / Light & weather.
+Every row has a one-line subtitle and a LIVE / NEXT START / STREAMING badge.
+Frame profile is scoped to resolution + FPS + frame queue and shows Custom when
+those change. Fog writes both g_fogenable and g_horizonfogenable, replacing the
+old Atmosphere bundle.
+
+The launcher's "Visual settings" is now "Graphics setup" with Performance,
+Launch-only and In-game sections. It no longer duplicates live Image/Scene rows
+or scene bundles; the In-game row is a read-only summary of Color grade, Bloom
+and World LOD with a "Change in game" action. Intro movies moved to Game.
+Hidden PERF_LEVEL/TINT overrides and the dead display-preset/bundle code were
+removed.
+
+Verified on phone: launcher sections and summary, Image/Scene tabs with
+World/Car/Light & weather headers, and Fog applying both fog globals live.
+Screenshots: /tmp/opencode/overhaul_*.png.

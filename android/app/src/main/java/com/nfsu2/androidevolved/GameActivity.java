@@ -237,25 +237,10 @@ public final class GameActivity extends NativeActivity {
             case GameOptions.LOOK:
                 applyVisualOptions();
                 break;
-            case GameOptions.EFFECTS: {
-                int level = Integer.parseInt(value);
-                setDisplayToggle(GameOptions.LIGHT_TRAILS, level >= 1);
-                setDisplayToggle(GameOptions.OVERBRIGHT, level >= 1);
-                setDisplayToggle(GameOptions.MOTION_BLUR, level >= 2);
-                applyVisualOptions();
-                break;
-            }
-            case GameOptions.ATMOSPHERE: {
-                int level = Integer.parseInt(value);
-                setDisplayToggle(GameOptions.FOG, level >= 1);
-                setDisplayToggle(GameOptions.RAIN, level >= 2);
-                nativeDisplayOption("g_horizonfogenable", level >= 1 ? 1 : 0);
-                break;
-            }
-            case GameOptions.TREATMENT: {
-                int level = Integer.parseInt(value);
-                setDisplayToggle(GameOptions.BLEACH, level >= 1);
-                setDisplayToggle(GameOptions.DOF, level >= 2);
+            case GameOptions.FOG: {
+                int on = value.equals("1") ? 1 : 0;
+                nativeDisplayOption("g_fogenable", on);
+                nativeDisplayOption("g_horizonfogenable", on);
                 break;
             }
             default:
@@ -263,14 +248,6 @@ public final class GameActivity extends NativeActivity {
                 if (display != null) nativeDisplayOption(display, Integer.parseInt(value));
                 break;
         }
-        GameOptions.syncDisplayBundles(this);
-    }
-
-    /** A bundle row writes both the saved concrete value and the live game global. */
-    private void setDisplayToggle(String key, boolean on) {
-        GameOptions.set(this, key, on ? "1" : "0");
-        String name = displayName(key);
-        if (name != null) nativeDisplayOption(name, on ? 1 : 0);
     }
 
     private void applyVisualOptions() {
@@ -280,16 +257,11 @@ public final class GameActivity extends NativeActivity {
                 Integer.parseInt(GameOptions.get(this, GameOptions.LOOK)),
                 Integer.parseInt(GameOptions.get(this, GameOptions.REFLECTIONS)),
                 Integer.parseInt(GameOptions.get(this, GameOptions.BLOOM)),
-                Integer.parseInt(GameOptions.get(this, GameOptions.EFFECTS)),
-                Integer.parseInt(GameOptions.get(this, GameOptions.ATMOSPHERE)),
-                Integer.parseInt(GameOptions.get(this, GameOptions.TREATMENT)),
-                0, false);
+                0, 0, 0, 0, false);
     }
 
     private static String displayName(String key) {
         for (String[] map : GameOptions.DISPLAY_MAP) if (map[0].equals(key)) return map[1];
-        if (key.equals(GameOptions.PERF_LEVEL)) return "g_performancelevel";
-        if (key.equals(GameOptions.TINT)) return "g_tintingenable";
         return null;
     }
 
@@ -405,7 +377,6 @@ public final class GameActivity extends NativeActivity {
         nativeFeedbackSource(GameOptions.get(this,GameOptions.FEEDBACK_SOURCE).equals("physics"));
         nativePhoneFeedback(phoneFeedback.enabled());
         nativeTriggerFallback(GameOptions.get(this, GameOptions.PEDALS).equals("triggers"));
-        GameOptions.syncDisplayBundles(this);
         nativeDisplayOverrides(GameOptions.displayOverrides(this));
         nativeVisualOptions(GameOptions.get(this, GameOptions.HD_PACKS).equals("on"),
                 Integer.parseInt(GameOptions.get(this, GameOptions.FILTERING)),
@@ -413,10 +384,7 @@ public final class GameActivity extends NativeActivity {
                 Integer.parseInt(GameOptions.get(this, GameOptions.LOOK)),
                 Integer.parseInt(GameOptions.get(this, GameOptions.REFLECTIONS)),
                 Integer.parseInt(GameOptions.get(this, GameOptions.BLOOM)),
-                Integer.parseInt(GameOptions.get(this, GameOptions.EFFECTS)),
-                Integer.parseInt(GameOptions.get(this, GameOptions.ATMOSPHERE)),
-                Integer.parseInt(GameOptions.get(this, GameOptions.TREATMENT)),
-                0, false);
+                0, 0, 0, 0, false);
         nativeCpuTextures(launch.getBooleanExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu")));
         String[] loader = launch.getStringArrayExtra("driverLoader");
         if (loader == null || loader.length != 4) loader = GpuDrivers.loaderArguments(this);

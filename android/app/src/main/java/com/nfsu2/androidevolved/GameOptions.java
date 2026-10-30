@@ -21,13 +21,13 @@ final class GameOptions {
     }
 
     static final String RESOLUTION = "resolution", FPS = "fps", FRAME_PACE = "frame_pace", WIDESCREEN = "widescreen", LATENCY = "latency",
-            FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", BLOOM = "bloom", LOOK = "lighting_look", EFFECTS = "night_effects", ATMOSPHERE = "atmosphere", TREATMENT = "treatment", DETAIL = "detail", DISPLAY_OWNER = "display_owner", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", INTRO = "intro", LANGUAGE = "language",
-            DISPLAY_PRESET = "display_preset", WORLD_DETAIL = "world_detail", CAR_DETAIL = "car_detail",
+            FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", BLOOM = "bloom", LOOK = "lighting_look", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", INTRO = "intro", LANGUAGE = "language",
+            WORLD_DETAIL = "world_detail", CAR_DETAIL = "car_detail",
             CAR_SHADOW = "car_shadow", CAR_HEADLIGHT = "car_headlight", CAR_ENV_DETAIL = "car_env_detail",
             CAR_ENV_UPDATE = "car_env_update", ROAD_REFLECT = "road_reflect_detail", CROWD = "crowd",
             LIGHT_TRAILS = "light_trails", LIGHT_GLOW = "light_glow", PARTICLES = "particles",
             MOTION_BLUR = "motion_blur", FOG = "fog", DOF = "dof", OVERBRIGHT = "overbright",
-            BLEACH = "bleach", RAIN = "rain", PERF_LEVEL = "perf_level", TINT = "tint_level";
+            BLEACH = "bleach", RAIN = "rain";
 
     /** Launcher row -> the game registry key it overrides (game = use the saved setting). */
     static final String[][] DISPLAY_MAP = {
@@ -54,7 +54,7 @@ final class GameOptions {
                     new String[] {"0", "25", "50", "100"}, new String[] {"Off", "Light", "Medium", "Strong"}),
             new Option(PEDALS, "Controller pedals", "triggers",
                     new String[] {"triggers", "game"}, new String[] {"Triggers", "Game bindings"}),
-            new Option(HD_PACKS, "Texture packs", "off",
+            new Option(HD_PACKS, "HD texture packs", "off",
                     new String[] {"off", "on"}, new String[] {"Original", "HD"}),
             new Option(FILTERING, "Texture filtering", "0",
                     new String[] {"0", "4", "8", "16"}, new String[] {"Game default", "4× anisotropic", "8× anisotropic", "16× anisotropic"}),
@@ -62,25 +62,22 @@ final class GameOptions {
                     new String[] {"0", "15", "30"}, new String[] {"Off", "Subtle", "Crisp"}),
             new Option(BLOOM, "Bloom", "0",
                     new String[] {"0", "1", "2"}, new String[] {"Off", "Subtle", "Strong"}),
-            new Option(LOOK, "Lighting look", "0",
+            new Option(LOOK, "Color grade", "0",
                     new String[] {"0", "1", "2", "3", "4"},
                     new String[] {"Original", "Night", "Neon night", "Filmic", "Midnight"}),
-            new Option(TREATMENT, "Treatment", "0",
-                    new String[] {"0", "1", "2"},
-                    new String[] {"Original", "Bleach bypass", "Bleach/DOF"}),
-            new Option(WORLD_DETAIL, "World detail", "2",
+            new Option(WORLD_DETAIL, "World LOD", "2",
                     new String[] {"0", "1", "2"}, new String[] {"Low", "Medium", "High"}),
-            new Option(CAR_DETAIL, "Car geometry", "1",
+            new Option(CAR_DETAIL, "Car LOD", "1",
                     new String[] {"0", "1", "2"}, new String[] {"Low", "Medium", "High"}),
             new Option(CAR_SHADOW, "Car shadow", "2",
                     new String[] {"0", "1", "2"}, new String[] {"Off", "Soft", "Neon"}),
             new Option(CAR_HEADLIGHT, "Headlights", "1",
                     new String[] {"0", "1"}, new String[] {"Off", "On"}),
-            new Option(CAR_ENV_DETAIL, "Reflection detail", "1",
+            new Option(CAR_ENV_DETAIL, "Car reflection detail", "1",
                     new String[] {"0", "1", "2"}, new String[] {"Off", "Low", "High"}),
-            new Option(CAR_ENV_UPDATE, "Reflection updates", "1",
+            new Option(CAR_ENV_UPDATE, "Car reflection updates", "1",
                     new String[] {"0", "1"}, new String[] {"Off", "On"}),
-            new Option(ROAD_REFLECT, "Road reflections", "2",
+            new Option(ROAD_REFLECT, "Road reflection detail", "2",
                     new String[] {"0", "1", "2", "3"},
                     new String[] {"Off", "Low", "Medium", "High"}),
             new Option(CROWD, "Crowds", "1",
@@ -103,13 +100,7 @@ final class GameOptions {
                     new String[] {"0", "1"}, new String[] {"Off", "On"}),
             new Option(RAIN, "Rain", "0",
                     new String[] {"0", "1"}, new String[] {"Off", "On"}),
-            new Option(ATMOSPHERE, "Atmosphere", "0",
-                    new String[] {"0", "1", "2"},
-                    new String[] {"Original", "Haze", "Rain haze"}),
-            new Option(EFFECTS, "Night effects", "0",
-                    new String[] {"0", "1", "2"},
-                    new String[] {"Original", "Streaks", "Full effects"}),
-            new Option(REFLECTIONS, "Reflections", "0",
+            new Option(REFLECTIONS, "Reflection resolution (2×)", "0",
                     new String[] {"0", "1"}, new String[] {"Original", "2×"}),
             new Option(RESOLUTION, "Internal resolution", "75",
                     new String[] {"100", "85", "75", "60", "50", "720"},
@@ -164,83 +155,6 @@ final class GameOptions {
     }
 
 
-    /** The game's own Display > Level Of Detail slider, captured from its writes. */
-    static void applyDisplayPreset(Context context, String preset) {
-        SharedPreferences.Editor e = prefs(context).edit();
-        e.putString(DISPLAY_PRESET, preset);
-        // Grading stays; the individual display rows already take precedence
-        // over the older bundle switches, so presets and looks stack.
-        String[][] low = {
-                {WORLD_DETAIL, "0"}, {CAR_DETAIL, "0"}, {CAR_SHADOW, "0"}, {CAR_HEADLIGHT, "0"},
-                {CAR_ENV_DETAIL, "0"}, {CAR_ENV_UPDATE, "0"}, {ROAD_REFLECT, "0"},
-                {CROWD, "0"}, {LIGHT_TRAILS, "0"}, {LIGHT_GLOW, "0"}, {PARTICLES, "0"},
-                {MOTION_BLUR, "0"}, {FOG, "0"}, {DOF, "0"}, {OVERBRIGHT, "0"},
-                {BLEACH, "0"}, {RAIN, "0"}, {PERF_LEVEL, "1"}, {TINT, "0"},
-        };
-        for (String[] row : low) e.putString(row[0], row[1]);
-        if (preset.equals("medium") || preset.equals("high") || preset.equals("ultra")) {
-            e.putString(WORLD_DETAIL, "1").putString(CAR_SHADOW, "2").putString(CAR_HEADLIGHT, "1")
-                    .putString(CROWD, "1").putString(LIGHT_GLOW, "1").putString(TINT, "1")
-                    .putString(PERF_LEVEL, "2");
-        }
-        if (preset.equals("high") || preset.equals("ultra")) {
-            e.putString(WORLD_DETAIL, "2").putString(CAR_DETAIL, "1").putString(CAR_ENV_DETAIL, "1")
-                    .putString(CAR_ENV_UPDATE, "1").putString(ROAD_REFLECT, "2")
-                    .putString(LIGHT_TRAILS, "1").putString(PARTICLES, "1")
-                    .putString(MOTION_BLUR, "1").putString(FOG, "1").putString(DOF, "1")
-                    .putString(OVERBRIGHT, "1").putString(PERF_LEVEL, "3");
-        }
-        if (preset.equals("ultra")) {
-            e.putString(CAR_ENV_DETAIL, "2").putString(ROAD_REFLECT, "3").putString(RAIN, "1")
-                    .putString(BLEACH, "1").putString(PERF_LEVEL, "4");
-        }
-        e.apply();
-    }
-
-    static String displayPresetLabel(Context context) {
-        String preset = prefs(context).getString(DISPLAY_PRESET, "high");
-        switch (preset) {
-            case "low": return "Low";
-            case "medium": return "Medium";
-            case "high": return "High";
-            case "ultra": return "Ultra";
-            default: return "Custom";
-        }
-    }
-
-    /** A bundle row writes the concrete display rows the game actually reads. */
-    static void setDisplayBundle(Context context, String key, String value) {
-        int level;
-        try { level = Integer.parseInt(value); } catch (NumberFormatException error) { return; }
-        if (key.equals(EFFECTS)) {
-            set(context, LIGHT_TRAILS, level >= 1 ? "1" : "0");
-            set(context, OVERBRIGHT, level >= 1 ? "1" : "0");
-            set(context, MOTION_BLUR, level >= 2 ? "1" : "0");
-        } else if (key.equals(ATMOSPHERE)) {
-            set(context, FOG, level >= 1 ? "1" : "0");
-            set(context, RAIN, level >= 2 ? "1" : "0");
-        } else if (key.equals(TREATMENT)) {
-            set(context, BLEACH, level >= 1 ? "1" : "0");
-            set(context, DOF, level >= 2 ? "1" : "0");
-        } else {
-            return;
-        }
-        set(context, key, value);
-    }
-
-    /** Keep the launcher's bundle rows consistent with the concrete display rows. */
-    static void syncDisplayBundles(Context context) {
-        int atmosphere = get(context, FOG).equals("1") || get(context, RAIN).equals("1")
-                ? (get(context, RAIN).equals("1") ? 2 : 1) : 0;
-        int treatment = get(context, BLEACH).equals("1")
-                ? (get(context, DOF).equals("1") ? 2 : 1) : 0;
-        int effects = get(context, MOTION_BLUR).equals("1") ? 2
-                : (get(context, LIGHT_TRAILS).equals("1") || get(context, OVERBRIGHT).equals("1") ? 1 : 0);
-        prefs(context).edit().putString(ATMOSPHERE, String.valueOf(atmosphere))
-                .putString(TREATMENT, String.valueOf(treatment))
-                .putString(EFFECTS, String.valueOf(effects)).apply();
-    }
-
     static String displayOverrides(Context context) {
         StringBuilder text = new StringBuilder();
         for (String[] map : DISPLAY_MAP) {
@@ -249,10 +163,6 @@ final class GameOptions {
             text.append(map[1]).append('=').append(value).append(',');
             if (map[0].equals(FOG)) text.append("g_horizonfogenable=").append(value).append(',');
         }
-        String perf = prefs(context).getString(PERF_LEVEL, "3");
-        if (!perf.equals("game")) text.append("g_performancelevel=").append(perf).append(',');
-        String tint = prefs(context).getString(TINT, "1");
-        if (!tint.equals("game")) text.append("g_tintingenable=").append(tint).append(',');
         return text.toString();
     }
 
