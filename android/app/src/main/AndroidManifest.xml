@@ -11,6 +11,7 @@
     <uses-feature android:name="android.hardware.vulkan.version" android:version="0x00401000" android:required="true" />
     <application android:requestLegacyExternalStorage="true" android:label="${appLabel}" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="false">
         <activity android:name=".GameActivity" android:exported="true" android:process=":game"
+            android:importantForAutofill="noExcludeDescendants"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|keyboardHidden" android:screenOrientation="sensorLandscape">
             <meta-data android:name="android.app.lib_name" android:value="nfsu2_android" />

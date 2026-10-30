@@ -1490,3 +1490,7 @@ only one host is expected.
 The drift-race -> Explore RaiseException did not reproduce during a Quick Race
 drift/drag attempt. The diagnostic RaiseException handler remains in the
 installed build and will print the exception code if it happens again.
+
+GameActivity now sets `android:importantForAutofill="noExcludeDescendants"`.
+The in-game "Type in the game" dialog was triggering Bitwarden's autofill
+sheet over the race; the activity no longer participates in autofill.
