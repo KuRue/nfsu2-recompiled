@@ -183,6 +183,10 @@ public final class SwitchSocket {
                 + (ticket.isEmpty() ? "" : ",\"ticket\":\"" + escape(ticket) + "\"")
                 + "}";
         sendText(output, hello);
+        // A page turns LAN play on again explicitly: the hello already says
+        // lan:1, but a queued hello (the switch full) keeps its place through
+        // its own messages, and an explicit one costs a single control frame.
+        sendText(output, "{\"t\":\"lan\",\"on\":1}");
         status("WebSocket open; waiting for the switch welcome…");
 
         SSLSocket current = active;

@@ -710,6 +710,13 @@ void incoming(const uint8_t* frame,size_t length){
     if(!online())return;
     noteFrame();
     bool broadcast=broadcastAddress(dst);
+    if(kind==KindUdp&&broadcast&&dport==9999){
+        static int seenAnnouncements=0;
+        if(seenAnnouncements<5){++seenAnnouncements;
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Virtual LAN: announcement from %u.%u.%u.%u:%u",
+                (src>>24)&255,(src>>16)&255,(src>>8)&255,src&255,sport);
+        }
+    }
     if(!broadcast&&dst!=vip)return;
     if(kind==KindUdp){
         if(op==UdpUnreach){deliverUnreachable(src,sport,dport);}

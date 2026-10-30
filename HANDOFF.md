@@ -1761,3 +1761,9 @@ row: EA Nation / Local LAN / nfsu2.xyz). Results:
   TCP join from a second client, and a race. The phone's touch is a relative
   mouse and the menu timing is awkward through adb, so the Host button could
   not be activated in this session.
+
+The phone went offline (192.168.1.169:42311 refused) before the announcement
+rule could be retested. Two follow-ups are in the build for that next session:
+the client sends an explicit {"t":"lan","on":1} after its hello (a queued
+hello keeps its own messages; this makes the routing state unambiguous), and
+the first five 9999 announcements are logged as "announcement from ...".
