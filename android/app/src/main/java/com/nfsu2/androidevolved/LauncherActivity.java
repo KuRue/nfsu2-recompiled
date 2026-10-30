@@ -420,7 +420,7 @@ public final class LauncherActivity extends Activity {
         picker.requestWindowFeature(Window.FEATURE_NO_TITLE);picker.setContentView(pickerPanel);
         picker.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
         picker.getWindow().setDimAmount(0.6f);
-        int width=Math.min(dp(520),getResources().getDisplayMetrics().widthPixels-dp(48));
+        int width=Math.min(dp(440),getResources().getDisplayMetrics().widthPixels-dp(64));
         int available=getResources().getDisplayMetrics().heightPixels-dp(32);
         int contentWidth=View.MeasureSpec.makeMeasureSpec(width-dp(28),View.MeasureSpec.EXACTLY);
         card.measure(contentWidth,View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));

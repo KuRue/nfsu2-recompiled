@@ -9,8 +9,8 @@
         <item name="android:textColorPrimary">@color/neon_text</item>
         <item name="android:textColorSecondary">@color/neon_muted</item>
         <item name="android:fontFamily">sans-serif-condensed</item>
-        <item name="android:windowMinWidthMajor">68%</item>
-        <item name="android:windowMinWidthMinor">68%</item>
+        <item name="android:windowMinWidthMajor">54%</item>
+        <item name="android:windowMinWidthMinor">54%</item>
         <item name="android:textAppearanceLarge">@style/NeonDialogTitle</item>
         <item name="android:textAppearanceMedium">@style/NeonDialogBody</item>
         <item name="android:textAppearanceSmall">@style/NeonDialogSmall</item>
@@ -32,8 +32,8 @@
 
     <style name="MenuDialog" parent="android:Theme.Material.Dialog.Alert">
         <item name="android:windowBackground">@drawable/dialog_menu</item>
-        <item name="android:windowMinWidthMajor">68%</item>
-        <item name="android:windowMinWidthMinor">68%</item>
+        <item name="android:windowMinWidthMajor">54%</item>
+        <item name="android:windowMinWidthMinor">54%</item>
         <item name="android:fontFamily">@font/menu_body</item>
         <item name="android:textColorPrimary">@color/menu_ink</item>
         <item name="android:textColorSecondary">@color/menu_secondary</item>

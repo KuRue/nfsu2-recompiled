@@ -7,6 +7,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -64,18 +65,8 @@ final class GraphicsPanel {
         LinearLayout top = new LinearLayout(context);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        TextView live = new TextView(context);
-        live.setText("LIVE");
-        live.setTextSize(12);
-        live.setTypeface(MenuTheme.font(context, true));
-        live.setTextColor(MenuTheme.color(context, R.color.menu_lime));
-        live.setBackground(MenuTheme.action(context, true));
-        live.setGravity(Gravity.CENTER);
-        live.setPadding(MenuTheme.dp(context, 10), MenuTheme.dp(context, 3),
-                MenuTheme.dp(context, 10), MenuTheme.dp(context, 3));
-        top.addView(live, new LinearLayout.LayoutParams(-2, -2));
         TextView hint = new TextView(context);
-        hint.setText("  Most changes apply while you drive. NEXT START rows wait for the next launch. The game is paused while this panel is open.");
+        hint.setText("Most changes apply live. NEXT START rows wait for relaunch.");
         hint.setTextSize(12);
         hint.setTextColor(MenuTheme.color(context, R.color.menu_secondary));
         hint.setTypeface(MenuTheme.font(context, false));
@@ -93,6 +84,8 @@ final class GraphicsPanel {
         top.addView(close, new LinearLayout.LayoutParams(-2, -2));
         body.addView(top, new LinearLayout.LayoutParams(-1, -2));
 
+        HorizontalScrollView tabScroll = new HorizontalScrollView(context);
+        tabScroll.setHorizontalScrollBarEnabled(false);
         tabs = new LinearLayout(context);
         tabs.setOrientation(LinearLayout.HORIZONTAL);
         tabs.setPadding(0, MenuTheme.dp(context, 6), 0, MenuTheme.dp(context, 4));
@@ -102,17 +95,19 @@ final class GraphicsPanel {
             tab.setTextSize(13);
             tab.setTypeface(MenuTheme.font(context, true));
             tab.setGravity(Gravity.CENTER);
-            tab.setPadding(MenuTheme.dp(context, 10), MenuTheme.dp(context, 4),
-                    MenuTheme.dp(context, 10), MenuTheme.dp(context, 4));
+            tab.setSingleLine(true);
+            tab.setPadding(MenuTheme.dp(context, 9), MenuTheme.dp(context, 4),
+                    MenuTheme.dp(context, 9), MenuTheme.dp(context, 4));
             tab.setOnClickListener(view -> {
                 category = entry[0];
                 refresh();
             });
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1f);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
             params.rightMargin = MenuTheme.dp(context, 4);
             tabs.addView(tab, params);
         }
-        body.addView(tabs, new LinearLayout.LayoutParams(-1, -2));
+        tabScroll.addView(tabs, new HorizontalScrollView.LayoutParams(-2, -2));
+        body.addView(tabScroll, new LinearLayout.LayoutParams(-1, -2));
 
         list = new LinearLayout(context);
         list.setOrientation(LinearLayout.VERTICAL);
@@ -127,11 +122,21 @@ final class GraphicsPanel {
         dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         dialog.getWindow().setDimAmount(0.55f);
         dialog.setOnDismissListener(ignored -> listener.graphicsPause(false));
-        int width = Math.min(MenuTheme.dp(context, 760),
-                context.getResources().getDisplayMetrics().widthPixels - MenuTheme.dp(context, 32));
-        int height = context.getResources().getDisplayMetrics().heightPixels - MenuTheme.dp(context, 20);
+        int screenWidth = context.getResources().getDisplayMetrics().widthPixels;
+        int screenHeight = context.getResources().getDisplayMetrics().heightPixels;
+        // A side sheet, not a full-screen dialog: keep roughly 40% of the scene visible
+        // on the right so changes to grading, bloom, fog and detail are visible live.
+        int width = Math.max(MenuTheme.dp(context, 360),
+                Math.min(MenuTheme.dp(context, 420), Math.round(screenWidth * 0.46f)));
+        width = Math.min(width, screenWidth - MenuTheme.dp(context, 24));
+        int height = screenHeight - MenuTheme.dp(context, 24);
+        dialog.getWindow().setDimAmount(0.22f);
         dialog.show();
+        dialog.getWindow().setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         dialog.getWindow().setLayout(width, height);
+        android.view.WindowManager.LayoutParams params = dialog.getWindow().getAttributes();
+        params.x = MenuTheme.dp(context, 12);
+        dialog.getWindow().setAttributes(params);
         listener.graphicsPause(true);
         refresh();
     }

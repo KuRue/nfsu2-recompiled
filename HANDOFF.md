@@ -1575,3 +1575,20 @@ its configured upstream repository. Verified on the phone: the Support >
 Report issue flow logged
 "github.com/KuRue/nfsu2-recompiled/issues/new". The report dialog was opened;
 the phone went offline before it could be cancelled.
+
+## 2026-10-30: narrower graphics side sheet and dialogs
+
+The in-game Graphics panel no longer says LIVE and is no longer a full-width
+dialog. It is a left-anchored side sheet:
+- width min(420dp, 46% of the screen), at least 360dp, 12dp from the left;
+- full height minus 24dp, dim behind reduced to 0.22;
+- tabs use their full labels in a horizontally scrollable wrap-content row
+  (Performance / Image / Scene / Textures / Display), so "Performance" does
+  not wrap.
+This leaves roughly half the scene visible on the right for live comparisons.
+
+Framework MenuDialog/HudDialog minimum width is reduced from 68% to 54%, and
+the launcher value picker from 520dp to 440dp. Verified the side sheet on the
+phone (title screen, game visible on the right, full tab labels). The launcher
+picker was not captured because the device's touch input returned to the home
+screen during the check.
