@@ -368,6 +368,7 @@ public final class LauncherActivity extends Activity {
                 optionsList.addView(optionRow("Check updates",
                         checkingUpdates ? "Checking…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
                 optionsList.addView(optionRow("Report issue", "Diagnostic log", () -> prepareReport(null)));
+                optionsList.addView(optionRow("Test nfsu2.xyz", "Virtual LAN", this::testNfsu2Switch));
                 break;
         }
     }
@@ -596,6 +597,23 @@ public final class LauncherActivity extends Activity {
                 main.post(() -> { refresh(); message("Report issue", "Could not prepare the log: " + error.getMessage()); });
             }
         });
+    }
+
+    /** Proof of concept for the nfsu2.xyz WebSocket virtual LAN. */
+    private void testNfsu2Switch() {
+        if (Nfsu2SwitchProbe.isRunning()) {
+            message("nfsu2.xyz switch", "The probe is already running.");
+            return;
+        }
+        final AlertDialog[] dialog = new AlertDialog[1];
+        dialog[0] = MenuTheme.dialog(this, "nfsu2.xyz switch")
+                .setMessage("Connecting…")
+                .setNegativeButton("Close", (d, which) -> Nfsu2SwitchProbe.stop())
+                .setOnCancelListener(d -> Nfsu2SwitchProbe.stop())
+                .show();
+        Nfsu2SwitchProbe.start(this, text -> main.post(() -> {
+            if (dialog[0] != null && dialog[0].isShowing()) dialog[0].setMessage(text);
+        }));
     }
 
     private void openUrl(Uri uri) {

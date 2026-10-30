@@ -1663,3 +1663,22 @@ A native option therefore needs:
 
 This is a real feature (multi-day port), not a host/port setting, but it is
 feasible and would unlock nfsu2.xyz LAN/free roam/Online for the native game.
+
+## 2026-10-30: nfsu2.xyz WebSocket proof of concept
+
+A host-side probe connected to wss://nfsu2.xyz/lan without an Origin header
+(the server accepts tools; only its own page origins are checked). The switch
+returned:
+{"t":"welcome","vip":172820807,"vipStr":"10.77.9.71",
+ "mask":"255.255.224.0","token":...,"bundle":1}
+and then relayed binary NET_KIND_LAN_UDP frames (kind 3) from other players,
+including the original game's "NFSU2NA" LAN advertisements to
+255.255.255.255:9999. This proves the switch relays the original LAN protocol,
+so a native virtual-LAN backend can join it.
+
+Added Android Nfsu2SwitchProbe: a minimal TLS + WebSocket client that performs
+the /lan upgrade, sends the hello, reads the welcome and counts relayed LAN
+frames. Support > Test nfsu2.xyz opens a dialog with the result. Built; the
+phone was offline before this APK could be installed, so the Android probe is
+not yet device-tested. Next: port the virtual LAN backend (net_lan.c) into the
+native Winsock HLE and route the game's LAN sockets through this transport.
