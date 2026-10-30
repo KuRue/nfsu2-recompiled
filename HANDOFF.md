@@ -1776,3 +1776,20 @@ launches on an Amigo7xESP (Amlogic, Android 12, armeabi-v7a): the launcher and
 Support > Test nfsu2.xyz work, welcome 10.77.14.146 and 2,040 relayed frames.
 The game itself cannot start there: the device has 1.0 GB free and no external
 volume, while the game folder is 3.0 GB; `/sdcard/nfsu2` is absent.
+
+## 2026-10-30: armv7 TV box boots the game
+
+Amigo7xESP (Amlogic, Android 12, armeabi-v7a, 4 GB storage). The 32-bit
+APK installs; with a reduced game folder it reaches the title screen and the
+main menu (Career selected), rendering correctly. Storage is the limit: the
+device had 1.0 GB free and the full game folder is 3.0 GB. Freed 133 MB (the
+pushed arm64 APK) and caches, then copied the essential 1.25 GB: SPEED2.EXE,
+GLOBAL, TRACKS, CARS, FRONTEND, LANGUAGES, SOUND, SUBTITLES, CREDITS, NIS,
+server.dll/cfg, memcard, and the English speech bank. MOVIES has only
+blank.vp6, THX_logo.vp6 and ealogo.vp6; TEXPACKS, pfdata and nisaudio.big are
+absent. Empty MOVIES/NIS directories make the game abort with "Empty game
+directory", so NIS is copied in full and the four small movies satisfy MOVIES.
+Without UG2_Speech.big the frontend crashed with SIGSEGV; with the English
+speech bank and its index it boots. 34 MB free after the copy, so the full
+MOVIES/TEXPACKS/pfdata set needs ~2 GB freed (preinstalled streaming apps) or
+an external USB volume.
