@@ -77,7 +77,7 @@ final class GraphicsPanel {
                 MenuTheme.dp(context, 10), MenuTheme.dp(context, 3));
         top.addView(live, new LinearLayout.LayoutParams(-2, -2));
         TextView hint = new TextView(context);
-        hint.setText("  Applies while you drive. The game is paused while this panel is open.");
+        hint.setText("  Most changes apply while you drive. NEXT START rows wait for the next launch. The game is paused while this panel is open.");
         hint.setTextSize(12);
         hint.setTextColor(MenuTheme.color(context, R.color.menu_secondary));
         hint.setTypeface(MenuTheme.font(context, false));
@@ -255,7 +255,7 @@ final class GraphicsPanel {
         if (key.equals(GameOptions.WIDESCREEN) || key.equals(GameOptions.LATENCY)
                 || key.equals(GameOptions.REFLECTIONS) || key.equals(GameOptions.TEXTURES))
             return "NEXT START";
-        if (key.equals(GameOptions.HD_PACKS)) return "STREAMS";
+        if (key.equals(GameOptions.HD_PACKS)) return "STREAMING";
         return null;
     }
 }
