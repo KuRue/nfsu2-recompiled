@@ -15,12 +15,14 @@ def main():
         build = Path(folder)
         for name in ['frame_pacer', 'frame_metrics', 'physics_probe', 'physics_haptics',
                      'gamepad_state', 'force_feedback', 'audio_mixer', 'texture_pack', 'guest_boot_worker',
-                     'capture_quiesce', 'frame_benchmark', 'performance_hint', 'lan_broadcast', 'guest_heap']:
+                     'capture_quiesce', 'frame_benchmark', 'performance_hint', 'lan_broadcast', 'virtual_lan', 'guest_heap']:
             executable = build / name
             run(os.environ.get('CXX', 'g++'), '-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror',
                 '-pthread', ROOT / 'tests' / (name + '.cpp'), '-o', executable)
             run(executable)
         java = ROOT / 'android/app/src/main/java/com/nfsu2/androidevolved'
+        # SwitchSocket is the pure-Java nfsu2.xyz transport: no Android imports.
+        run('javac', '-d', build, java / 'SwitchSocket.java')
         run('javac', '-d', build, java / 'ReleaseVersion.java', java / 'BenchmarkReport.java', java / 'GraphicsDemand.java',
             ROOT / 'tests/java/com/nfsu2/androidevolved/GraphicsDemandTest.java',
             ROOT / 'tests/java/com/nfsu2/androidevolved/ReleaseVersionTest.java',

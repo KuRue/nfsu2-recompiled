@@ -357,7 +357,16 @@ public final class LauncherActivity extends Activity {
                     }));
                 }
                 optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.INTRO)));
-                optionsList.addView(optionRow("Online server", GameOptions.onlineServer(this), this::chooseOnlineServer));
+                optionsList.addView(optionRow("Network", GameOptions.networkLabel(GameOptions.network(this)), this::chooseNetwork));
+                String network = GameOptions.network(this);
+                if (network.equals(GameOptions.NETWORK_EA))
+                    optionsList.addView(optionRow("Online server", GameOptions.onlineServer(this), this::chooseOnlineServer));
+                else if (network.equals(GameOptions.NETWORK_LAN))
+                    optionsList.addView(optionRow("LAN play", "Same Wi-Fi network", () -> explainNetwork(
+                            "Local LAN", "The game's own LAN mode finds players on your Wi-Fi network. No server is used.")));
+                else
+                    optionsList.addView(optionRow("nfsu2.xyz", "Virtual LAN switch", () -> explainNetwork(
+                            "nfsu2.xyz", "LAN play goes through the nfsu2.xyz virtual LAN switch, so players need no shared Wi-Fi. The EA Nation online server is not used in this mode.")));
                 break;
             }
             case "saves":
@@ -456,6 +465,20 @@ public final class LauncherActivity extends Activity {
         String current = GameOptions.language(this);
         for (String[] language : LANGUAGES) if (language[1].equals(current)) return language[0];
         return current;
+    }
+
+    private void chooseNetwork() {
+        String current = GameOptions.network(this);
+        chooseValue("Network", new String[] {"EA Nation server", "Local LAN", "nfsu2.xyz virtual LAN"},
+                new String[] {GameOptions.NETWORK_EA, GameOptions.NETWORK_LAN, GameOptions.NETWORK_NFSU2},
+                current, GameOptions.NETWORK_EA, value -> {
+                    GameOptions.prefs(this).edit().putString(GameOptions.NETWORK, value).apply();
+                    refreshOptions();
+                });
+    }
+
+    private void explainNetwork(String title, String text) {
+        MenuTheme.dialog(this, title).setMessage(text).setPositiveButton("OK", null).show();
     }
 
     private void chooseOnlineServer() {
@@ -739,6 +762,7 @@ public final class LauncherActivity extends Activity {
                 .putExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY)))
                 .putExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu"))
                 .putExtra("onlineServer", GameOptions.onlineServer(this))
+                .putExtra("networkProvider", GameOptions.network(this))
                 .putExtra("driverLoader", loader));
     }
 

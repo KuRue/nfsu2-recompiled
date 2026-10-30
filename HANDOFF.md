@@ -1682,3 +1682,55 @@ frames. Support > Test nfsu2.xyz opens a dialog with the result. Built; the
 phone was offline before this APK could be installed, so the Android probe is
 not yet device-tested. Next: port the virtual LAN backend (net_lan.c) into the
 native Winsock HLE and route the game's LAN sockets through this transport.
+
+## 2026-10-30: nfsu2.xyz virtual LAN, native
+
+The launcher's Game section now has a Network choice: **EA Nation server**
+(the existing community server), **Local LAN** (the game's own LAN mode on
+Wi-Fi), and **nfsu2.xyz** (LAN play through the nfsu2.xyz switch). The Online
+server field only appears for EA Nation; the other choices show a short
+explanation in its place. The provider is saved as `network_provider` and
+travels to GameActivity as `networkProvider`.
+
+nfsu2.xyz is not a host/port: its /lan endpoint is a WebSocket virtual-LAN
+switch. The implementation has two halves:
+
+- `android/.../SwitchSocket.java` (pure Java): TLS + WebSocket /lan client.
+  It sends the hello (`lan:1`, no bundle/compact so frames stay plain), handles
+  welcome/token/queue/ticket, pings every 2 s, reconnects with the token and
+  queue ticket, and queues outgoing frames from the game. No Android imports,
+  so it runs in the host test and in `check_phone_source.py`.
+- `Nfsu2LanBridge.java`/JNI: the bridge starts for the nfsu2 provider, hands
+  switch frames to the native stack, and pumps the native outbox back.
+- `android/.../guest_lan.inc`: the virtual IP stack behind the Winsock HLE:
+  UDP bind/broadcast/unicast/port-unreachable, TCP SYN/SYNACK/DATA/FIN/RST
+  with accept queues and refusals, local 127/8 connections, the 10.77.x.x
+  subnet, Windows SO_REUSEADDR semantics and broadcast loopback. The HLE
+  virtualizes ports 9999 (discovery), 9900 (LAN lobby/join) and 3658 (race
+  link); every other socket (EA Nation 20920/20921) stays on the real network.
+- Address identity: with nfsu2 selected, `gethostbyname(local host)`, the
+  interface list and routing-interface queries report the switch's VIP and
+  mask, so the game advertises `10.77.x.x` instead of the phone's Wi-Fi IP.
+
+Verification without the phone:
+
+- `tests/virtual_lan.cpp` (in `check_phone_source.py`): bind, broadcast
+  loopback, peer delivery, port unreachable, TCP listener SYN/SYNACK/accept/
+  DATA/FIN and TCP client connect/SYNACK; passes.
+- Live switch, native frames through a host relay: welcome `10.77.x.x/19`,
+  585 relayed frames and 539 datagrams, including other players' original
+  384-byte `NFSU2NA` advertisements.
+- Android emulator (s25u_sim): selected nfsu2.xyz in the launcher, started the
+  game; the bridge queued, got welcome `10.77.6.60/19`, and the native log
+  shows 1793 relayed frames. The game reached its main menu. Not tested on the
+  phone: the phone was offline (`192.168.0.247:36391` refused), and the
+  emulator's virtual controls could not be driven into the LAN screen, so the
+  host/join handshake against server.dll is still unverified on device.
+- Two-client host/join on the switch is the next test: host a LAN server,
+  join from another browser or a second install, then a race.
+
+Limitations: virtual ICMP is not routed from the game (ping to a virtual host
+uses the phone's real network and fails); the switch is often full, so the
+client may wait in its queue before the LAN screen has an address. The bridge
+holds the switch slot for the whole game session, as the browser port holds it
+from WSAStartup to WSACleanup.

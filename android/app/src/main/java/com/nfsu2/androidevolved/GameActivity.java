@@ -179,6 +179,7 @@ public final class GameActivity extends NativeActivity {
     private static native void nativeBenchmark(int seconds, String reportPath, String resolution);
     private static native void nativeWidescreen(boolean enabled);
     private static native void nativeOnlineServer(String host);
+    private static native void nativeNetworkProvider(String provider);
     private static native boolean nativeLanBroadcasts();
     private static native void nativeGamepadConnected(boolean connected);
     private static native void nativeGamepadDevices(int[] ids);
@@ -369,6 +370,11 @@ public final class GameActivity extends NativeActivity {
         nativeWidescreen(launch.getBooleanExtra("widescreen", GameOptions.get(this, GameOptions.WIDESCREEN).equals("on")));
         String server = launch.getStringExtra("onlineServer");
         nativeOnlineServer(GameOptions.validServer(server) ? server : GameOptions.onlineServer(this));
+        String network = launch.getStringExtra("networkProvider");
+        if (!GameOptions.validNetwork(network)) network = GameOptions.network(this);
+        nativeNetworkProvider(network);
+        if (network.equals(GameOptions.NETWORK_NFSU2)) Nfsu2LanBridge.start(this);
+        else Nfsu2LanBridge.stop();
         nativeMinimapTop(launch.getBooleanExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top")));
         nativeSkipIntro(launch.getBooleanExtra("skipIntro", GameOptions.get(this, GameOptions.INTRO).equals("skip")));
         nativeBackBuffers(launch.getIntExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY))));
@@ -450,6 +456,7 @@ public final class GameActivity extends NativeActivity {
     }
     /** The guest's Quit Game action: end the session and show the launcher main menu. */
     public void onGameExit() {
+        Nfsu2LanBridge.stop();
         runOnUiThread(() -> {
             try { stopService(new Intent(this, KeepAliveService.class)); }
             catch (RuntimeException ignored) {}

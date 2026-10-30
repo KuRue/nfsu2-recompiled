@@ -1919,6 +1919,11 @@ void setGuestPointer(float x,float y,int phase){
 }
 void typeGuestText(const std::vector<uint32_t>& characters){enqueueGuestText(characters);}
 void setGuestOnlineServer(const std::string& host){std::lock_guard<MachineMutex> lock(machine);if(!memory&&!host.empty())onlineServer=host;}
+void setGuestNetworkProvider(const std::string& provider){vlan::setActive(provider=="nfsu2");}
+void guestSwitchWelcome(uint32_t address,uint32_t netmask){vlan::welcome(address,netmask);}
+void guestSwitchFrame(const uint8_t* frame,size_t length){vlan::incoming(frame,length);}
+void guestSwitchClosed(const char* reason){vlan::disconnected(reason);}
+bool guestSwitchPoll(std::vector<uint8_t>& frame,int timeoutMs){return vlan::takeOutgoing(frame,timeoutMs);}
 void setGuestWidescreen(bool enabled){std::lock_guard<MachineMutex> lock(machine);if(!memory)guestWidescreen=enabled;}
 void setGuestLanguage(const char* language){
     std::lock_guard<MachineMutex> lock(machine);if(memory)return;

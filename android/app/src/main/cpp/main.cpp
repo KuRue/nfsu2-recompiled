@@ -564,6 +564,33 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_nfsu2_androidevolved_GameActivity
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeOnlineServer(JNIEnv* env,jclass,jstring host){
     const char* text=env->GetStringUTFChars(host,nullptr);setGuestOnlineServer(text?text:"");env->ReleaseStringUTFChars(host,text);
 }
+// "ea", "lan" or "nfsu2": selects the virtual LAN backend (nfsu2.xyz).
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeNetworkProvider(JNIEnv* env,jclass,jstring provider){
+    const char* text=env->GetStringUTFChars(provider,nullptr);setGuestNetworkProvider(text?text:"");env->ReleaseStringUTFChars(provider,text);
+}
+// The Java /lan WebSocket: the switch's welcome, its binary frames, and its close.
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_Nfsu2LanBridge_nativeSwitchWelcome(JNIEnv*,jclass,jint vip,jint mask){
+    guestSwitchWelcome(uint32_t(vip),uint32_t(mask));
+}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_Nfsu2LanBridge_nativeSwitchFrame(JNIEnv* env,jclass,jbyteArray frame){
+    if(!frame)return;
+    jsize length=env->GetArrayLength(frame);
+    if(length<24)return;
+    std::vector<uint8_t> bytes(static_cast<size_t>(length),0);
+    env->GetByteArrayRegion(frame,0,length,reinterpret_cast<jbyte*>(bytes.data()));
+    guestSwitchFrame(bytes.data(),bytes.size());
+}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_Nfsu2LanBridge_nativeSwitchClosed(JNIEnv* env,jclass,jstring reason){
+    const char* text=reason?env->GetStringUTFChars(reason,nullptr):nullptr;guestSwitchClosed(text?text:"");if(text)env->ReleaseStringUTFChars(reason,text);
+}
+extern "C" JNIEXPORT jbyteArray JNICALL Java_com_nfsu2_androidevolved_Nfsu2LanBridge_nativeSwitchPoll(JNIEnv* env,jclass,jint timeoutMs){
+    std::vector<uint8_t> frame;
+    if(!guestSwitchPoll(frame,int(timeoutMs)))return nullptr;
+    jbyteArray array=env->NewByteArray(jsize(frame.size()));
+    if(!array)return nullptr;
+    env->SetByteArrayRegion(array,0,jsize(frame.size()),reinterpret_cast<const jbyte*>(frame.data()));
+    return array;
+}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeSkipIntro(JNIEnv*,jclass,jboolean skip){setGuestSkipIntro(skip==JNI_TRUE);}
 // A benchmark run moves the minimap far above the screen so the stats panel has the corner.
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeMinimapTop(JNIEnv*,jclass,jboolean top){

@@ -19,10 +19,11 @@ std::string onlineServer="eahub.eu";
 namespace net {
 constexpr uint32_t socketError=0xffffffffu,invalidSocket=0xffffffffu;
 constexpr uint32_t wsaEinval=10022,wsaEwouldblock=10035,wsaEnotsock=10038,wsaEfault=10014,wsaEmsgsize=10040,
-    wsaEtimedout=10060,wsaEafnosupport=10047,wsaNotinitialised=10093,wsaHostNotFound=11001,wsaNoData=11004;
+    wsaEtimedout=10060,wsaEafnosupport=10047,wsaNotinitialised=10093,wsaHostNotFound=11001,wsaNoData=11004,
+    wsaEdestaddrreq=10039,wsaEconnreset=10054;
 constexpr char localHostName[]="nfsu2-android";
 // icmp: a Windows raw ICMP socket (ping) on an unprivileged Linux ping socket; see icmpReceive.
-struct Socket{int fd;bool guestNonBlocking=false,connecting=false,icmp=false,datagram=false,broadcast=false;unsigned boundPort=0;uint16_t icmpId=0;uint32_t recvTimeout=0,sendTimeout=0;std::set<std::string> peersLogged;
+struct Socket{int fd;bool guestNonBlocking=false,connecting=false,icmp=false,datagram=false,broadcast=false,reuse=false;int vkind=0;unsigned boundPort=0;uint16_t icmpId=0;uint32_t recvTimeout=0,sendTimeout=0;std::set<std::string> peersLogged;
     struct Counter{uint32_t sentPackets=0,sentBytes=0,receivedPackets=0,receivedBytes=0;};
     std::map<std::string,Counter> traffic;std::chrono::steady_clock::time_point nextSummary{};};
 std::map<uint32_t,Socket> sockets;
@@ -98,6 +99,10 @@ bool storeAddress(uint32_t address,uint32_t lengthPointer,const sockaddr_storage
     uint32_t capacity=read32(lengthPointer);
     if(int32_t(capacity)<int32_t(length))return false;
     std::memcpy(ptr(address,length),&value,length);write32(lengthPointer,length);return true;
+}
+bool storeAddress(uint32_t address,uint32_t lengthPointer,const sockaddr_in& value,socklen_t length){
+    sockaddr_storage storage{};std::memcpy(&storage,&value,sizeof value);
+    return storeAddress(address,lengthPointer,storage,length);
 }
 uint32_t newHandle(int fd,bool nonBlocking){
     uint32_t handle=nextHandle;nextHandle+=4;
@@ -188,10 +193,38 @@ void publishLanBroadcasts(){
     bool wanted=false;
     for(const auto& entry:sockets){
         const Socket& socket=entry.second;
+        if(socket.vkind)continue;
         if(lanSocketNeedsWifiBroadcast(LanSocketView(socket.datagram,socket.broadcast,socket.boundPort))){wanted=true;break;}
     }
     if(lanBroadcastWanted.exchange(wanted,std::memory_order_acq_rel)==wanted)return;
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","LAN broadcasts %s",wanted?"needed":"idle");
+}
+}  // namespace net
+
+#include "guest_lan.inc"
+
+namespace net {
+// The switch's virtual LAN lives outside the guest machine: waits release the
+// machine, as socket waits do, so the guest keeps running (and the Java
+// WebSocket thread can deliver the welcome or a frame).
+bool waitVirtual(uint32_t timeoutMs){
+    WaitScope scope("virtual LAN",timeoutMs);
+    released([&]{vlan::waitChange(20);return 0;});
+    checkGuestProgress();
+    return true;
+}
+bool switchOnline(uint32_t timeoutMs){
+    auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(timeoutMs);
+    while(!vlan::online()){
+        if(timeoutMs&&std::chrono::steady_clock::now()>=deadline)return false;
+        waitVirtual(20);
+    }
+    return true;
+}
+// Result of a virtual TCP connect: 0 established, kWouldBlock still trying,
+// another Winsock error refused or timed out.
+int virtualConnectResult(uint32_t handle){
+    return vlan::connectResult(handle);
 }
 }  // namespace net
 
@@ -206,7 +239,8 @@ void wsaStartup(){
     std::strcpy(static_cast<char*>(ptr(data+261,8)),"Running");
     uint16_t maxSockets=1024,maxDatagram=65467;std::memcpy(ptr(data+390,2),&maxSockets,2);std::memcpy(ptr(data+392,2),&maxDatagram,2);
     ++net::startups;
-    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: WSAStartup %04x; EA Nation hosts resolve via %s",requested,onlineServer.c_str());
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: WSAStartup %04x; EA Nation hosts resolve via %s%s",requested,onlineServer.c_str(),
+        vlan::active()?"; LAN play uses the nfsu2.xyz switch":"");
     ret(0,2);
 }
 void wsaCleanup(){
@@ -245,6 +279,7 @@ void socketCreate(){
 void socketClose(){
     auto found=net::sockets.find(arg(0));
     if(found==net::sockets.end()){ret(net::fail(net::wsaEnotsock),1);return;}
+    if(found->second.vkind)vlan::closeSocket(arg(0),false);
     ::close(found->second.fd);net::sockets.erase(found);net::publishLanBroadcasts();ret(0,1);
 }
 void socketBind(){
@@ -253,6 +288,14 @@ void socketBind(){
     if(!length){ret(net::fail(net::wsaEfault),3);return;}
     // A raw ICMP socket ignores the port; on a ping socket it is the echo id and low ones need privileges.
     if(socket->icmp&&address.ss_family==AF_INET)reinterpret_cast<sockaddr_in*>(&address)->sin_port=0;
+    auto* in=reinterpret_cast<sockaddr_in*>(&address);
+    uint16_t port=ntohs(in->sin_port);
+    if(!socket->icmp&&vlan::active()&&vlan::wantsPort(port)){
+        uint16_t boundPort=port;
+        int error=vlan::bind(arg(0),!socket->datagram,ntohl(in->sin_addr.s_addr),port,socket->reuse,boundPort);
+        if(!error){socket->vkind=socket->datagram?1:2;socket->boundPort=boundPort;net::publishLanBroadcasts();}
+        ret(error?net::fail(uint32_t(error)):0,3);return;
+    }
     int status=::bind(socket->fd,reinterpret_cast<sockaddr*>(&address),length);int error=errno;
     if(!status&&!socket->icmp&&address.ss_family==AF_INET){
         unsigned port=ntohs(reinterpret_cast<sockaddr_in*>(&address)->sin_port);
@@ -267,11 +310,33 @@ void socketBind(){
 }
 void socketListen(){
     auto* socket=net::find(arg(0));if(!socket){ret(net::fail(net::wsaEnotsock),2);return;}
+    if(socket->vkind==2){int error=vlan::listen(arg(0),int(arg(1)));ret(error?net::fail(uint32_t(error)):0,2);return;}
     ret(::listen(socket->fd,int(arg(1)))?net::failErrno():0,2);
 }
 void socketAccept(){
     uint32_t handle=arg(0),address=arg(1),lengthPointer=arg(2);
     auto* socket=net::find(handle);if(!socket){lastError=net::wsaEnotsock;ret(net::invalidSocket,3);return;}
+    if(socket->vkind==2){
+        auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(socket->recvTimeout);
+        for(;;){
+            uint32_t created=net::nextHandle;net::nextHandle+=4;
+            int error=vlan::accept(handle,created);
+            if(!error){
+                net::sockets[created]=net::Socket{-1,socket->guestNonBlocking};
+                net::sockets[created].vkind=3;
+                uint32_t peerIp=0;uint16_t peerPort=0;
+                vlan::localAddress(created,peerIp,peerPort,true);
+                sockaddr_in peer{};peer.sin_family=AF_INET;peer.sin_addr.s_addr=htonl(peerIp);peer.sin_port=htons(peerPort);
+                if(address&&!net::storeAddress(address,lengthPointer,peer,16)){vlan::closeSocket(created,true);net::sockets.erase(created);ret(net::fail(net::wsaEfault),3);return;}
+                ret(created,3);return;
+            }
+            if(error!=vlan::kWouldBlock){lastError=uint32_t(error);ret(net::invalidSocket,3);return;}
+            if(socket->guestNonBlocking){lastError=net::wsaEwouldblock;ret(net::invalidSocket,3);return;}
+            if(socket->recvTimeout&&std::chrono::steady_clock::now()>=deadline){lastError=net::wsaEtimedout;ret(net::invalidSocket,3);return;}
+            net::waitVirtual(20);
+            socket=net::find(handle);if(!socket){lastError=net::wsaEnotsock;ret(net::invalidSocket,3);return;}
+        }
+    }
     sockaddr_storage peer{};socklen_t length=sizeof peer;
     int fd=int(net::blocking(*socket,POLLIN,0,[&](int listener){length=sizeof peer;return ssize_t(::accept4(listener,reinterpret_cast<sockaddr*>(&peer),&length,SOCK_NONBLOCK|SOCK_CLOEXEC));}));
     if(fd<0){lastError=net::wsaError(errno);ret(net::invalidSocket,3);return;}
@@ -285,7 +350,30 @@ void socketConnect(){
     sockaddr_storage address;socklen_t length=net::guestAddress(arg(1),arg(2),address);
     if(!length){ret(net::fail(net::wsaEfault),3);return;}
     auto* in=reinterpret_cast<sockaddr_in*>(&address);char text[INET_ADDRSTRLEN]{};inet_ntop(AF_INET,&in->sin_addr,text,sizeof text);
-    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: connect %08x to %s:%u",handle,text,ntohs(in->sin_port));
+    uint16_t port=ntohs(in->sin_port);uint32_t ip=ntohl(in->sin_addr.s_addr);
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: connect %08x to %s:%u",handle,text,port);
+    if(vlan::active()&&vlan::wantsPort(port)){
+        if(!net::switchOnline(5000)){ret(net::fail(net::wsaNotinitialised),3);return;}
+        if(socket->vkind==0){
+            vlan::open(handle,socket->datagram?1:3);
+            socket->vkind=socket->datagram?1:3;
+        }
+        if(socket->datagram){
+            int error=vlan::connectDatagram(handle,ip,port);
+            ret(error?net::fail(uint32_t(error)):0,3);return;
+        }
+        int result=vlan::connectStream(handle,ip,port);
+        if(result==0){ret(0,3);return;}
+        if(result!=vlan::kWouldBlock){ret(net::fail(uint32_t(result)),3);return;}
+        if(socket->guestNonBlocking){socket->connecting=true;ret(net::fail(net::wsaEwouldblock),3);return;}
+        auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(4000);
+        while((result=net::virtualConnectResult(handle))==vlan::kWouldBlock){
+            if(std::chrono::steady_clock::now()>=deadline){result=vlan::kTimedOut;break;}
+            net::waitVirtual(20);
+            if(!net::find(handle)){ret(net::fail(net::wsaEnotsock),3);return;}
+        }
+        ret(result?net::fail(uint32_t(result)):0,3);return;
+    }
     if(::connect(socket->fd,reinterpret_cast<sockaddr*>(&address),length)==0){ret(0,3);return;}
     if(errno!=EINPROGRESS){ret(net::failErrno(),3);return;}
     if(socket->guestNonBlocking){socket->connecting=true;ret(net::fail(net::wsaEwouldblock),3);return;}
@@ -296,49 +384,113 @@ void socketConnect(){
 }
 void socketShutdown(){
     auto* socket=net::find(arg(0));if(!socket){ret(net::fail(net::wsaEnotsock),2);return;}
+    if(socket->vkind==3){int error=vlan::shutdownStream(arg(0),int(arg(1)));ret(error?net::fail(uint32_t(error)):0,2);return;}
     ret(::shutdown(socket->fd,int(arg(1)))?net::failErrno():0,2);
 }
 void socketSend(){
-    auto* socket=net::find(arg(0));if(!socket){ret(net::fail(net::wsaEnotsock),4);return;}
+    uint32_t handle=arg(0);
+    auto* socket=net::find(handle);if(!socket){ret(net::fail(net::wsaEnotsock),4);return;}
     uint32_t buffer=arg(1),length=arg(2),flags=arg(3);
     const void* data=length?ptr(buffer,length):nullptr;
     net::noteIcmpSend(*socket,data,length);
+    if(socket->vkind==3||socket->vkind==1){
+        if(socket->vkind==1){
+            uint32_t ip=0;uint16_t port=0;int error=vlan::localAddress(handle,ip,port,true);
+            if(error){ret(net::fail(uint32_t(error)),4);return;}
+            int result=vlan::sendDatagram(handle,static_cast<const uint8_t*>(data),length,ip,port);
+            ret(result?net::fail(uint32_t(result)):length,4);return;
+        }
+        auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(socket->sendTimeout);
+        for(;;){
+            int error=0;ssize_t sent=vlan::sendStream(handle,static_cast<const uint8_t*>(data),length,error);
+            if(sent>=0){ret(uint32_t(sent),4);return;}
+            if(error!=vlan::kWouldBlock){ret(net::fail(uint32_t(error)),4);return;}
+            if(socket->guestNonBlocking){ret(net::fail(net::wsaEwouldblock),4);return;}
+            if(socket->sendTimeout&&std::chrono::steady_clock::now()>=deadline){ret(net::fail(net::wsaEtimedout),4);return;}
+            net::waitVirtual(20);
+            socket=net::find(handle);if(!socket){ret(net::fail(net::wsaEnotsock),4);return;}
+        }
+    }
     ssize_t sent=net::blocking(*socket,POLLOUT,socket->sendTimeout,[&](int fd){return ::send(fd,data,length,int(flags&7)|MSG_NOSIGNAL);});
     ret(sent<0?net::failErrno():uint32_t(sent),4);
 }
 void socketSendTo(){
-    auto* socket=net::find(arg(0));if(!socket){ret(net::fail(net::wsaEnotsock),6);return;}
+    uint32_t handle=arg(0);
+    auto* socket=net::find(handle);if(!socket){ret(net::fail(net::wsaEnotsock),6);return;}
     uint32_t buffer=arg(1),length=arg(2),flags=arg(3);
     sockaddr_storage address;socklen_t addressLength=0;
     if(arg(4)){addressLength=net::guestAddress(arg(4),arg(5),address);if(!addressLength){ret(net::fail(net::wsaEfault),6);return;}}
     const void* data=length?ptr(buffer,length):nullptr;
     net::noteIcmpSend(*socket,data,length);
+    uint16_t port=addressLength?ntohs(reinterpret_cast<sockaddr_in*>(&address)->sin_port):0;
+    if(!socket->icmp&&vlan::active()&&vlan::wantsPort(port)&&socket->vkind==0){
+        vlan::open(handle,1);socket=net::find(handle);if(!socket){ret(net::fail(net::wsaEnotsock),6);return;}
+        socket->vkind=1;
+    }
+    if(socket->vkind==1){
+        if(!addressLength){ret(net::fail(net::wsaEdestaddrreq),6);return;}
+        uint32_t ip=ntohl(reinterpret_cast<sockaddr_in*>(&address)->sin_addr.s_addr);
+        int result=vlan::sendDatagram(handle,static_cast<const uint8_t*>(data),length,ip,port);
+        ret(result?net::fail(uint32_t(result)):length,6);return;
+    }
     ssize_t sent=net::blocking(*socket,POLLOUT,socket->sendTimeout,[&](int fd){
         return ::sendto(fd,data,length,int(flags&7)|MSG_NOSIGNAL,addressLength?reinterpret_cast<sockaddr*>(&address):nullptr,addressLength);});
-    socket=net::find(arg(0));  // the call may have waited with the machine released
+    socket=net::find(handle);  // the call may have waited with the machine released
     if(socket){
         int error=errno;
-        if(net::hardError(sent))NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: sendto %08x -> %s fallo: %s",arg(0),addressLength?net::describe(address).c_str():"(conectado)",std::strerror(error));
-        else if(sent>=0&&addressLength){net::notePeer(*socket,"envia a",net::describe(address),sent);net::count(arg(0),*socket,net::describe(address),true,sent);}
+        if(net::hardError(sent))NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: sendto %08x -> %s fallo: %s",handle,addressLength?net::describe(address).c_str():"(conectado)",std::strerror(error));
+        else if(sent>=0&&addressLength){net::notePeer(*socket,"envia a",net::describe(address),sent);net::count(handle,*socket,net::describe(address),true,sent);}
         errno=error;
     }
     ret(sent<0?net::failErrno():uint32_t(sent),6);
 }
 void socketRecvFrom();
 void socketRecv(){
-    auto* socket=net::find(arg(0));if(!socket){ret(net::fail(net::wsaEnotsock),4);return;}
+    uint32_t handle=arg(0);
+    auto* socket=net::find(handle);if(!socket){ret(net::fail(net::wsaEnotsock),4);return;}
     uint32_t buffer=arg(1),length=arg(2),flags=arg(3);
     if(socket->icmp){  // recv == recvfrom without the source address
-        uint32_t returnAddress=read32(g_esp),handle=arg(0);
+        uint32_t returnAddress=read32(g_esp);
         g_esp-=8;write32(g_esp,returnAddress);write32(g_esp+4,handle);write32(g_esp+8,buffer);write32(g_esp+12,length);write32(g_esp+16,flags);
         write32(g_esp+20,0);write32(g_esp+24,0);socketRecvFrom();return;
     }
     void* data=length?ptr(buffer,length):nullptr;
+    if(socket->vkind==3){
+        auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(socket->recvTimeout);
+        for(;;){
+            size_t got=0;bool reset=false;
+            int result=vlan::recvStream(handle,static_cast<uint8_t*>(data),length,got,reset);
+            if(result==0){
+                if(got==0&&reset){ret(net::fail(net::wsaEconnreset),4);return;}
+                ret(uint32_t(got),4);return;
+            }
+            if(result!=vlan::kWouldBlock){ret(net::fail(uint32_t(result)),4);return;}
+            if(socket->guestNonBlocking){ret(net::fail(net::wsaEwouldblock),4);return;}
+            if(socket->recvTimeout&&std::chrono::steady_clock::now()>=deadline){ret(net::fail(net::wsaEtimedout),4);return;}
+            net::waitVirtual(20);
+            socket=net::find(handle);if(!socket){ret(net::fail(net::wsaEnotsock),4);return;}
+        }
+    }
+    if(socket->vkind==1){
+        auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(socket->recvTimeout);
+        for(;;){
+            uint32_t source=0;uint16_t sport=0;size_t got=0;bool unreachable=false;
+            int result=vlan::recvDatagram(handle,static_cast<uint8_t*>(data),length,source,sport,got,unreachable);
+            if(unreachable){ret(net::fail(net::wsaEconnreset),4);return;}
+            if(result==0||result==vlan::kMsgSize){ret(result?net::fail(uint32_t(result)):uint32_t(got),4);return;}
+            if(result!=vlan::kWouldBlock){ret(net::fail(uint32_t(result)),4);return;}
+            if(socket->guestNonBlocking){ret(net::fail(net::wsaEwouldblock),4);return;}
+            if(socket->recvTimeout&&std::chrono::steady_clock::now()>=deadline){ret(net::fail(net::wsaEtimedout),4);return;}
+            net::waitVirtual(20);
+            socket=net::find(handle);if(!socket){ret(net::fail(net::wsaEnotsock),4);return;}
+        }
+    }
     ssize_t received=net::blocking(*socket,POLLIN,socket->recvTimeout,[&](int fd){return ::recv(fd,data,length,int(flags&3));});
     ret(received<0?net::failErrno():uint32_t(received),4);
 }
 void socketRecvFrom(){
-    auto* socket=net::find(arg(0));if(!socket){ret(net::fail(net::wsaEnotsock),6);return;}
+    uint32_t handle=arg(0);
+    auto* socket=net::find(handle);if(!socket){ret(net::fail(net::wsaEnotsock),6);return;}
     uint32_t buffer=arg(1),length=arg(2),flags=arg(3),address=arg(4),lengthPointer=arg(5);
     void* data=length?ptr(buffer,length):nullptr;
     sockaddr_storage peer{};socklen_t peerLength=sizeof peer;
@@ -348,26 +500,53 @@ void socketRecvFrom(){
             peerLength=sizeof peer;return ::recvfrom(fd,message.data(),message.size(),int(flags&2),reinterpret_cast<sockaddr*>(&peer),&peerLength);});
         if(received<0){ret(net::failErrno(),6);return;}
         message.resize(size_t(received));
-        if(auto* current=net::find(arg(0))){net::notePeer(*current,"ping: respuesta de",net::describe(peer),received);net::count(arg(0),*current,net::describe(peer),false,received);}
-        auto packet=net::icmpPacket(*net::find(arg(0)),std::move(message),*reinterpret_cast<sockaddr_in*>(&peer));
+        if(auto* current=net::find(handle)){net::notePeer(*current,"ping: respuesta de",net::describe(peer),received);net::count(handle,*current,net::describe(peer),false,received);}
+        auto packet=net::icmpPacket(*net::find(handle),std::move(message),*reinterpret_cast<sockaddr_in*>(&peer));
         if(peerLength&&!net::storeAddress(address,lengthPointer,peer,std::min<socklen_t>(peerLength,16))){ret(net::fail(net::wsaEfault),6);return;}
         if(length)std::memcpy(data,packet.data(),std::min<size_t>(length,packet.size()));
         if(packet.size()>length){ret(net::fail(net::wsaEmsgsize),6);return;}
         ret(uint32_t(packet.size()),6);return;
     }
+    if(socket->vkind==1){
+        auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(socket->recvTimeout);
+        for(;;){
+            uint32_t source=0;uint16_t sport=0;size_t got=0;bool unreachable=false;
+            int result=vlan::recvDatagram(handle,static_cast<uint8_t*>(data),length,source,sport,got,unreachable);
+            if(unreachable){ret(net::fail(net::wsaEconnreset),6);return;}
+            if(result==0||result==vlan::kMsgSize){
+                if(address){
+                    sockaddr_in from{};from.sin_family=AF_INET;from.sin_addr.s_addr=htonl(source);from.sin_port=htons(sport);
+                    if(!net::storeAddress(address,lengthPointer,from,16)){ret(net::fail(net::wsaEfault),6);return;}
+                }
+                ret(result?net::fail(uint32_t(result)):uint32_t(got),6);return;
+            }
+            if(result!=vlan::kWouldBlock){ret(net::fail(uint32_t(result)),6);return;}
+            if(socket->guestNonBlocking){ret(net::fail(net::wsaEwouldblock),6);return;}
+            if(socket->recvTimeout&&std::chrono::steady_clock::now()>=deadline){ret(net::fail(net::wsaEtimedout),6);return;}
+            net::waitVirtual(20);
+            socket=net::find(handle);if(!socket){ret(net::fail(net::wsaEnotsock),6);return;}
+        }
+    }
     // MSG_TRUNC reports the full datagram size: Windows fails a short buffer with WSAEMSGSIZE.
     ssize_t received=net::blocking(*socket,POLLIN,socket->recvTimeout,[&](int fd){
         peerLength=sizeof peer;return ::recvfrom(fd,data,length,int(flags&3)|MSG_TRUNC,reinterpret_cast<sockaddr*>(&peer),&peerLength);});
-    if(net::hardError(received)){int error=errno;NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: recvfrom %08x fallo: %s",arg(0),std::strerror(error));errno=error;}
+    if(net::hardError(received)){int error=errno;NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: recvfrom %08x fallo: %s",handle,std::strerror(error));errno=error;}
     if(received<0){ret(net::failErrno(),6);return;}
-    socket=net::find(arg(0));
-    if(socket&&peerLength){net::notePeer(*socket,"recibe de",net::describe(peer),received);net::count(arg(0),*socket,net::describe(peer),false,received);}
+    socket=net::find(handle);
+    if(socket&&peerLength){net::notePeer(*socket,"recibe de",net::describe(peer),received);net::count(handle,*socket,net::describe(peer),false,received);}
     if(peerLength&&!net::storeAddress(address,lengthPointer,peer,std::min<socklen_t>(peerLength,16))){ret(net::fail(net::wsaEfault),6);return;}
     if(uint32_t(received)>length){ret(net::fail(net::wsaEmsgsize),6);return;}
     ret(uint32_t(received),6);
 }
 void socketName(bool peer){
-    auto* socket=net::find(arg(0));if(!socket){ret(net::fail(net::wsaEnotsock),3);return;}
+    uint32_t handle=arg(0);
+    auto* socket=net::find(handle);if(!socket){ret(net::fail(net::wsaEnotsock),3);return;}
+    if(socket->vkind){
+        uint32_t ip=0;uint16_t port=0;int error=vlan::localAddress(handle,ip,port,peer);
+        if(error){ret(net::fail(uint32_t(error)),3);return;}
+        sockaddr_in address{};address.sin_family=AF_INET;address.sin_addr.s_addr=htonl(ip);address.sin_port=htons(port);
+        ret(net::storeAddress(arg(1),arg(2),address,16)?0:net::fail(net::wsaEfault),3);return;
+    }
     sockaddr_storage address{};socklen_t length=sizeof address;
     int status=peer ? ::getpeername(socket->fd,reinterpret_cast<sockaddr*>(&address),&length) : ::getsockname(socket->fd,reinterpret_cast<sockaddr*>(&address),&length);
     if(status){ret(net::failErrno(),3);return;}
@@ -381,7 +560,9 @@ void socketIoctl(){
     if(!value){ret(net::fail(net::wsaEfault),3);return;}
     switch(command){
     case 0x8004667eu:socket->guestNonBlocking=read32(value)!=0;ret(0,3);return;  // FIONBIO
-    case 0x4004667fu:{int pending=0;if(::ioctl(socket->fd,FIONREAD,&pending)){ret(net::failErrno(),3);return;}write32(value,uint32_t(pending));ret(0,3);return;}  // FIONREAD
+    case 0x4004667fu:{
+        if(socket->vkind){size_t pending=0;vlan::readable(arg(0),pending);write32(value,uint32_t(pending));ret(0,3);return;}
+        int pending=0;if(::ioctl(socket->fd,FIONREAD,&pending)){ret(net::failErrno(),3);return;}write32(value,uint32_t(pending));ret(0,3);return;}  // FIONREAD
     default:throw GuestStop("ioctlsocket comando pendiente: "+hex(command)+" desde "+hex(g_cur_func));
     }
 }
@@ -394,7 +575,7 @@ void socketOption(){
     uint32_t result;
     if(level==0xffffu){  // SOL_SOCKET
         switch(name){
-        case 0x0004:result=set(SOL_SOCKET,SO_REUSEADDR,integer());break;
+        case 0x0004:{int enabled=integer();result=set(SOL_SOCKET,SO_REUSEADDR,enabled);if(!result)socket->reuse=enabled!=0;break;}
         case 0x0008:result=set(SOL_SOCKET,SO_KEEPALIVE,integer());break;
         case 0x0020:{int enabled=integer()?1:0;result=set(SOL_SOCKET,SO_BROADCAST,enabled);
             if(!result){socket->broadcast=enabled!=0;net::publishLanBroadcasts();
@@ -420,23 +601,35 @@ void socketOption(){
 }
 // getsockopt for the options a Winsock program reads back.
 void socketGetOption(){
-    auto* socket=net::find(arg(0));if(!socket){ret(net::fail(net::wsaEnotsock),5);return;}
+    uint32_t handle=arg(0);
+    auto* socket=net::find(handle);if(!socket){ret(net::fail(net::wsaEnotsock),5);return;}
     uint32_t level=arg(1),name=arg(2),value=arg(3),lengthPointer=arg(4);
     if(!value||!lengthPointer||int32_t(read32(lengthPointer))<4){ret(net::fail(net::wsaEfault),5);return;}
     int option=0;socklen_t size=sizeof option;int status=0;
     if(level==0xffffu){
         switch(name){
-        case 0x1007:status=::getsockopt(socket->fd,SOL_SOCKET,SO_ERROR,&option,&size);if(!status)option=option?int(net::wsaError(option)):0;break;
-        case 0x1008:status=::getsockopt(socket->fd,SOL_SOCKET,SO_TYPE,&option,&size);break;  // SOCK_STREAM/DGRAM match
-        case 0x1001:status=::getsockopt(socket->fd,SOL_SOCKET,SO_SNDBUF,&option,&size);break;
-        case 0x1002:status=::getsockopt(socket->fd,SOL_SOCKET,SO_RCVBUF,&option,&size);break;
-        case 0x0004:status=::getsockopt(socket->fd,SOL_SOCKET,SO_REUSEADDR,&option,&size);break;
-        case 0x0020:status=::getsockopt(socket->fd,SOL_SOCKET,SO_BROADCAST,&option,&size);break;
+        case 0x1007:
+            if(socket->vkind){
+                option=socket->vkind==3?net::virtualConnectResult(handle):0;
+                if(option==vlan::kWouldBlock)option=net::wsaEwouldblock;
+            }else{
+                status=::getsockopt(socket->fd,SOL_SOCKET,SO_ERROR,&option,&size);
+                if(!status)option=option?int(net::wsaError(option)):0;
+            }
+            break;
+        case 0x1008:option=socket->datagram?2:1;break;  // SOCK_DGRAM / SOCK_STREAM
+        case 0x1001:option=65536;break;
+        case 0x1002:option=65536;break;
+        case 0x0004:if(socket->vkind){option=socket->reuse?1:0;break;}status=::getsockopt(socket->fd,SOL_SOCKET,SO_REUSEADDR,&option,&size);break;
+        case 0x0020:if(socket->vkind){option=socket->broadcast?1:0;break;}status=::getsockopt(socket->fd,SOL_SOCKET,SO_BROADCAST,&option,&size);break;
         case 0x1005:option=int(socket->sendTimeout);break;
         case 0x1006:option=int(socket->recvTimeout);break;
         default:throw GuestStop("getsockopt SOL_SOCKET opcion pendiente: "+hex(name)+" desde "+hex(g_cur_func));
         }
-    }else if(level==IPPROTO_TCP&&name==1)status=::getsockopt(socket->fd,IPPROTO_TCP,TCP_NODELAY,&option,&size);
+    }else if(level==IPPROTO_TCP&&name==1){
+        option=1;
+        if(!socket->vkind)status=::getsockopt(socket->fd,IPPROTO_TCP,TCP_NODELAY,&option,&size);
+    }
     else throw GuestStop("getsockopt nivel "+hex(level)+" opcion "+hex(name)+" pendiente desde "+hex(g_cur_func));
     if(status){ret(net::failErrno(),5);return;}
     write32(value,uint32_t(option));write32(lengthPointer,4);ret(0,5);
@@ -448,7 +641,7 @@ void hostToNetShort(){ret(__builtin_bswap16(uint16_t(arg(0))),1);}
 void socketSelect(){
     uint32_t sets[3]={arg(1),arg(2),arg(3)},timeoutPointer=arg(4);
     static constexpr short wanted[3]={POLLIN,POLLOUT,POLLPRI};
-    struct Entry{uint32_t handle;int fd;unsigned set;};
+    struct Entry{uint32_t handle;int fd;unsigned set;size_t poll;bool virtualSocket;};
     std::vector<Entry> entries;std::vector<pollfd> polls;
     for(unsigned set=0;set<3;++set){
         if(!sets[set])continue;
@@ -456,38 +649,48 @@ void socketSelect(){
         for(uint32_t i=0;i<count;++i){
             uint32_t handle=read32(sets[set]+4+i*4);auto* socket=net::find(handle);
             if(!socket){ret(net::fail(net::wsaEnotsock),5);return;}
-            entries.push_back({handle,socket->fd,set});polls.push_back({socket->fd,wanted[set],0});
+            size_t index=polls.size();
+            if(socket->vkind)entries.push_back({handle,socket->fd,set,index,true});
+            else{entries.push_back({handle,socket->fd,set,index,false});polls.push_back({socket->fd,wanted[set],0});}
         }
     }
     if(entries.empty()){ret(net::fail(net::wsaEinval),5);return;}
     bool forever=!timeoutPointer;
     uint64_t timeout=forever?0:uint64_t(read32(timeoutPointer))*1000u+(read32(timeoutPointer+4)+999u)/1000u;
-    int ready=::poll(polls.data(),nfds_t(polls.size()),0);
     auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(timeout);
     WaitScope scope("select",uint32_t(timeout));
-    while(ready==0){
-        auto left=std::chrono::duration_cast<std::chrono::milliseconds>(deadline-std::chrono::steady_clock::now()).count();
-        if(!forever&&left<=0)break;
-        checkGuestProgress();
-        int slice=forever?50:int(std::min<long long>(left,50));
-        ready=net::released([&]{return ::poll(polls.data(),nfds_t(polls.size()),slice);});
-        if(ready<0&&errno==EINTR)ready=0;
-    }
-    if(ready<0){ret(net::failErrno(),5);return;}
     std::vector<uint32_t> hits[3];
-    for(size_t i=0;i<entries.size();++i){
-        auto& entry=entries[i];short events=polls[i].revents;auto* socket=net::find(entry.handle);
-        bool hit=false;
-        if(entry.set==0)hit=events&(POLLIN|POLLHUP|POLLERR);
-        else if(socket&&socket->connecting&&(events&(POLLOUT|POLLERR|POLLHUP))){
-            // A pending non-blocking connect is writable on success, "except" on failure.
-            int error=0;socklen_t size=sizeof error;::getsockopt(entry.fd,SOL_SOCKET,SO_ERROR,&error,&size);
-            hit=entry.set==1?!error:error!=0;
-            if(hit)socket->connecting=false;
+    for(;;){
+        int ready=0;
+        if(!polls.empty())ready=net::released([&]{return ::poll(polls.data(),nfds_t(polls.size()),0);});
+        if(ready<0&&errno!=EINTR){ret(net::failErrno(),5);return;}
+        for(unsigned set=0;set<3;++set)hits[set].clear();
+        for(auto& entry:entries){
+            short events=0;
+            if(entry.virtualSocket)events=vlan::pollEvents(entry.handle,wanted[entry.set]);
+            else events=polls[entry.poll].revents;
+            if(!events)continue;
+            auto* socket=net::find(entry.handle);
+            bool hit=false;
+            if(entry.set==0)hit=events&(POLLIN|POLLHUP|POLLERR|POLLNVAL);
+            else if(socket&&socket->connecting&&(events&(POLLOUT|POLLERR|POLLHUP))){
+                // A pending non-blocking connect is writable on success, "except" on failure.
+                int error=0;
+                if(socket->vkind==3)error=net::virtualConnectResult(entry.handle);
+                else{socklen_t size=sizeof error;::getsockopt(entry.fd,SOL_SOCKET,SO_ERROR,&error,&size);}
+                hit=entry.set==1?!error:error!=0;
+                if(hit)socket->connecting=false;
+            }
+            else if(entry.set==1)hit=events&POLLOUT;
+            else hit=events&POLLPRI;
+            if(hit&&std::find(hits[entry.set].begin(),hits[entry.set].end(),entry.handle)==hits[entry.set].end())hits[entry.set].push_back(entry.handle);
         }
-        else if(entry.set==1)hit=events&POLLOUT;
-        else hit=events&POLLPRI;
-        if(hit&&std::find(hits[entry.set].begin(),hits[entry.set].end(),entry.handle)==hits[entry.set].end())hits[entry.set].push_back(entry.handle);
+        uint32_t total=0;
+        for(unsigned set=0;set<3;++set)total+=uint32_t(hits[set].size());
+        if(total)break;
+        if(!forever&&std::chrono::steady_clock::now()>=deadline)break;
+        checkGuestProgress();
+        net::waitVirtual(forever?20:10);
     }
     uint32_t total=0;
     for(unsigned set=0;set<3;++set){
@@ -502,8 +705,15 @@ void socketSelect(){
 void hostByName(){
     std::string requested=guestString(arg(0)),name=lower(requested);
     std::vector<in_addr> addresses;
-    if(net::localName(name))addresses=net::interfaceAddresses(name=="localhost");
-    else{
+    if(net::localName(name)){
+        // On the virtual LAN the game must advertise its switch address, not
+        // the phone's Wi-Fi address: peers route by virtual address.
+        if(vlan::active()&&name!="localhost"){
+            if(!vlan::online())net::switchOnline(3000);
+            if(vlan::online()){in_addr address{};address.s_addr=htonl(vlan::address());addresses.push_back(address);}
+            else addresses=net::interfaceAddresses(false);
+        }else addresses=net::interfaceAddresses(name=="localhost");
+    }else{
         std::string lookup=name;
         if(name=="ea.com"||net::endsWith(name,".ea.com"))lookup=onlineServer;
         addrinfo hints{};hints.ai_family=AF_INET;hints.ai_socktype=SOCK_STREAM;
@@ -548,6 +758,16 @@ void wsaIoctl(){
         // SIO_ROUTING_INTERFACE_QUERY: the local address the host routes toward the given destination.
         sockaddr_storage target;socklen_t length=net::guestAddress(arg(2),arg(3),target);
         if(!length||target.ss_family!=AF_INET){ret(net::fail(net::wsaEfault),9);return;}
+        uint32_t destination=ntohl(reinterpret_cast<sockaddr_in*>(&target)->sin_addr.s_addr);
+        if(vlan::active()&&vlan::online()&&(destination>>24)!=127){
+            // Every route is the switch's: the game uses this probe to learn
+            // the address it should advertise on the LAN.
+            sockaddr_in local{};local.sin_family=AF_INET;local.sin_addr.s_addr=htonl(vlan::address());
+            if(returned)write32(returned,16);
+            if(!output||capacity<16){ret(net::fail(net::wsaEfault),9);return;}
+            std::memcpy(ptr(output,16),&local,16);
+            ret(0,9);return;
+        }
         if(reinterpret_cast<sockaddr_in*>(&target)->sin_port==0)reinterpret_cast<sockaddr_in*>(&target)->sin_port=htons(9);
         int probe=::socket(AF_INET,SOCK_DGRAM|SOCK_CLOEXEC,0);
         if(probe<0){ret(net::failErrno(),9);return;}
@@ -565,6 +785,22 @@ void wsaIoctl(){
         ret(0,9);return;
     }
     if(code!=0x4004747fu)throw GuestStop("WSAIoctl codigo pendiente: "+hex(code)+" desde "+hex(g_cur_func));
+    if(vlan::active()&&vlan::online()){
+        // One adapter, the switch's: the game reads this as the LAN identity.
+        std::array<uint8_t,76> row{};
+        uint32_t flags=1|2|16;
+        std::memcpy(row.data(),&flags,4);
+        sockaddr_in address{};address.sin_family=AF_INET;address.sin_addr.s_addr=htonl(vlan::address());
+        std::memcpy(row.data()+4,&address,16);
+        sockaddr_in broadcast=address;broadcast.sin_addr.s_addr=htonl((vlan::address()&vlan::mask)|~vlan::mask);
+        std::memcpy(row.data()+28,&broadcast,16);
+        sockaddr_in netmask{};netmask.sin_family=AF_INET;netmask.sin_addr.s_addr=htonl(vlan::mask);
+        std::memcpy(row.data()+52,&netmask,16);
+        if(returned)write32(returned,76);
+        if(!output||capacity<76){ret(net::fail(net::wsaEfault),9);return;}
+        std::memcpy(ptr(output,76),row.data(),76);
+        ret(0,9);return;
+    }
     std::vector<std::pair<int,std::array<uint8_t,76>>> rows;ifaddrs* list=nullptr;
     if(getifaddrs(&list)==0){
         for(auto* entry=list;entry;entry=entry->ifa_next){

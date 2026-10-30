@@ -180,6 +180,25 @@ final class GameOptions {
     }
 
     static final String ONLINE_SERVER = "online_server", DEFAULT_ONLINE_SERVER = "eahub.eu";
+    // Which network the game's multiplayer uses: EA Nation's replacement
+    // server, the phone's real LAN, or nfsu2.xyz's WebSocket virtual LAN.
+    static final String NETWORK = "network_provider";
+    static final String NETWORK_EA = "ea", NETWORK_LAN = "lan", NETWORK_NFSU2 = "nfsu2";
+
+    static String network(Context context) {
+        return validNetwork(prefs(context).getString(NETWORK, NETWORK_EA))
+                ? prefs(context).getString(NETWORK, NETWORK_EA) : NETWORK_EA;
+    }
+
+    static boolean validNetwork(String value) {
+        return NETWORK_EA.equals(value) || NETWORK_LAN.equals(value) || NETWORK_NFSU2.equals(value);
+    }
+
+    static String networkLabel(String value) {
+        if (NETWORK_LAN.equals(value)) return "Local LAN";
+        if (NETWORK_NFSU2.equals(value)) return "nfsu2.xyz";
+        return "EA Nation server";
+    }
 
     /** EA Nation replacement server: the game's *.ea.com hosts resolve to this name or IPv4 address. */
     static String onlineServer(Context context) {

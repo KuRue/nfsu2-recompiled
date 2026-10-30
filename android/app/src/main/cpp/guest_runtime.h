@@ -27,6 +27,14 @@ bool guestGamepadInUse();
 // Launcher option; only before the guest boots.
 void setGuestWidescreen(bool enabled);
 void setGuestOnlineServer(const std::string& host);
+// "ea", "lan" or "nfsu2": the virtual LAN backend is enabled for nfsu2 only.
+void setGuestNetworkProvider(const std::string& provider);
+// The Java /lan client: welcome, a binary switch frame, or the link closing.
+void guestSwitchWelcome(uint32_t vip,uint32_t mask);
+void guestSwitchFrame(const uint8_t* frame,size_t length);
+void guestSwitchClosed(const char* reason);
+// Next frame the virtual LAN queued for the switch; false on timeout.
+bool guestSwitchPoll(std::vector<uint8_t>& frame,int timeoutMs);
 /** Touch as mouse: x/y as a fraction of the game view; phase 0 down, 1 move, 2 up (left button). */
 void setGuestPointer(float x,float y,int phase);
 /** Posts WM_CHAR messages (the game's text fields read those); 8 is backspace. */
