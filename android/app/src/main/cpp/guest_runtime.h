@@ -7,6 +7,7 @@
 std::string connectGuestRuntime(const char* executable);
 void requestGuestRuntimeStop();
 void setGuestPaused(bool paused);
+void setGuestOverlayPaused(bool paused);
 // True once the game has presented at least one frame (i.e. it is live, not booting).
 bool guestHasPresented();
 void setGuestDisplaySize(unsigned width,unsigned height);
@@ -31,6 +32,8 @@ void setGuestResolution(unsigned width,unsigned height);
 void setGuestFrameLimit(unsigned framesPerSecond);
 void setGuestDisplayRefresh(unsigned hertz);
 void setGuestSteadyPace(bool steady);
+// Queue a game display value for the next live Present (free roam/race only).
+void queueGuestDisplayValue(const std::string& name,unsigned value);
 // Refresh rates available at the current display size, 30..120 Hz.
 void setGuestDisplayModes(const unsigned* hertz,unsigned count);
 // Latest request for the display. False until a schedule exists, or while a
@@ -51,9 +54,3 @@ unsigned guestForceFeedbackLevel();
 void stopGuestForceFeedback();
 
 void setGuestFeedbackSource(bool physics);
-// Launcher visual preview: queue settings (returns their generation); last generation on screen.
-#include <string>
-#include <utility>
-#include <vector>
-unsigned queuePreviewSettings(std::vector<std::pair<std::string,std::string>> values);
-unsigned previewReadyGeneration();

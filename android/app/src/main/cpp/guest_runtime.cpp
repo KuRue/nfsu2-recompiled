@@ -1,4 +1,3 @@
-#include "preview_mode.h"
 #include <initializer_list>
 #include <set>
 #include <condition_variable>
@@ -24,6 +23,7 @@
 #include <array>
 #include <vector>
 #include <map>
+#include <deque>
 #ifdef __ANDROID__
 #include <sys/system_properties.h>
 #include <fcntl.h>
@@ -213,6 +213,12 @@ std::string guestLanguage="Spanish";
 bool guestWidescreen=true;
 std::atomic<bool> stopRequested{false};
 std::atomic<bool> guestPaused{false};
+// Paused only by an in-game overlay (the Graphics panel). The Android main
+// loop clears guestPaused on every resumed iteration, so it cannot use that.
+std::atomic<bool> overlayPaused{false};
+// True while the player is in free roam or a race: the only state where the
+// Graphics panel's display values are safe to write.
+std::atomic<bool> guestLiveScene{false};
 std::chrono::steady_clock::time_point bootDeadline;
 std::string guestThreadFault;
 bool timerTestActive=false;std::vector<uint32_t> timerTestCalls;
@@ -475,7 +481,7 @@ thread_local bool renderThread=false;
 // Render-thread slice handovers and the time spent getting the machine back.
 uint64_t renderYields=0;std::chrono::nanoseconds renderWait{};
 void checkGuestProgress() {
-    while(guestPaused.load()&&!stopRequested.load())yieldGuestMachine(20);
+    while((guestPaused.load()||overlayPaused.load())&&!stopRequested.load())yieldGuestMachine(20);
     if(stopRequested.load())throw GuestStop("Guest execution cancelled");
     // Imports and lifted back edges can reach this hook many times per frame.
     // Keep cancellation immediate, but amortize full register saves and native
@@ -627,45 +633,6 @@ void serviceGuestSoundTick();
 // mode (2 car racing, 4 auto pilot). The property is read every 2 s.
 uint32_t callGuest(uint32_t va,const uint32_t* args,size_t count,uint32_t cleanup,bool threadStart);
 bool visualRegistryOverride(const std::string& name,uint32_t& value);
-// Launcher visual preview (launcher_preview.cpp). The car is shown by the game's showcase camera
-// (sub_00501290(true)) with the HUD off (player+0x28 = 1). Settings arrive while it runs and are
-// applied on this thread at Present: environment for the launcher's own options, then each game
-// display variable (the g_* values the in-game options menu changes, loaded from the registry by
-// the routine at 0x5BEB00) is rewritten from the launcher override or, without one, the value the
-// game had loaded. A generation becomes ready once its frames have settled on screen.
-struct PreviewSettings {std::vector<std::pair<std::string,std::string>> values;unsigned generation=0;};
-std::mutex previewMutex;PreviewSettings previewPending;
-// Generation 1 is the settings the preview started with; each update is the next number.
-std::atomic<unsigned> previewRequested{1},previewReady{0};
-unsigned queuePreviewLocal(std::vector<std::pair<std::string,std::string>> values){
-    std::lock_guard<std::mutex> lock(previewMutex);previewPending.values=std::move(values);previewPending.generation=++previewRequested;
-    return previewPending.generation;
-}
-unsigned previewReadyLocal(){return previewReady.load();}
-struct DisplayVariable {const char* name;uint32_t address;};
-void runLauncherPreview(uint32_t player,uint32_t mode){
-    static unsigned racing=0,settle=0,applied=0;static bool showing=false;
-    if(mode==2)++racing;
-    if(!showing){
-        if(racing<30)return;
-        State saved;saved.save();const uint32_t on=1;callGuest(0x501290u,&on,1,0,false);saved.load();
-        showing=true;settle=0;applied=1;
-        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSPreview","showcase camera on");
-    }
-    if(memory->writable(player+0x28u,1)){uint8_t off=1;std::memcpy(static_cast<uint8_t*>(memory->base())+player+0x28u,&off,1);}
-    PreviewSettings next;
-    {std::lock_guard<std::mutex> lock(previewMutex);if(previewPending.generation){next=std::move(previewPending);previewPending=PreviewSettings{};}}
-    if(next.generation){
-        // Display g_* globals are applied by the isolated preview at boot from the
-        // launcher overrides. Rewriting them at Present bypasses the game's own
-        // reload path and crashed on car shadow; display changes restart instead.
-        for(const auto& [name,value]:next.values)setenv(name.c_str(),value.c_str(),1);
-        applied=next.generation;settle=0;
-    }
-    // The first shot waits for the camera to come to rest; later ones only for the change.
-    if(++settle==(previewReady.load()?8u:45u)){previewReady=applied;
-        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSPreview","ready generation %u",previewReady.load());}
-}
 void maybeAutopilot(){
 #if defined(__ANDROID__)&&!defined(NFSU2_EXE_F4BB0D99)
     static int wanted=0;static auto lastRead=std::chrono::steady_clock::time_point{};static uint32_t logged=~0u;
@@ -679,7 +646,7 @@ void maybeAutopilot(){
     uint32_t player;std::memcpy(&player,base+0x8900acu,4);
     if(!player||!memory->readable(player+0x22cu,8))return;
     uint32_t mode[2];std::memcpy(mode,base+player+0x22cu,8);
-    if(launcherPreviewMode())runLauncherPreview(player,mode[0]);
+    guestLiveScene.store(mode[0]==2||mode[0]==4,std::memory_order_relaxed);
     if(mode[0]!=logged){logged=mode[0];NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","player %08x mode %u requested %u",player,mode[0],mode[1]);}
     // Development: `debug.nfs.dumprace 1` logs the race setup and SkipFE settings when a race
     // starts, to compare a menu Quick Race with the SkipFE one.
@@ -708,6 +675,45 @@ void maybeAutopilot(){
                 if(hud!=shown){shown=hud;NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","hud mode %u",hud);}}}}
     autopilotDriving.store(mode[0]==4,std::memory_order_relaxed);
 #endif
+}
+// In-game Graphics panel: queue one g_* display value at a time. Present applies
+// the next entry only while the player is in free roam or a race; the game's
+// renderer then reads the new value on the following frame. The native Display
+// menu is not shipped, so this is the only live writer.
+namespace {
+struct DisplayVariable {const char* name;uint32_t address;uint32_t minimum,maximum;};
+constexpr DisplayVariable displayVariables[]={
+    {"g_worldlodlevel",0x870cf4,0,2},{"g_carlodlevel",0x870cf8,0,2},
+    {"g_carshadowenable",0x870cc0,0,2},{"g_carheadlightenable",0x870cc4,0,1},
+    {"g_carenvironmentmapenable",0x870cb8,0,2},{"g_carenvironmentmapupdatedata",0x870cbc,0,1},
+    {"g_roadreflectionenable",0x870cd4,0,3},{"g_crowdenable",0x870cd0,0,1},
+    {"g_lightstreaksenable",0x870ce0,0,1},{"g_lightglowenable",0x870ce4,0,1},
+    {"g_particlesystemenable",0x870cec,0,1},{"g_motionblurenable",0x870cdc,0,1},
+    {"g_fogenable",0x870cd8,0,1},{"g_horizonfogenable",0x870d0c,0,1},
+    {"g_depthoffieldenable",0x870cf0,0,1},{"g_overbrightenable",0x870cfc,0,1},
+    {"g_bleachbypassenable",0x870d00,0,1},{"g_rainenable",0x870d10,0,1},
+    {"g_performancelevel",0x870d1c,1,4},{"g_tintingenable",0x870d04,0,1},
+    {"g_carlightingenable",0x870cc8,0,1},
+};
+std::mutex displayMutex;
+// Insertion order matters: a bundle queues several values and the player's
+// next individual change must win. Deduplicate by name, keep the last request.
+std::deque<std::pair<std::string,uint32_t>> displayPending;
+void applyPendingDisplay(){
+    if(!guestLiveScene.load(std::memory_order_relaxed)||guestPaused.load(std::memory_order_relaxed))return;
+    std::pair<std::string,uint32_t> next;
+    {std::lock_guard<std::mutex> lock(displayMutex);
+     if(displayPending.empty())return;
+     next=displayPending.front();displayPending.pop_front();}
+    for(const auto& variable:displayVariables)if(next.first==variable.name){
+        uint32_t value=std::max(variable.minimum,std::min(variable.maximum,next.second));
+        if(memory->writable(variable.address,4)&&read32(variable.address)!=value){
+            write32(variable.address,value);
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Graphics %s = %u",variable.name,value);
+        }
+        return;
+    }
+}
 }
 void d3dDispatch(){
     if(d3dToken==0x7e002110u)maybeAutopilot();
@@ -739,7 +745,7 @@ void d3dDispatch(){
     static std::array<std::chrono::nanoseconds,4096> methodTime{};
     if(timed){auto spent=std::chrono::steady_clock::now()-bridgeStart;bridgeTime+=token==0x7e002110u?spent:spent*64;bridgeTotal+=token==0x7e002110u?spent:spent*64;presentTime+=token==0x7e002110u?spent:std::chrono::nanoseconds{};
         methodTime[((token-0x7e000000u)/16u)&4095u]+=token==0x7e002110u?spent:spent*64;}
-    if(token==0x7e002110u){NFS_PROBE("Present");NFS_CAPTURE_CHECK("Present");nfs_widescreen_apply_frame_rate();lastPresentMs=steadyMs();startStallWatch();}
+    if(token==0x7e002110u){NFS_PROBE("Present");NFS_CAPTURE_CHECK("Present");applyPendingDisplay();nfs_widescreen_apply_frame_rate();lastPresentMs=steadyMs();startStallWatch();}
     if(token==0x7e002110u&&result==0){
         samplePhysicsForPhone();
         static FramePacer pacer;
@@ -1721,12 +1727,12 @@ std::string connectGuestRuntime(const char* executable) {
         // loaded, about 4 s after launch (phone, 2026-10-27). A benchmark run always uses it so
         // each run is the same race; `debug.nfs.skipfe 1` does the same for development.
         {char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.skipfe",value);
-            if(std::atoi(value)||benchmarkSeconds.load()||launcherPreviewMode()){
+            if(std::atoi(value)||benchmarkSeconds.load()){
                 // 0x864FB0 is the SkipFE opponent count (copied to race setup 0x89E7C4, which a
                 // menu Quick Race with three opponents also sets to 3). Three AI racers keep the
                 // scene representative of a real race.
-                write32(0x864fac,1);write32(0x864fb0,launcherPreviewMode()?0:3);
-                NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","SkipFE: straight into a race with %u opponents",launcherPreviewMode()?0u:3u);}}
+                write32(0x864fac,1);write32(0x864fb0,3);
+                NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSAutopilot","SkipFE: straight into a race with %u opponents",3u);}}
         // Development: `debug.nfs.poke "ADDR=VALUE,..."` (hex address, decimal value) writes
         // 32-bit values before the entry, for trying the SkipFE race settings.
         {char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.poke",value);
@@ -1757,6 +1763,16 @@ std::string connectGuestRuntime(const char* executable) {
 }
 void requestGuestRuntimeStop() {stopRequested=true;}
 bool guestHasPresented() { return lastPresentMs.load() > 0; }
+void setGuestOverlayPaused(bool paused){
+    overlayPaused.store(paused);
+#ifdef __ANDROID__
+    // The AAudio stream pulls from looping voices: silence it with the guest.
+    if(soundStream){
+        aaudio_result_t status=paused?AAudioStream_requestPause(soundStream):AAudioStream_requestStart(soundStream);
+        if(status!=AAUDIO_OK)NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFS","Overlay audio %s failed: %d",paused?"pause":"resume",int(status));
+    }
+#endif
+}
 void setGuestPaused(bool paused) {
     // The AAudio stream keeps pulling from looping voices while the guest is
     // paused: in the background the last mixed sound repeated until the app
@@ -1839,6 +1855,13 @@ void setGuestDisplayModes(const unsigned* hertz,unsigned count){
     publishFrameSchedule();
 }
 void setGuestSteadyPace(bool steady){steadyPace=steady;publishFrameSchedule();}
+void queueGuestDisplayValue(const std::string& name,unsigned value){
+    if(name.empty())return;
+    std::lock_guard<std::mutex> lock(displayMutex);
+    for(auto it=displayPending.begin();it!=displayPending.end();++it)if(it->first==name){
+        displayPending.erase(it);break;}
+    displayPending.emplace_back(name,value);
+}
 bool guestDisplaySchedule(unsigned& contentFps,unsigned& panelHz,unsigned& generation){
     unsigned first=scheduleGeneration.load(std::memory_order_acquire);
     contentFps=scheduledContent.load(std::memory_order_relaxed);
@@ -1855,8 +1878,6 @@ void setGuestBenchmark(unsigned seconds,const std::string& reportPath,const std:
     if(!resolution.empty())benchmarkResolution=resolution;
     if(!benchmarkSeconds)benchmarkPath.clear();
 }
-unsigned queuePreviewSettings(std::vector<std::pair<std::string,std::string>> values){return queuePreviewLocal(std::move(values));}
-unsigned previewReadyGeneration(){return previewReadyLocal();}
 void setGuestBenchmarkHandler(void (*handler)(const char*)){std::lock_guard<std::mutex> lock(benchmarkMutex);benchmarkHandler=handler;}
 void setGuestSkipIntro(bool skip){skipIntroMovies=skip;}
 bool guestBenchmarkActive(){return benchmarkSeconds.load()!=0;}

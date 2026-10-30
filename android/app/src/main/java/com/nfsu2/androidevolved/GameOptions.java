@@ -208,6 +208,39 @@ final class GameOptions {
         }
     }
 
+    /** A bundle row writes the concrete display rows the game actually reads. */
+    static void setDisplayBundle(Context context, String key, String value) {
+        int level;
+        try { level = Integer.parseInt(value); } catch (NumberFormatException error) { return; }
+        if (key.equals(EFFECTS)) {
+            set(context, LIGHT_TRAILS, level >= 1 ? "1" : "0");
+            set(context, OVERBRIGHT, level >= 1 ? "1" : "0");
+            set(context, MOTION_BLUR, level >= 2 ? "1" : "0");
+        } else if (key.equals(ATMOSPHERE)) {
+            set(context, FOG, level >= 1 ? "1" : "0");
+            set(context, RAIN, level >= 2 ? "1" : "0");
+        } else if (key.equals(TREATMENT)) {
+            set(context, BLEACH, level >= 1 ? "1" : "0");
+            set(context, DOF, level >= 2 ? "1" : "0");
+        } else {
+            return;
+        }
+        set(context, key, value);
+    }
+
+    /** Keep the launcher's bundle rows consistent with the concrete display rows. */
+    static void syncDisplayBundles(Context context) {
+        int atmosphere = get(context, FOG).equals("1") || get(context, RAIN).equals("1")
+                ? (get(context, RAIN).equals("1") ? 2 : 1) : 0;
+        int treatment = get(context, BLEACH).equals("1")
+                ? (get(context, DOF).equals("1") ? 2 : 1) : 0;
+        int effects = get(context, MOTION_BLUR).equals("1") ? 2
+                : (get(context, LIGHT_TRAILS).equals("1") || get(context, OVERBRIGHT).equals("1") ? 1 : 0);
+        prefs(context).edit().putString(ATMOSPHERE, String.valueOf(atmosphere))
+                .putString(TREATMENT, String.valueOf(treatment))
+                .putString(EFFECTS, String.valueOf(effects)).apply();
+    }
+
     static String displayOverrides(Context context) {
         StringBuilder text = new StringBuilder();
         for (String[] map : DISPLAY_MAP) {

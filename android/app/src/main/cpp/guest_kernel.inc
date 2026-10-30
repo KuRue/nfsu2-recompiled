@@ -321,7 +321,6 @@ bool registryPersisted(const std::string& name){
     return name!="install dir"&&name!="language"&&name!="g_racingresolution"&&name!="g_fsaalevel";
 }
 void loadPersistedRegistry(){
-    if(launcherPreviewMode())return;
     std::ifstream file(registryFile(),std::ios::binary);if(!file)return;
     auto read=[&](void* data,size_t bytes){return bool(file.read(static_cast<char*>(data),std::streamsize(bytes)));};
     uint32_t count=0,restored=0;if(!read(&count,4)||count>4096)return;
@@ -335,7 +334,6 @@ void loadPersistedRegistry(){
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFS","Registry: restored %u saved game settings",restored);
 }
 void savePersistedRegistry(){
-    if(launcherPreviewMode())return;
     std::string target=registryFile(),temporary=target+".tmp";
     {std::ofstream file(temporary,std::ios::binary|std::ios::trunc);if(!file)return;
         uint32_t count=0;for(auto& [name,value]:gameRegistry)if(registryPersisted(name))++count;
@@ -367,7 +365,6 @@ void regOpenKeyA(){registryOpen(arg(2),3);}void regOpenKeyExA(){registryOpen(arg
 void regCloseKey(){ret(registryHandles.erase(arg(0))?0:6,1);}
 // Launcher overrides do not replace saved in-game values.
 bool visualRegistryOverride(const std::string& name,uint32_t& value){
-    auto number=[](const char* key,int fallback){const char* v=std::getenv(key);return v?std::atoi(v):fallback;};
     // Re-parsed when the text changes: the launcher's live preview updates it while running.
     static std::string parsed="\x01";static std::map<std::string,uint32_t> displayOverrides;
     {const char* current=std::getenv("NFSU2_DISPLAY_OVERRIDES");std::string now=current?current:"";
@@ -387,28 +384,9 @@ bool visualRegistryOverride(const std::string& name,uint32_t& value){
     }();}}
     auto direct=displayOverrides.find(name);
     if(direct!=displayOverrides.end()){value=direct->second;return true;}
-    value=1;
-    bool night=number("NFSU2_NATIVE_LOOK",0)>0; // any look preset, not only "1"
-    bool reflections=number("NFSU2_NATIVE_REFLECTIONS",0)==1;
-    int effects=number("NFSU2_NATIVE_EFFECTS",0);
-    int atmosphere=number("NFSU2_NATIVE_ATMOSPHERE",0);
-    int treatment=number("NFSU2_NATIVE_TREATMENT",0);
-    int detail=number("NFSU2_NATIVE_DETAIL",0);
-    if(night&&(name=="g_carlightingenable"||name=="g_carheadlightenable"||
-               name=="g_carshadowenable"||name=="g_lightglowenable"))return true;
-    if(effects>=1&&(name=="g_lightstreaksenable"||name=="g_overbrightenable"||
-                    name=="g_tintingenable"||name=="g_particlesystemenable"||name=="g_crowdenable"))return true;
-    if(effects>=2&&name=="g_motionblurenable")return true;
-    if(atmosphere>=1&&(name=="g_fogenable"||name=="g_horizonfogenable"))return true;
-    if(atmosphere>=2&&name=="g_rainenable")return true;
-    if(treatment>=1&&name=="g_bleachbypassenable")return true;
-    if(treatment>=2&&name=="g_depthoffieldenable")return true;
-    if(reflections&&(name=="g_carenvironmentmapenable"||name=="g_roadreflectionenable"||
-                     name=="g_carenvironmentmapupdatedata"))return true;
-    // The game's own display levels are 0..2 (Low/Medium/High); the launcher can
-    // pin them so the city and cars keep full detail.
-    if(detail>=1&&(name=="g_worldlodlevel"||name=="g_carlodlevel"||name=="g_performancelevel")){
-        value=detail>=2?2u:1u;return true;}
+    // The game's own Display menu is the owner of these values now. Do not
+    // derive implicit overrides from the launcher's visual-effect options:
+    // they would silently replace the values the player saved in-game.
     return false;
 }
 void regQueryValueExA(){
@@ -430,10 +408,6 @@ void regSetValueExA(){
     uint32_t size=arg(5);if(size>1048576){ret(87,6);return;}
     RegistryValue value{arg(3),std::vector<uint8_t>(size)};if(size)std::memcpy(value.bytes.data(),ptr(arg(4),size),size);
     auto name=lower(guestString(arg(1)));
-    // Launcher-owned look: the in-game display menu still reports success but
-    // its writes are not saved, so the two sources cannot fight each other.
-    const char* lock=std::getenv("NFSU2_NATIVE_LOCK_DISPLAY");
-    if(lock&&std::strcmp(lock,"1")==0&&name.rfind("g_",0)==0){ret(0,6);return;}
     uint32_t ignored=0;if(visualRegistryOverride(name,ignored)){ret(0,6);return;}
     gameRegistry[name]=std::move(value);
     if(registryPersisted(name))savePersistedRegistry();

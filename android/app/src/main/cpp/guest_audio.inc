@@ -21,7 +21,6 @@ std::atomic<bool> soundStreamLost{false};
 aaudio_data_callback_result_t soundCallback(AAudioStream*,void*,void* data,int32_t frames){
     auto start=std::chrono::steady_clock::now();
     soundMixer.render(static_cast<float*>(data),unsigned(frames));
-    if(launcherPreviewMode())std::memset(data,0,size_t(frames)*2*sizeof(float));
     uint32_t us=uint32_t(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-start).count());
     auto peak=soundCallbackPeakUs.load(std::memory_order_relaxed);
     while(us>peak&&!soundCallbackPeakUs.compare_exchange_weak(peak,us,std::memory_order_relaxed)){}

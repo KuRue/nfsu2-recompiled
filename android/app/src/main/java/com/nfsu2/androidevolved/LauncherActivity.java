@@ -56,13 +56,8 @@ public final class LauncherActivity extends Activity {
 
     private TextView status, optionsTitle, submenuBack;
     private MenuPanel infoPanel;
-    private VisualPreview visualPreview;
     /** Play/Resume. Hidden in submenus so the left pane can use the full height. */
     private LinearLayout playRow;
-    private ScrollView leftScroll;
-    private ImageView previewImage;
-    private TextView previewStatus;
-    private String previewPath;
     private ScrollView optionsScroll;
     private GlowActionButton play;
     private Button access, playArrow;
@@ -131,7 +126,6 @@ public final class LauncherActivity extends Activity {
 
     @Override protected void onPause() {
         resumed = false;
-        if(visualPreview!=null)visualPreview.hide();
         if(play!=null)play.setActive(false);
         main.removeCallbacks(sessionRefresh);
         super.onPause();
@@ -156,7 +150,7 @@ public final class LauncherActivity extends Activity {
         LinearLayout leftColumn = new LinearLayout(this);
         leftColumn.setOrientation(LinearLayout.VERTICAL);
         columns.addView(leftColumn, new LinearLayout.LayoutParams(0, -1, 1.1f));
-        leftScroll = new ScrollView(this);
+        ScrollView leftScroll = new ScrollView(this);
         leftScroll.setFillViewport(true);
         leftScroll.addView(left);
         leftColumn.addView(leftScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
@@ -254,6 +248,7 @@ public final class LauncherActivity extends Activity {
         play.setEnabled(ready);
         play.setAlpha(ready ? 1f : .45f);
         access.setVisibility(allowed ? View.GONE : View.VISIBLE);
+        GameOptions.syncDisplayBundles(this);
         refreshOptions();
     }
 
@@ -284,7 +279,6 @@ public final class LauncherActivity extends Activity {
         if(key==null)return "Options";
         switch(key){
             case "graphics": return "Visual settings";
-            case "display": return "Display detail";
             case "controls": return "Controls";
             case "game": return "Game";
             case "saves": return "Saves";
@@ -333,26 +327,12 @@ public final class LauncherActivity extends Activity {
                 PhonePreset preset = GameOptions.phonePreset(this);
                 optionsList.addView(cycleRow("Performance preset", labels, values, preset == null ? "" : preset.name(), "Custom",
                         name -> { GameOptions.applyPhonePreset(this, PhonePreset.valueOf(name)); refreshOptions(); }));
-                optionsList.addView(optionRow("Display detail",
-                        GameOptions.displayPresetLabel(this), () -> openGroup("display")));
                 for (GameOptions.Option option : GameOptions.ALL)
                     if (!isControlOption(option) && !GameOptions.isDisplayOption(option))
                         optionsList.addView(optionCycleRow(option));
                 optionsList.addView(optionRow("Upscaling", "Unavailable", this::explainUpscaling));
                 optionsList.addView(optionRow("Test driver", "Vulkan features", () -> probeDriver(false)));
                 optionsList.addView(optionRow("Clear shaders", "Rebuild shaders", () -> GraphicsCache.prompt(this)));
-                break;
-            }
-            case "display": {
-                String[] labels = {"Low", "Medium", "High", "Ultra"};
-                String[] values = {"low", "medium", "high", "ultra"};
-                optionsList.addView(cycleRow("Detail preset", labels, values,
-                        GameOptions.prefs(this).getString(GameOptions.DISPLAY_PRESET, "high"), "Low",
-                        value -> { GameOptions.applyDisplayPreset(this, value); refreshOptions(); }));
-                optionsList.addView(sectionDivider("INDIVIDUAL SETTINGS"));
-                for (GameOptions.Option option : GameOptions.ALL)
-                    if (GameOptions.isDisplayOption(option))
-                        optionsList.addView(optionCycleRow(option));
                 break;
             }
             case "controls":
@@ -387,6 +367,7 @@ public final class LauncherActivity extends Activity {
 
     private View optionCycleRow(GameOptions.Option option) {
         return cycleRow(option.title, option.labels, option.values, GameOptions.get(this, option.key), GameOptions.get(this, option.key), value -> {
+            GameOptions.setDisplayBundle(this, option.key, value);
             GameOptions.set(this, option.key, value); refreshOptions();
         });
     }
@@ -894,18 +875,6 @@ public final class LauncherActivity extends Activity {
     /** Contextual left pane: what the current group is, then each setting's cost. */
     private void updateLeftPane() {
         if (leftHome == null || leftInfo == null) return;
-        if(visualPreview==null)visualPreview=new VisualPreview(this,(path,state)->{
-            if(previewImage==null||previewStatus==null)return;
-            previewStatus.setText(state);previewPath=path;
-            // Keep a real still visible while a newer one is prepared; the status line
-            // below it explains Preparing/Updating/errors instead of blanking the pane.
-            if(path!=null){previewImage.setImageBitmap(android.graphics.BitmapFactory.decodeFile(path));previewImage.setVisibility(View.VISIBLE);
-                previewStatus.setVisibility("Preview".equals(state)?View.GONE:View.VISIBLE);
-                previewImage.post(this::fitPreview);}
-            else {previewImage.setImageDrawable(null);previewImage.setVisibility(View.GONE);previewStatus.setVisibility(View.VISIBLE);}
-        });
-        boolean visuals="graphics".equals(openGroup)||"display".equals(openGroup);
-        if(!visuals){visualPreview.leave();previewImage=null;previewStatus=null;}
         if (playRow != null) playRow.setVisibility(openGroup == null ? View.VISIBLE : View.GONE);
         if (openGroup == null) { leftHome.setVisibility(View.VISIBLE); infoPanel.setVisibility(View.GONE); return; }
         leftHome.setVisibility(View.GONE); infoPanel.setVisibility(View.VISIBLE);
@@ -949,36 +918,7 @@ public final class LauncherActivity extends Activity {
                     ? "Uncapped · "+Math.round(refresh)+" Hz reference"
                     : Math.round(demand.targetFps)+" FPS target",11,MUTED,false);
             target.setPadding(dp(10),0,dp(10),dp(4));leftInfo.addView(target);
-            previewStatus=label("Preparing…",12,MUTED,false);
-            previewStatus.setPadding(dp(10),dp(4),dp(10),dp(4));leftInfo.addView(previewStatus);
-            previewImage=new ImageView(this);previewImage.setAdjustViewBounds(true);
-            previewImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            previewImage.setContentDescription("Game-rendered visual preview. Tap to enlarge.");
-            previewImage.setOnClickListener(view->{
-                if(previewPath==null)return;
-                ImageView full=new ImageView(this);full.setAdjustViewBounds(true);
-                full.setImageBitmap(android.graphics.BitmapFactory.decodeFile(previewPath));
-                MenuTheme.dialog(this,"Visual preview").setView(full)
-                    .setPositiveButton("Back",null).setNeutralButton("Refresh",(d,w)->visualPreview.retry()).show();
-            });
-            previewStatus.setOnClickListener(view->visualPreview.retry());
-            // Full pane width at the capture's 16:9.
-            LinearLayout.LayoutParams frame=new LinearLayout.LayoutParams(-1,-2);frame.leftMargin=frame.rightMargin=dp(8);
-            leftInfo.addView(previewImage,frame);
-            if(resumed&&allowed())visualPreview.request();
-            else previewStatus.setText("File access required");
         }
-    }
-
-    /** Size the preview to the space between the settings card and Play: full width, cropped to fit. */
-    private void fitPreview(){
-        if(previewImage==null||leftScroll==null||infoPanel==null||previewImage.getWidth()==0)return;
-        int[] panel=new int[2],area=new int[2];infoPanel.getLocationOnScreen(panel);leftScroll.getLocationOnScreen(area);
-        int spare=(area[1]+leftScroll.getHeight()-dp(4))-(panel[1]+infoPanel.getHeight());
-        int height=Math.max(dp(64),Math.min(previewImage.getWidth()*3/4,previewImage.getHeight()+spare));
-        if(Math.abs(height-previewImage.getHeight())<2)return;
-        previewImage.setAdjustViewBounds(false);previewImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        android.view.ViewGroup.LayoutParams params=previewImage.getLayoutParams();params.height=height;previewImage.setLayoutParams(params);
     }
 
     private static String tierName(int level){return level<=1?"Low":level==2?"Medium":level==3?"High":"Very high";}

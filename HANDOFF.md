@@ -1369,3 +1369,50 @@ crash; Car shadow Off/Neon produced a clean stop/restart with the old still and
 "Updating…", no SIGSEGV; the next still arrived in 7.3 s; leaving and reopening
 Visual settings showed the still immediately. First boot of a brand-new preview
 combination still takes ~7.3 s; the pane is never blank.
+
+## 2026-10-30: preview removed; in-game Graphics panel owns display settings
+
+The launcher visual preview is deleted end to end: VisualPreview,
+VisualPreviewService, the `:preview` manifest entry, launcher_preview.cpp,
+preview_mode.h, the preview runtime hooks and tests/preview_mode.cpp. Nothing
+starts an isolated preview game any more. The launcher keeps the port's visual
+and performance options; its old Display detail group stays removed.
+
+The game's native Display page is also not shipped. `scripts/patch_display_menu.py`
+removes the Display category from both the frontend and pause Options carousels
+(the item object is still built so the SEH cleanup state stays valid). It runs
+from `scripts/rebuild-run.sh` and is documented in the lift steps because
+`src/recomp/gen` is regenerated.
+
+In its place, GameActivity hosts a themed in-game Graphics panel:
+- Reachable from the expanded dock in free roam/races (monitor icon) and from
+  the pause/frontend icon row.
+- Five tabs: Performance, Effects, Detail, Textures, Display.
+- It writes the same GameOptions preferences the launcher reads, so settings
+  persist and the launcher shows the current values next time.
+- The panel pauses the guest and AAudio with a separate overlay flag. The
+  Android main loop clears guestPaused on every resumed iteration, so using
+  guestPaused directly would immediately unpause.
+- Live paths: internal resolution (ANativeWindow buffer geometry), FPS limit,
+  frame pace, minimap, bloom/look/sharpening (DXVK present shader re-reads the
+  environment every present), anisotropic filtering (read per sampler state),
+  HD packs off/on (existing replacements are deactivated/reactivated; new
+  uploads stream the pack), and the game's individual display globals.
+- Display globals are queued in order and applied one per live Present, only
+  while the player is in free roam or a race. This avoids the old preview bug
+  that rewrote g_* every frame and SIGSEGV'd on Car shadow.
+- Bundles expand to their concrete rows: Night effects -> light trails,
+  overbright, motion blur; Atmosphere -> fog, horizon fog, rain; Treatment ->
+  bleach, DOF. The bundle summaries are re-derived from the concrete values so
+  the launcher and panel cannot disagree.
+- Restart-only values are labelled NEXT START: widescreen, frame queue,
+  2x reflections, CPU texture decode.
+
+Verified on the phone (build before the final prefs-bundle sync): FPS 60->30
+live, Bloom Off->Strong live, Car shadow Neon->Off without SIGSEGV, world and
+car LOD both directions without SIGSEGV, resolution Native<->50% live and
+persisted across a cold start, HD packs off/on without a crash, AF 16 and
+Crisp sharpening applied, and no Display entry in Pause Options. The final
+prefs-bundle/ordered-queue build compiles, but the phone dropped wireless adb
+before that exact APK could be installed; re-run the on-device pass when it is
+reachable again.

@@ -14,9 +14,10 @@ bool packsInitialized=false;
 uint64_t packedBytes=0;
 constexpr uint64_t texturePackBudget=256ull*1024*1024;
 void initTexturePacks(){
-    if(packsInitialized)return;packsInitialized=true;
+    if(packsInitialized)return;
     const char* on=std::getenv("NFSU2_NATIVE_HD");if(!on||std::strcmp(on,"1"))return;
     const char* root=std::getenv("NFSU2_NATIVE_TEXROOT");if(!root)return;
+    packsInitialized=true;
     for(const char* name:{"uhud.pak","world.pak"})try{
         auto pack=std::make_unique<nfs_tex::Pack>();pack->open(std::string(root)+"/"+name);
         NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","HD pack %s: %zu indexed textures",name,pack->entries.size());
@@ -117,8 +118,9 @@ void copyPackedTexture(uint32_t src,uint32_t dst){
     else disablePackedTexture(dst);
 }
 HRESULT filteredSampler(IDirect3DDevice9* device,DWORD sampler,D3DSAMPLERSTATETYPE type,DWORD value){
-    static const unsigned requested=[] {const char* option=std::getenv("NFSU2_NATIVE_AF");return option?unsigned(std::atoi(option)):0u;}();
-    unsigned desired=requested;
+    // Read every time: the in-game Graphics panel changes filtering live.
+    const char* option=std::getenv("NFSU2_NATIVE_AF");
+    unsigned desired=option?unsigned(std::atoi(option)):0u;
     if(desired>1&&sampler<16&&(type==D3DSAMP_MINFILTER||type==D3DSAMP_MAXANISOTROPY)){
         static std::unordered_map<IDirect3DDevice9*,unsigned> limits;
         auto found=limits.find(device);

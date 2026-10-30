@@ -27,7 +27,7 @@ final class RacingControlsView extends View {
     /** Touches outside every control drive the game's mouse: x/y as fractions of the view, phase 0 down, 1 move, 2 up. */
     interface Pointer { void touch(float x, float y, int phase); }
     // Special controls that do not map to a DirectInput scan code.
-    private static final int MODE = -1, TEXT = -2, STICK = -3, EDIT = -5, BAR = -6;
+    private static final int MODE = -1, TEXT = -2, STICK = -3, EDIT = -5, BAR = -6, GRAPHICS = -7;
     private static final int ROUND = 0, PEDAL = 1, WHEEL = 2;
     private final Keys keys;
     private Pointer pointer;
@@ -36,6 +36,7 @@ final class RacingControlsView extends View {
     private final Runnable textInput;
     private final Runnable configureTilt;
     private final Runnable configureFrameLimit;
+    private final Runnable graphicsMenu;
     private String style;
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -70,8 +71,9 @@ final class RacingControlsView extends View {
             area = new RectF(x, y, x+w, y+h); original=new RectF(area); this.shape=shape; this.icon=icon; this.scan=scan; this.color=color; this.utility=utility; this.docked=utility;
         }
     }
-    RacingControlsView(Context context, Keys keys, Runnable textInput, Runnable configureTilt, Runnable configureFrameLimit) {
-        super(context); this.keys=keys; this.textInput=textInput;
+    RacingControlsView(Context context, Keys keys, Runnable textInput, Runnable configureTilt, Runnable configureFrameLimit,
+                       Runnable graphicsMenu) {
+        super(context); this.keys=keys; this.textInput=textInput; this.graphicsMenu=graphicsMenu;
         layouts=context.getSharedPreferences("touch_layouts_v1",Context.MODE_PRIVATE);
         style=layouts.getString("style","classic");barExpanded=layouts.getBoolean("bar.expanded",false);
         this.configureTilt=configureTilt;this.configureFrameLimit=configureFrameLimit;
@@ -147,6 +149,7 @@ final class RacingControlsView extends View {
             addUtility(bx+(bs+gap)*barIndex++,by,bs,"shiftUp",0x2a);
             addUtility(bx+(bs+gap)*barIndex++,by,bs,"shiftDown",0x1d);
             addUtility(bx+(bs+gap)*barIndex++,by,bs,"settings",EDIT);
+            addUtility(bx+(bs+gap)*barIndex++,by,bs,"graphics",GRAPHICS);
             addUtility(bx+(bs+gap)*barIndex++,by,bs,"menu",MODE);
             barRight=bx+(bs+gap)*(barIndex-1)+bs;
             barArea.set(64,12,barRight+6,12+bs+8);
@@ -167,7 +170,8 @@ final class RacingControlsView extends View {
             }
         } else {
             add(w-62,16,46,"settings",EDIT);
-            add(w-118,16,46,"wheel",MODE);
+            add(w-118,16,46,"graphics",GRAPHICS);
+            add(w-174,16,46,"wheel",MODE);
             float pad=60,cx=24+pad*1.5f,cy=bottom-pad*1.5f;
             add(cx-pad/2,cy-pad*1.5f,pad,"up",0xc8);
             add(cx-pad/2,cy+pad*.5f,pad,"down",0xd0);
@@ -317,6 +321,12 @@ final class RacingControlsView extends View {
             case "reset":
                 canvas.drawArc(cx-s*.75f,cy-s*.75f,cx+s*.75f,cy+s*.75f,-60,290,false,line);
                 path.reset();path.moveTo(cx+s*.2f,cy-s*.95f);path.lineTo(cx+s*.55f,cy-s*.62f);path.lineTo(cx+s*.08f,cy-s*.42f);
+                canvas.drawPath(path,line);break;
+            case "graphics":
+                // Display with a performance trace, distinct from the sliders icon.
+                canvas.drawRoundRect(cx-s*.9f,cy-s*.65f,cx+s*.9f,cy+s*.65f,s*.16f,s*.16f,line);
+                path.reset();path.moveTo(cx-s*.55f,cy+s*.28f);path.lineTo(cx-s*.18f,cy-s*.12f);
+                path.lineTo(cx+s*.12f,cy+s*.12f);path.lineTo(cx+s*.55f,cy-s*.32f);
                 canvas.drawPath(path,line);break;
             case "expand":
                 if(barExpanded) {
@@ -562,6 +572,7 @@ final class RacingControlsView extends View {
                 if(c.scan==BAR) {barExpanded=!barExpanded;layouts.edit().putBoolean("bar.expanded",barExpanded).apply();releaseAll();}
                 else if(c.scan==MODE) {racing=!racing;layoutControls();}
                 else if(c.scan==TEXT) {releaseAll();textInput.run();}
+                else if(c.scan==GRAPHICS) {releaseAll();graphicsMenu.run();}
                 else if(c.scan==EDIT) {releaseAll();editing=true;selected=null;layoutControls();}
                 performClick();
             }

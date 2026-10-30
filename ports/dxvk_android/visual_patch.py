@@ -77,19 +77,27 @@ def apply(root):
 
     s = cpp.read_text().replace('#include "dxvk_swapchain_blitter.h"',
                                  '#include "dxvk_swapchain_blitter.h"\n#include <cstdlib>\n#include <algorithm>')
-    s = s.replace('''  : m_device(device) {
-    this->createSampler();''',
-                  '''  : m_device(device) {
+    s = s.replace('''  DxvkSwapchainBlitter::DxvkSwapchainBlitter''',
+                  '''  // Re-read on every present: the in-game Graphics panel updates these
+  // environment values while the game is running.
+  static void nfsReadNativeVisual(float* out) {
     const char* sharp = std::getenv("NFSU2_NATIVE_SHARPNESS");
     const char* look = std::getenv("NFSU2_NATIVE_LOOK");
     const char* bloom = std::getenv("NFSU2_NATIVE_BLOOM");
-    m_nativeVisual[0] = sharp ? float(std::clamp(std::atoi(sharp), 0, 50)) / 100.0f : 0.0f;
-    m_nativeVisual[1] = look ? float(std::clamp(std::atoi(look), 0, 3)) : 0.0f;
+    out[0] = sharp ? float(std::clamp(std::atoi(sharp), 0, 50)) / 100.0f : 0.0f;
+    out[1] = look ? float(std::clamp(std::atoi(look), 0, 3)) : 0.0f;
     int bloomLevel = bloom ? std::clamp(std::atoi(bloom), 0, 2) : 0;
-    m_nativeVisual[2] = bloomLevel == 1 ? 0.5f : bloomLevel == 2 ? 1.0f : 0.0f;
+    out[2] = bloomLevel == 1 ? 0.5f : bloomLevel == 2 ? 1.0f : 0.0f;
+  }
+
+  DxvkSwapchainBlitter::DxvkSwapchainBlitter''')
+    s = s.replace('''  : m_device(device) {
+    this->createSampler();''',
+                  '''  : m_device(device) {
+    nfsReadNativeVisual(m_nativeVisual);
     this->createSampler();''')
     s = s.replace('    args.srcOffset = srcRect.offset;',
-                  '    args.srcOffset = srcRect.offset;\n    std::copy(m_nativeVisual, m_nativeVisual + 4, args.nativeVisual);')
+                  '    nfsReadNativeVisual(m_nativeVisual);\n    args.srcOffset = srcRect.offset;\n    std::copy(m_nativeVisual, m_nativeVisual + 4, args.nativeVisual);')
     s = s.replace('m_device->extensions().amdShaderFragmentMask\n        ?',
                   'm_device->extensions().amdShaderFragmentMask && m_nativeVisual[0] == 0.0f\n        ?')
     cpp.write_text(s)

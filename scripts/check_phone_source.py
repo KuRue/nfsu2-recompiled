@@ -13,7 +13,7 @@ def run(*command):
 def main():
     with tempfile.TemporaryDirectory(prefix='nfsu2-source-checks-') as folder:
         build = Path(folder)
-        for name in ['preview_mode', 'frame_pacer', 'frame_metrics', 'physics_probe', 'physics_haptics',
+        for name in ['frame_pacer', 'frame_metrics', 'physics_probe', 'physics_haptics',
                      'gamepad_state', 'force_feedback', 'audio_mixer', 'texture_pack', 'guest_boot_worker',
                      'capture_quiesce', 'frame_benchmark', 'performance_hint', 'lan_broadcast', 'guest_heap']:
             executable = build / name

@@ -14,6 +14,7 @@ void setD3D9HostWindow(ANativeWindow* window);
 void setD3D9RenderSize(unsigned width,unsigned height);
 // Launcher compatibility options; call before the game creates its device.
 void setD3D9Compatibility(bool cpuTextures,unsigned backBuffers);
+void setD3D9TexturePacks(bool enabled);
 bool d3d9RequestsSurface();
 void acknowledgeD3D9Surface(bool available);
 uint32_t createGuestD3D9(uint32_t sdk);

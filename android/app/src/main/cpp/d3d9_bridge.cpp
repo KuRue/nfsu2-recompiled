@@ -213,6 +213,18 @@ void shutdownD3D9Bridge(){
 #endif
 }
 void setD3D9HostWindow(ANativeWindow* window){hostWindow=window;dxvkAndroidSetWindow(window);}
+void setD3D9TexturePacks(bool enabled){
+    setenv("NFSU2_NATIVE_HD",enabled?"1":"0",1);
+    if(enabled){
+        initTexturePacks();
+        for(auto& entry:packedTextures)entry.second->active=true;
+    }else{
+        // Keep the decoded replacements resident: switching back on is instant,
+        // and the next draw returns the original texture without unloading memory
+        // the guest may still reference.
+        for(auto& entry:packedTextures)entry.second->active=false;
+    }
+}
 bool d3d9RequestsSurface(){return surfaceRequested;}
 void acknowledgeD3D9Surface(bool available){surfaceAvailable=available;}
 uint32_t createGuestD3D9(uint32_t sdk){

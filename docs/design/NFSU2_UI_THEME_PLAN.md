@@ -209,3 +209,13 @@ Play/Resume is anchored below the left scrolling pane, at the bottom of the laun
 CPU/GPU use ten lime segments each; both share the same active color. Segment count follows
 relative demand score while Low/Medium/High/Very high labels retain their tier thresholds.
 Real rendered preview feasibility/next steps: VISUAL_PREVIEW.md (not yet implemented).
+
+### 2026-10-30 — Preview removed; in-game Graphics panel
+
+The launcher preview, its isolated service and the native showcase runtime are
+removed. Display detail is no longer a launcher group, and the game's native
+Display page is removed from both Options carousels after every lift. A themed
+in-game Graphics panel is hosted by GameActivity (MenuPanel frame/sheet, lime
+oblique headings, silver rows) and is reachable from the expanded racing dock
+and the pause/frontend icon row. It reuses the launcher's silver/black/lime
+language and applies the same persisted GameOptions values live.

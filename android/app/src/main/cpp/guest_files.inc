@@ -9,12 +9,6 @@ std::filesystem::path gamePath(std::string guest){
     else if(guest.find(':')!=std::string::npos||guest.rfind("//",0)==0)throw GuestStop("Unsupported guest path: "+guest);
     else {if(!guest.empty()&&guest.front()=='/')guest.erase(0,1);else{auto current=guestWorkingDirectory.substr(8);std::replace(current.begin(),current.end(),'\\','/');if(!current.empty())guest=current+"/"+guest;}}
     auto relative=std::filesystem::path(guest).lexically_normal();for(const auto& part:relative)if(part=="..")throw GuestStop("Guest path leaves nfsu2: "+guest);
-    // Preview never reads the user's Windows profile folders.
-    if(launcherPreviewMode() && !relative.empty()) {
-        auto first=lower(relative.begin()->string());
-        if(first=="documents"||first=="appdata")
-            return std::filesystem::path(std::getenv("NFSU2_PREVIEW_PROFILE"))/relative;
-    }
     auto result=std::filesystem::path(hostGameRoot);
     for(const auto& part:relative){if(part==".")continue;std::error_code error;bool found=false;
         for(auto& entry:std::filesystem::directory_iterator(result,error))if(lower(entry.path().filename().string())==lower(part.string())){result=entry.path();found=true;break;}
@@ -77,7 +71,6 @@ void prefetchLargeAsset(const std::filesystem::path& path){
 // launch. The file is small and keeps the 118 MB read out of the intro.
 std::string lastTrackWritten;
 void rememberTrackAsset(const std::filesystem::path& path){
-    if(launcherPreviewMode())return;
     try{
         auto relative=path.lexically_relative(std::filesystem::weakly_canonical(hostGameRoot));
         auto first=relative.begin();
@@ -124,7 +117,6 @@ static std::filesystem::path skipIntroMovie(const std::filesystem::path& path){
 }
 void createFile(){
     auto path=skipIntroMovie(gamePath(guestString(arg(0))));uint32_t access=arg(1),disposition=arg(4),flags=arg(5);
-    if(!launcherPreviewAllowsOpen(access,disposition)){lastError=5;ret(UINT32_MAX,7);return;}
     if(flags&0x40000000u)throw GuestStop("Overlapped CreateFile requires asynchronous file service");
     int options=access&0x40000000u?(access&0x80000000u?O_RDWR:O_WRONLY):O_RDONLY;
     switch(disposition){case 1:options|=O_CREAT|O_EXCL;break;case 2:options|=O_CREAT|O_TRUNC;break;case 3:break;case 4:options|=O_CREAT;break;case 5:options|=O_TRUNC;break;default:lastError=87;ret(UINT32_MAX,7);return;}
@@ -203,7 +195,7 @@ void shellFolderPath(){
     if(arg(2)||arg(3)>1||(folder&~0xc0ffu)){ret(0x80070057u,5);return;}
     std::string suffix;switch(folder&0xff){case 0x1c:suffix="AppData\\Local";break;case 0x1a:suffix="AppData\\Roaming";break;case 5:suffix="Documents";break;default:ret(0x80070057u,5);return;}
     std::string logical="C:\\nfsu2\\"+suffix;auto path=gamePath(logical);std::error_code error;
-    if((folder&0x8000)&&!launcherPreviewMode())std::filesystem::create_directories(path,error);
+    if((folder&0x8000))std::filesystem::create_directories(path,error);
     if(error){ret(0x80070005u,5);return;}
     if(!(folder&0x4000)&&!std::filesystem::is_directory(path,error)){ret(0x80070003u,5);return;}
     std::memcpy(ptr(out,logical.size()+1),logical.c_str(),logical.size()+1);
@@ -255,7 +247,7 @@ void findNextFile(){auto found=fileSearches.find(arg(0));if(found==fileSearches.
 }
 void findClose(){if(!fileSearches.erase(arg(0))){lastError=6;ret(0,1);return;}ret(1,1);}
 void createDirectory(){
-    if(launcherPreviewMode()){lastError=5;ret(0,2);return;}if(arg(1))throw GuestStop("CreateDirectory security attributes pending");auto path=gamePath(guestString(arg(0)));
+    if(arg(1))throw GuestStop("CreateDirectory security attributes pending");auto path=gamePath(guestString(arg(0)));
     if(::mkdir(path.c_str(),0700)){lastError=errno==EEXIST?183:fileError();ret(0,2);return;}ret(1,2);
 }
 void fullPathName(){
@@ -270,19 +262,16 @@ void fullPathName(){
 }
 // DeleteFileA / MoveFileA inside the game folder (gamePath refuses anything outside it).
 void deleteFile(){
-    if(launcherPreviewMode()){lastError=5;ret(0,1);return;}
     auto path=gamePath(guestString(arg(0)));
     if(::unlink(path.c_str())){lastError=fileError();ret(0,1);return;}
     lastError=0;ret(1,1);
 }
 void removeDirectory(){
-    if(launcherPreviewMode()){lastError=5;ret(0,1);return;}
     auto path=gamePath(guestString(arg(0)));
     if(::rmdir(path.c_str())){lastError=errno==ENOTEMPTY||errno==EEXIST?145:fileError();ret(0,1);return;}  // ERROR_DIR_NOT_EMPTY
     lastError=0;ret(1,1);
 }
 void moveFile(){
-    if(launcherPreviewMode()){lastError=5;ret(0,2);return;}
     auto from=gamePath(guestString(arg(0))),to=gamePath(guestString(arg(1)));
     struct stat status{};if(!::stat(to.c_str(),&status)){lastError=183;ret(0,2);return;}  // ERROR_ALREADY_EXISTS
     if(::rename(from.c_str(),to.c_str())){lastError=fileError();ret(0,2);return;}

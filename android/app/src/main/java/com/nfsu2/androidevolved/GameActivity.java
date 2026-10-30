@@ -51,6 +51,7 @@ public final class GameActivity extends NativeActivity {
     private long benchmarkPhoneRead;
     private String benchmarkPhone = "";
     private PopupWindow controlsWindow;
+    private GraphicsPanel graphicsPanel;
     private RacingControlsView touchControls;
     private boolean statusHidden;
     private static native void nativeKey(int scan, boolean down);
@@ -167,10 +168,14 @@ public final class GameActivity extends NativeActivity {
     private static native void nativeDisplayOverrides(String overrides);
     private static native void nativeVisualOptions(boolean packs, int filtering, int sharpness, int look, int reflections, int bloom, int effects, int atmosphere, int treatment, int detail, boolean lockDisplay);
     private static native void nativeResolution(int width, int height);
+    private static native void nativeLiveResolution(int width, int height);
     private static native void nativeFrameLimit(int framesPerSecond);
     private static native void nativeDisplayRefresh(int hertz);
     private static native void nativeDisplayModes(int[] hertz);
     private static native void nativeFramePace(boolean steady);
+    private static native void nativePaused(boolean paused);
+    private static native void nativeDisplayOption(String name, int value);
+    private static native void nativeTexturePacks(boolean enabled);
     private static native void nativeBenchmark(int seconds, String reportPath, String resolution);
     private static native void nativeWidescreen(boolean enabled);
     private static native void nativeOnlineServer(String host);
@@ -182,6 +187,112 @@ public final class GameActivity extends NativeActivity {
     private static native void nativeBackBuffers(int count);
     static native void nativeCpuTextures(boolean enabled);
     static native void nativeGpuDriver(String hooks, String temp, String directory, String library);
+    private void showGraphicsPanel() {
+        if (graphicsPanel == null) graphicsPanel = new GraphicsPanel(this, new GraphicsPanel.Listener() {
+            @Override public void graphicsPause(boolean paused) { nativePaused(paused); }
+            @Override public void graphicsApply(String key, String value) { applyGraphicsSetting(key, value); }
+        });
+        graphicsPanel.show();
+    }
+
+    /** The panel writes the same preferences the launcher reads, then applies them live. */
+    private void applyGraphicsSetting(String key, String value) {
+        switch (key) {
+            case GameOptions.RESOLUTION: {
+                DisplayMetrics metrics = new DisplayMetrics();
+                getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
+                int[] size = GameOptions.renderSize(this, Math.max(metrics.widthPixels, metrics.heightPixels),
+                        Math.min(metrics.widthPixels, metrics.heightPixels));
+                nativeLiveResolution(size[0], size[1]);
+                break;
+            }
+            case GameOptions.FPS:
+                nativeFrameLimit(Integer.parseInt(value));
+                break;
+            case GameOptions.FRAME_PACE:
+                nativeFramePace(value.equals("steady"));
+                break;
+            case GameOptions.LATENCY:
+                nativeBackBuffers(Integer.parseInt(value));
+                break;
+            case GameOptions.MINIMAP:
+                nativeMinimapTop(value.equals("top"));
+                break;
+            case GameOptions.WIDESCREEN:
+                nativeWidescreen(value.equals("on"));
+                break;
+            case GameOptions.TEXTURES:
+                nativeCpuTextures(value.equals("cpu"));
+                break;
+            case GameOptions.HD_PACKS:
+                applyVisualOptions();
+                nativeTexturePacks(value.equals("on"));
+                break;
+            case GameOptions.FILTERING:
+            case GameOptions.SHARPEN:
+            case GameOptions.BLOOM:
+            case GameOptions.REFLECTIONS:
+                applyVisualOptions();
+                break;
+            case GameOptions.LOOK:
+                applyVisualOptions();
+                break;
+            case GameOptions.EFFECTS: {
+                int level = Integer.parseInt(value);
+                setDisplayToggle(GameOptions.LIGHT_TRAILS, level >= 1);
+                setDisplayToggle(GameOptions.OVERBRIGHT, level >= 1);
+                setDisplayToggle(GameOptions.MOTION_BLUR, level >= 2);
+                applyVisualOptions();
+                break;
+            }
+            case GameOptions.ATMOSPHERE: {
+                int level = Integer.parseInt(value);
+                setDisplayToggle(GameOptions.FOG, level >= 1);
+                setDisplayToggle(GameOptions.RAIN, level >= 2);
+                nativeDisplayOption("g_horizonfogenable", level >= 1 ? 1 : 0);
+                break;
+            }
+            case GameOptions.TREATMENT: {
+                int level = Integer.parseInt(value);
+                setDisplayToggle(GameOptions.BLEACH, level >= 1);
+                setDisplayToggle(GameOptions.DOF, level >= 2);
+                break;
+            }
+            default:
+                String display = displayName(key);
+                if (display != null) nativeDisplayOption(display, Integer.parseInt(value));
+                break;
+        }
+        GameOptions.syncDisplayBundles(this);
+    }
+
+    /** A bundle row writes both the saved concrete value and the live game global. */
+    private void setDisplayToggle(String key, boolean on) {
+        GameOptions.set(this, key, on ? "1" : "0");
+        String name = displayName(key);
+        if (name != null) nativeDisplayOption(name, on ? 1 : 0);
+    }
+
+    private void applyVisualOptions() {
+        nativeVisualOptions(GameOptions.get(this, GameOptions.HD_PACKS).equals("on"),
+                Integer.parseInt(GameOptions.get(this, GameOptions.FILTERING)),
+                Integer.parseInt(GameOptions.get(this, GameOptions.SHARPEN)),
+                Integer.parseInt(GameOptions.get(this, GameOptions.LOOK)),
+                Integer.parseInt(GameOptions.get(this, GameOptions.REFLECTIONS)),
+                Integer.parseInt(GameOptions.get(this, GameOptions.BLOOM)),
+                Integer.parseInt(GameOptions.get(this, GameOptions.EFFECTS)),
+                Integer.parseInt(GameOptions.get(this, GameOptions.ATMOSPHERE)),
+                Integer.parseInt(GameOptions.get(this, GameOptions.TREATMENT)),
+                0, false);
+    }
+
+    private static String displayName(String key) {
+        for (String[] map : GameOptions.DISPLAY_MAP) if (map[0].equals(key)) return map[1];
+        if (key.equals(GameOptions.PERF_LEVEL)) return "g_performancelevel";
+        if (key.equals(GameOptions.TINT)) return "g_tintingenable";
+        return null;
+    }
+
     private void showFrameLimitOptions() {
         GameOptions.Option option=GameOptions.find(GameOptions.FPS);
         String saved=GameOptions.get(this,GameOptions.FPS);int selected=0;
@@ -291,6 +402,7 @@ public final class GameActivity extends NativeActivity {
         nativeFeedbackSource(GameOptions.get(this,GameOptions.FEEDBACK_SOURCE).equals("physics"));
         nativePhoneFeedback(phoneFeedback.enabled());
         nativeTriggerFallback(GameOptions.get(this, GameOptions.PEDALS).equals("triggers"));
+        GameOptions.syncDisplayBundles(this);
         nativeDisplayOverrides(GameOptions.displayOverrides(this));
         nativeVisualOptions(GameOptions.get(this, GameOptions.HD_PACKS).equals("on"),
                 Integer.parseInt(GameOptions.get(this, GameOptions.FILTERING)),
@@ -301,7 +413,7 @@ public final class GameActivity extends NativeActivity {
                 Integer.parseInt(GameOptions.get(this, GameOptions.EFFECTS)),
                 Integer.parseInt(GameOptions.get(this, GameOptions.ATMOSPHERE)),
                 Integer.parseInt(GameOptions.get(this, GameOptions.TREATMENT)),
-                0, true);
+                0, false);
         nativeCpuTextures(launch.getBooleanExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu")));
         String[] loader = launch.getStringArrayExtra("driverLoader");
         if (loader == null || loader.length != 4) loader = GpuDrivers.loaderArguments(this);
@@ -317,7 +429,7 @@ public final class GameActivity extends NativeActivity {
         statusWindow = new PopupWindow(status, ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT, false);
         statusWindow.setTouchable(false);
-        touchControls = new RacingControlsView(this, this::setTouchKey, this::showTextInput,this::showTiltOptions,this::showFrameLimitOptions);
+        touchControls = new RacingControlsView(this, this::setTouchKey, this::showTextInput,this::showTiltOptions,this::showFrameLimitOptions,this::showGraphicsPanel);
         touchControls.setPointer(GameActivity::nativePointer);
         controlsWindow = new PopupWindow(touchControls, ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT, false);
@@ -456,6 +568,7 @@ public final class GameActivity extends NativeActivity {
         if (benchmarkWindow != null) benchmarkWindow.dismiss();
         if (touchControls != null) {touchControls.removeCallbacks(updateControlMode);touchControls.releaseAll();}
         if (controlsWindow != null) controlsWindow.dismiss();
+        if (graphicsPanel != null && graphicsPanel.isShowing()) graphicsPanel.dismiss();
         super.onPause();
     }
     @Override protected void onResume() {

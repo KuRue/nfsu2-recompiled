@@ -499,6 +499,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
     __android_log_print(ANDROID_LOG_INFO,"NFSU2","Native visuals: packs=%d AF=%d sharpen=%d look=%d bloom=%d reflections=%d effects=%d atmosphere=%d treatment=%d detail=%d",int(packs),filtering,sharpness,look,bloom,reflections,effects,atmosphere,treatment,detail);
 }
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeResolution(JNIEnv*,jclass,jint width,jint height){setGuestResolution(unsigned(width),unsigned(height));}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeLiveResolution(JNIEnv*,jclass,jint width,jint height){setD3D9RenderSize(unsigned(width),unsigned(height));}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFrameLimit(JNIEnv*,jclass,jint cap){setGuestFrameLimit(unsigned(cap));}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeDisplayRefresh(JNIEnv*,jclass,jint hertz){setGuestDisplayRefresh(unsigned(hertz));}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeDisplayModes(JNIEnv* env,jclass,jintArray rates){
@@ -514,6 +515,13 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
     setGuestDisplayModes(modes,count);
 }
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFramePace(JNIEnv*,jclass,jboolean steady){setGuestSteadyPace(steady==JNI_TRUE);}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativePaused(JNIEnv*,jclass,jboolean paused){setGuestOverlayPaused(paused==JNI_TRUE);}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeDisplayOption(JNIEnv* env,jclass,jstring name,jint value){
+    const char* text=name?env->GetStringUTFChars(name,nullptr):nullptr;if(!text)return;
+    queueGuestDisplayValue(text,unsigned(value));
+    env->ReleaseStringUTFChars(name,text);
+}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeTexturePacks(JNIEnv*,jclass,jboolean enabled){setD3D9TexturePacks(enabled==JNI_TRUE);}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeBenchmark(JNIEnv* env,jclass,jint seconds,jstring path,jstring resolution){
     const char* report=path?env->GetStringUTFChars(path,nullptr):nullptr;
     const char* scale=resolution?env->GetStringUTFChars(resolution,nullptr):nullptr;
@@ -559,7 +567,6 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
 // drives the GPU through two Vulkan drivers.
 static bool customVulkanDriver=false;
 static std::string customVulkanError;
-const char* launcherPreviewDriverError(){return customVulkanError.c_str();}
 extern "C" void dxvkAndroidSetInstanceProcAddr(PFN_vkGetInstanceProcAddr entry);
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGpuDriver(JNIEnv* env,jclass,jstring hooks,jstring temp,jstring directory,jstring library){
     auto text=[&](jstring value){const char* c=value?env->GetStringUTFChars(value,nullptr):nullptr;std::string r=c?c:"";if(c)env->ReleaseStringUTFChars(value,c);return r;};

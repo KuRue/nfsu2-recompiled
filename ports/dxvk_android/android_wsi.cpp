@@ -2,6 +2,7 @@
 #include "../../android/app/src/main/cpp/android_resolution.h"
 #ifdef __ANDROID__
 #include <android/native_window.h>
+#include <android/log.h>
 #else
 #define VK_USE_PLATFORM_XLIB_KHR
 #include <X11/Xlib.h>
@@ -43,9 +44,20 @@ extern "C" PFN_vkGetInstanceProcAddr dxvkAndroidGetInstanceProcAddr(){
 }
 extern "C" void dxvkAndroidSetRenderSize(uint32_t width,uint32_t height){std::lock_guard<std::mutex> guard(windowMutex);renderWidth=width;renderHeight=height;
 #ifdef __ANDROID__
-    // Same as dxvkAndroidSetWindow when the window came first.
-    if(currentWindow&&!bufferWidth&&width&&height&&width<screenWidth&&height<screenHeight&&
-       ANativeWindow_setBuffersGeometry(currentWindow,width,height,0)==0){bufferWidth=width;bufferHeight=height;}
+    // Live resolution changes: the in-game Graphics panel calls this while the
+    // guest is paused. 0x0 restores the window's own size (Native); a smaller
+    // buffer lets the compositor scale the presented picture.
+    if(currentWindow){
+        bool native=!width||!height||width>=screenWidth||height>=screenHeight;
+        uint32_t targetWidth=native?0:width,targetHeight=native?0:height;
+        if(targetWidth!=bufferWidth||targetHeight!=bufferHeight){
+            if(ANativeWindow_setBuffersGeometry(currentWindow,targetWidth,targetHeight,0)==0){
+                bufferWidth=targetWidth;bufferHeight=targetHeight;
+            }
+            __android_log_print(ANDROID_LOG_INFO,"NFSU2","Android render size %ux%u -> buffer %ux%u (screen %ux%u)",
+                width,height,bufferWidth,bufferHeight,screenWidth,screenHeight);
+        }
+    }
 #endif
 }
 extern "C" HWND dxvkAndroidGetWindowHandle(){std::lock_guard<std::mutex> guard(windowMutex);return currentHandle;}
