@@ -1501,5 +1501,6 @@ The launcher return was verified through ExitProcess, but the game's shutdown
 helpers can also call GetCurrentProcess + TerminateProcess (guest 0x75D4E2).
 TerminateProcess had no HLE implementation, so that path surfaced as
 "HLE pendiente". It now logs the handle/code, sets the same guest exit request
-and follows the launcher-return path. Built; the phone went offline before this
-APK could be installed and the actual Quit Game button retested.
+and follows the launcher-return path. The APK is installed on the phone; the
+actual Quit Game button still needs a retest. The likely previous error was
+"HLE pendiente: kernel32.dll!TerminateProcess desde 0x0075d4e2".
