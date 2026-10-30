@@ -502,6 +502,37 @@ int sendDatagram(uint32_t handle,const uint8_t* data,size_t length,uint32_t ip,u
     changeCv.notify_all();
     return 0;
 }
+int sendIcmp(uint32_t handle,const uint8_t* data,size_t length,uint32_t ip){
+    std::lock_guard<std::mutex> lock(mu);
+    VSock* socket=find(handle);
+    if(!socket)return kNotSock;
+    if(length>kMaxPayload)return kMsgSize;
+    if(!online())return 0;
+    bool loop=(ip>>24)==127,self=ip==vip;
+    if(loop||self){
+        if(length>=8&&data[0]==8){
+            std::vector<uint8_t> reply(data,data+length);
+            reply[0]=0;reply[1]=0;reply[2]=reply[3]=0;
+            uint32_t sum=0;
+            for(size_t i=0;i+1<reply.size();i+=2)sum+=uint32_t(reply[i])<<8|reply[i+1];
+            if(reply.size()&1)sum+=uint32_t(reply.back())<<8;
+            while(sum>>16)sum=(sum&0xffff)+(sum>>16);
+            sum=~sum&0xffff;reply[2]=uint8_t(sum>>8);reply[3]=uint8_t(sum);
+            for(auto& entry:socks){
+                VSock& other=entry.second;
+                if(!other.used||!other.icmp)continue;
+                Dgram dgram;dgram.src=ip;dgram.data=reply;
+                if(other.q.size()<kDgramQueueMax&&other.qBytes+reply.size()<=kDgramBytesMax){
+                    other.qBytes+=reply.size();other.q.push_back(std::move(dgram));
+                }
+            }
+        }
+    }else if(inSubnet(ip)&&!broadcastAddress(ip)){
+        txRaw(KindIcmp,ip,0,0,0,0,data,length);
+    }
+    changeCv.notify_all();
+    return 0;
+}
 int closeSocket(uint32_t handle,bool abortive){
     std::lock_guard<std::mutex> lock(mu);
     auto found=socks.find(handle);

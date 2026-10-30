@@ -131,6 +131,20 @@ int main() {
     vlan::incoming(clientSynAck.data(), clientSynAck.size());
     check(vlan::connectResult(30) == 0, "SYNACK establishes the client");
 
+    // ICMP: an echo request to a peer goes out on the switch, and a reply
+    // comes back to the raw socket with an IPv4 header.
+    vlan::open(50, 4);
+    uint8_t echo[8] = {8, 0, 0, 0, 0x12, 0x34, 0, 1};
+    check(vlan::sendIcmp(50, echo, sizeof echo, 0x0a4d0948u) == 0, "send ICMP echo");
+    auto icmp = next();
+    check(icmp[0] == vlan::KindIcmp && icmp.size() == 24 + sizeof echo, "ICMP frame");
+    uint8_t echoReply[8]; std::memcpy(echoReply, echo, sizeof echo); echoReply[0] = 0;
+    auto icmpReply = frame(vlan::KindIcmp, 0x0a4d0948u, 0x0a4d0947u, 0, 0, 0, 0, echoReply, sizeof echoReply);
+    vlan::incoming(icmpReply.data(), icmpReply.size());
+    uint32_t icmpSource = 0; uint16_t icmpPort = 0; size_t icmpGot = 0; bool icmpUnreachable = false;
+    check(vlan::recvDatagram(50, buffer, sizeof buffer, icmpSource, icmpPort, icmpGot, icmpUnreachable) == 0 &&
+          icmpGot == sizeof echoReply && buffer[0] == 0 && icmpSource == 0x0a4d0948u, "ICMP reply delivered");
+
     vlan::disconnected("test link down");
     check(!vlan::online(), "offline after the link drops");
 
@@ -140,6 +154,7 @@ int main() {
     vlan::closeSocket(20, false);
     vlan::closeSocket(accepted, false);
     vlan::closeSocket(30, false);
+    vlan::closeSocket(50, false);
     if (failures) std::fprintf(stderr, "%d virtual LAN check(s) failed\n", failures);
     else std::puts("virtual LAN passed");
     return failures ? 1 : 0;
