@@ -366,7 +366,7 @@ public final class LauncherActivity extends Activity {
                             "Local LAN", "The game's own LAN mode finds players on your Wi-Fi network. No server is used.")));
                 else
                     optionsList.addView(optionRow("nfsu2.xyz", "Virtual LAN switch", () -> explainNetwork(
-                            "nfsu2.xyz", "LAN play goes through the nfsu2.xyz virtual LAN switch, so players need no shared Wi-Fi. The EA Nation online server is not used in this mode.")));
+                            "nfsu2.xyz", "LAN play goes through the nfsu2.xyz virtual LAN switch, so players need no shared Wi-Fi. The game's Online mode still uses the saved EA Nation server.")));
                 break;
             }
             case "saves":
