@@ -169,6 +169,8 @@ void disconnected(const char* reason){
         if(conn->state==VConn::SynSent)conn->state=VConn::Failed;
         else if(conn->state==VConn::Established){conn->rxRst=true;conn->rx.clear();conn->rxOff=0;}
     }
+    // Frames queued for the old link must not appear on the next one.
+    outbox.clear();outCv.notify_all();
     changeCv.notify_all();
     NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Virtual LAN: disconnected (%s)",lastStatus.c_str());
 }
