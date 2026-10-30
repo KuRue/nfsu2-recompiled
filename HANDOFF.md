@@ -1729,8 +1729,8 @@ Verification without the phone:
 - Two-client host/join on the switch is the next test: host a LAN server,
   join from another browser or a second install, then a race.
 
-Limitations: virtual ICMP is not routed from the game (ping to a virtual host
-uses the phone's real network and fails); the switch is often full, so the
-client may wait in its queue before the LAN screen has an address. The bridge
-holds the switch slot for the whole game session, as the browser port holds it
-from WSAStartup to WSACleanup.
+Limitations: the switch is often full, so the client may wait in its queue
+before the LAN screen has an address. The bridge holds the switch slot for the
+whole game session, as the browser port holds it from WSAStartup to
+WSACleanup. Automatic answers (port unreachable, RST to a stray SYN, ICMP
+echo replies) share a 32 KB/s budget, as the browser port's do.
