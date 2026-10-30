@@ -219,3 +219,12 @@ in-game Graphics panel is hosted by GameActivity (MenuPanel frame/sheet, lime
 oblique headings, silver rows) and is reachable from the expanded racing dock
 and the pause/frontend icon row. It reuses the launcher's silver/black/lime
 language and applies the same persisted GameOptions values live.
+
+### 2026-10-30 — Controls consistency pass
+
+RacingControlsView now consumes the shared menu palette instead of duplicating
+hex values. The expanded dock uses the menu's black band and lime hairline;
+editor actions are outlined with SAVE as the lime primary and the rest as white
+secondary actions. Idle faces are darker with soft white rings, held controls
+use lime, and editor selection is white. Pedal red/green and controller face
+colors remain semantic. Hitboxes and saved layouts are unchanged.

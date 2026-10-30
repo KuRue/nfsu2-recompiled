@@ -1504,3 +1504,24 @@ TerminateProcess had no HLE implementation, so that path surfaced as
 and follows the launcher-return path. The APK is installed on the phone; the
 actual Quit Game button still needs a retest. The likely previous error was
 "HLE pendiente: kernel32.dll!TerminateProcess desde 0x0075d4e2".
+
+## 2026-10-30: on-screen control consistency pass
+
+RacingControlsView now draws from the same palette as the menu instead of
+duplicating hex values:
+- accent/white/whiteSoft/ink/inkSoft/panel/barFill/barStroke come from
+  menu_colors.xml or are alpha compositions of those colors.
+- The expanded dock band uses the menu's black title band (0xE6101010) with a
+  lime hairline and 10dp corners.
+- Editor actions are outlined: SAVE is the lime primary; RESET, −, +, CANCEL
+  and OPTIONS are white secondary actions. Labels stay in the menu oblique face.
+- Idle faces are darker and more opaque (0xCC202420) with soft white rings;
+  held controls use lime; the editor selection ring is full white; pedal red/
+  green and Xbox/PlayStation face colors remain semantic.
+- No hitboxes, layout positions, save format or control mappings changed.
+
+Verified on the phone in a race and in the editor: the dock band, idle/held
+rings, SAVE/CANCEL hierarchy and the editor backdrop all read correctly;
+CANCEL closes the editor and returns to the race. Screenshots:
+/tmp/opencode/controls_theme_race_collapsed.png and
+/tmp/opencode/controls_theme_editor.png.

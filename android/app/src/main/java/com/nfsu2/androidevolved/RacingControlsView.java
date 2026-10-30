@@ -56,7 +56,9 @@ final class RacingControlsView extends View {
     private float dragX, dragY;
     private final SharedPreferences layouts;
     private float scale;
-    private static final int ACCENT = 0xFFC6E78B;
+    // One palette for every canvas-drawn control. Values mirror menu_colors.xml
+    // so the dock/editor and the launcher cannot drift apart.
+    private final int accent, white, whiteSoft, ink, inkSoft, panel, barFill, barStroke;
     private static final class Control {
         final RectF area;
         final String icon;
@@ -79,6 +81,14 @@ final class RacingControlsView extends View {
         this.configureTilt=configureTilt;this.configureFrameLimit=configureFrameLimit;
         setContentDescription("Game controls");
         setHapticFeedbackEnabled(true);
+        accent=MenuTheme.color(getContext(),R.color.menu_lime);
+        white=MenuTheme.color(getContext(),R.color.menu_white);
+        whiteSoft=(white&0x00FFFFFF)|0xB3000000;
+        ink=MenuTheme.color(getContext(),R.color.menu_ink);
+        inkSoft=(ink&0x00FFFFFF)|0xCC000000;
+        panel=0xCC202420;
+        barFill=0xE6101010;
+        barStroke=(accent&0x00FFFFFF)|0x66000000;
         line.setStyle(Paint.Style.STROKE);line.setStrokeCap(Paint.Cap.ROUND);line.setStrokeJoin(Paint.Join.ROUND);
         text.setTextAlign(Paint.Align.CENTER);text.setTypeface(MenuTheme.font(getContext(),true));
     }
@@ -213,11 +223,11 @@ final class RacingControlsView extends View {
         canvas.save(); canvas.scale(scale,scale);
         if(editing)canvas.drawColor(0x55000000);
         if(racing&&(barExpanded||editing)&&!barArea.isEmpty()) {
-            fill.setColor(0xB3101010);
-            line.setColor(0x66C6E78B);
-            line.setStrokeWidth(1.5f);
-            canvas.drawRoundRect(barArea,16,16,fill);
-            canvas.drawRoundRect(barArea,16,16,line);
+            fill.setColor(barFill);
+            line.setColor(barStroke);
+            line.setStrokeWidth(1.2f);
+            canvas.drawRoundRect(barArea,10,10,fill);
+            canvas.drawRoundRect(barArea,10,10,line);
         }
         for(Control c:controls) {
             if(c.docked&&!barExpanded&&!editing)continue;
@@ -237,37 +247,38 @@ final class RacingControlsView extends View {
     private void drawControl(Canvas canvas,Control c) {
         boolean on=c.held>0, picked=editing&&c==selected;
         float cx=c.area.centerX(),cy=c.area.centerY(),r=Math.min(c.area.width(),c.area.height())/2;
-        int ink=on?0xFF171B17:0xE6FFFFFF;
+        int iconInk=on?ink:(white&0x00FFFFFF)|0xE6000000;
         line.setStrokeWidth(Math.max(1.6f,r*.06f));
         if(c.shape==PEDAL) {
             float corner=c.area.width()*.28f;
             fill.setColor((c.color&0x00FFFFFF)|(on?0xD0000000:0x99000000));
             canvas.drawRoundRect(c.area,corner,corner,fill);
-            line.setColor(picked?0xFFE8E8E8:on?0xFFC6E78B:0xB3E8E8E8);
+            line.setColor(picked?white:on?accent:whiteSoft);
             canvas.drawRoundRect(c.area,corner,corner,line);
             // Grip ridges like a real pedal, then the direction it drives.
-            line.setColor(on?0xCC171B17:0x66FFFFFF);
+            line.setColor(on?inkSoft:(white&0x00FFFFFF)|0x66000000);
             float span=c.area.width()*.28f;
             for(int i=0;i<4;++i){float y=c.area.top+c.area.height()*(.52f+i*.11f);canvas.drawLine(cx-span,y,cx+span,y,line);}
-            line.setColor(ink);line.setStrokeWidth(Math.max(2.4f,c.area.width()*.06f));
+            line.setColor(iconInk);line.setStrokeWidth(Math.max(2.4f,c.area.width()*.06f));
             chevron(canvas,cx,c.area.top+c.area.height()*.27f,c.area.width()*.22f,c.icon.equals("gas"));
             return;
         }
         fill.setColor(0x55000000);canvas.drawCircle(cx,cy+r*.06f,r,fill);
-        fill.setColor(on?0xD0C6E78B:0x8C202020);canvas.drawCircle(cx,cy,r,fill);
+        fill.setColor(on?(accent&0x00FFFFFF)|0xD0000000:panel);canvas.drawCircle(cx,cy,r,fill);
         int ring=faceColor(c);
-        line.setColor(picked?0xFFE8E8E8:on?0xFFC6E78B:c.scan==BAR?ACCENT:ring!=0?ring:0xB3E8E8E8);
+        line.setColor(picked?white:on?accent:c.scan==BAR?accent:ring!=0?ring:whiteSoft);
         canvas.drawCircle(cx,cy,r-line.getStrokeWidth()/2,line);
         if(c.shape==WHEEL) {
-            fill.setColor(on?ACCENT:0xCC2A2E28);
+            fill.setColor(on?accent:0xCC2A2E28);
             float knob=r*.4f,kx=cx+c.steering*(r-knob);
-            canvas.drawCircle(kx,cy,knob,fill);line.setColor(0xB3FFFFFF);canvas.drawCircle(kx,cy,knob,line);
-            line.setColor(0x80FFFFFF);chevronSide(canvas,cx-r*.78f,cy,r*.12f,true);chevronSide(canvas,cx+r*.78f,cy,r*.12f,false);
+            canvas.drawCircle(kx,cy,knob,fill);line.setColor(whiteSoft);canvas.drawCircle(kx,cy,knob,line);
+            line.setColor((white&0x00FFFFFF)|0x80000000);chevronSide(canvas,cx-r*.78f,cy,r*.12f,true);chevronSide(canvas,cx+r*.78f,cy,r*.12f,false);
             return;
         }
-        line.setColor(ink);fill.setColor(ink);line.setStrokeWidth(Math.max(2.2f,r*.1f));
+        line.setColor(iconInk);fill.setColor(iconInk);line.setStrokeWidth(Math.max(2.2f,r*.1f));
         drawIcon(canvas,c,cx,cy,r,on);
     }
+    /** Face-button colors are semantic controller identities, not theme colors. */
     private int faceColor(Control c) {
         if(!racing||style.equals("classic")||c.icon.length()!=1)return 0;
         if(c.scan==0x39)return style.equals("xbox")?0xff74df8e:0xff80b8ff;
@@ -358,12 +369,15 @@ final class RacingControlsView extends View {
     }
     private void glyph(Canvas canvas,String value,float x,float y,float size,boolean on) {glyph(canvas,value,x,y,size,on,0);}
     private void glyph(Canvas canvas,String value,float x,float y,float size,boolean on,int color) {
-        text.setTextSize(size);text.setColor(on?0xFF171B17:color!=0?color:0xF0FFFFFF);
+        text.setTextSize(size);text.setColor(on?ink:color!=0?color:white);
         canvas.drawText(value,x,y-(text.ascent()+text.descent())/2,text);
     }
     private void drawToolbarButton(Canvas canvas,RectF area,String label) {
-        fill.setColor(0xE6101010);canvas.drawRoundRect(area,12,12,fill);
-        text.setColor(ACCENT);text.setTextSize(label.length()>2?12:24);text.setTypeface(MenuTheme.font(getContext(),true));
+        boolean primary=label.equals("SAVE");
+        fill.setColor(barFill);canvas.drawRoundRect(area,10,10,fill);
+        line.setColor(primary?accent:whiteSoft);line.setStrokeWidth(1.2f);
+        canvas.drawRoundRect(area,10,10,line);
+        text.setColor(primary?accent:white);text.setTextSize(label.length()>2?12:24);text.setTypeface(MenuTheme.font(getContext(),true));
         canvas.drawText(label,area.centerX(),area.centerY()-(text.ascent()+text.descent())/2,text);
     }
 
