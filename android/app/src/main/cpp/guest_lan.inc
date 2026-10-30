@@ -91,7 +91,7 @@ struct VConn {
     Clock::time_point deadline{};
 };
 struct VSock {
-    bool used=false,tcp=false,bound=false,reuse=false,listening=false,icmp=false,hasPeer=false;
+    bool used=false,tcp=false,bound=false,reuse=false,listening=false,icmp=false,hasPeer=false,sentBroadcast=false;
     uint32_t ip=0,peerIp=0;uint16_t port=0,peerPort=0;int backlog=1;
     std::deque<Dgram> q;size_t qBytes=0;
     std::shared_ptr<VConn> stream;              // connected or accepted stream
@@ -470,9 +470,16 @@ int sendDatagram(uint32_t handle,const uint8_t* data,size_t length,uint32_t ip,u
         socket->port=ephemeral(false);
         if(!socket->port)return kNoBufs;
         socket->bound=true;
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Virtual LAN: udp auto-bind port %u",socket->port);
     }
     bool loop=(ip>>24)==127,self=ip==vip;
     uint32_t source=loop?0x7f000001u:vip;
+    static int loggedSends=0;
+    if(loggedSends<12){
+        ++loggedSends;
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Virtual LAN: udp %u -> %u.%u.%u.%u:%u, %zu bytes%s",
+            socket->port,(ip>>24)&255,(ip>>16)&255,(ip>>8)&255,ip&255,port,length,broadcastAddress(ip)?" broadcast":"");
+    }
     if(loop||self){
         // A datagram to our own address never leaves the browser.
         for(auto& entry:socks){
@@ -487,6 +494,7 @@ int sendDatagram(uint32_t handle,const uint8_t* data,size_t length,uint32_t ip,u
         return 0;
     }
     if(broadcastAddress(ip)){
+        socket->sentBroadcast=true;
         // Windows loops a broadcast back to the sender's own sockets.
         for(auto& entry:socks){
             VSock& other=entry.second;
@@ -636,12 +644,21 @@ void deliverUdp(uint32_t src,uint16_t sport,uint32_t dst,uint16_t dport,const ui
     int delivered=0;
     for(auto& entry:socks){
         VSock& socket=entry.second;
-        if(!socket.used||socket.tcp||socket.icmp||!socket.bound||socket.port!=dport)continue;
+        if(!socket.used||socket.tcp||socket.icmp)continue;
+        bool boundPort=socket.bound&&socket.port==dport;
+        // The game's discovery socket sends its broadcast from an ephemeral
+        // port; on a real LAN it also hears the hosts' 9999 announcements, so
+        // a socket that broadcast to 9999 listens to that port too.
+        bool discoveryListener=broadcast&&dport==9999&&socket.sentBroadcast;
+        if(!boundPort&&!discoveryListener)continue;
         if(!(!socket.ip||socket.ip==dst||(broadcast&&socket.ip==vip)||((dst>>24)==127&&(socket.ip>>24)==127)))continue;
         if(broadcast){
             if(socket.q.size()>=kDgramQueueMax||socket.qBytes+length>kDgramBytesMax)continue;
             Dgram dgram;dgram.src=src;dgram.sport=sport;dgram.data.assign(data,data+length);
-            socket.qBytes+=length;socket.q.push_back(std::move(dgram));++delivered;continue;
+            socket.qBytes+=length;socket.q.push_back(std::move(dgram));++delivered;
+            static int loggedBroadcasts=0;
+            if(loggedBroadcasts<8){++loggedBroadcasts;NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Virtual LAN: broadcast %zu bytes to local port %u from %u.%u.%u.%u:%u",length,dport,(src>>24)&255,(src>>16)&255,(src>>8)&255,src&255,sport);}
+            continue;
         }
         if(!first)first=&socket;
         if(!exact&&socket.ip==dst)exact=&socket;
@@ -651,6 +668,8 @@ void deliverUdp(uint32_t src,uint16_t sport,uint32_t dst,uint16_t dport,const ui
         if(socket.q.size()<kDgramQueueMax&&socket.qBytes+length<=kDgramBytesMax){
             Dgram dgram;dgram.src=src;dgram.sport=sport;dgram.data.assign(data,data+length);
             socket.qBytes+=length;socket.q.push_back(std::move(dgram));++delivered;
+            static int loggedUnicasts=0;
+            if(loggedUnicasts<8){++loggedUnicasts;NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Virtual LAN: unicast %zu bytes to local port %u from %u.%u.%u.%u:%u",length,dport,(src>>24)&255,(src>>16)&255,(src>>8)&255,src&255,sport);}
         }
     }
     if(!delivered&&!broadcast&&allowAuto(0)){

@@ -1734,3 +1734,30 @@ before the LAN screen has an address. The bridge holds the switch slot for the
 whole game session, as the browser port holds it from WSAStartup to
 WSACleanup. Automatic answers (port unreachable, RST to a stray SYN, ICMP
 echo replies) share a 32 KB/s budget, as the browser port's do.
+
+## 2026-10-30: first real-phone LAN session
+
+Phone SM-S938U1 (Android 17) at 192.168.1.169:42311, dev build with the
+nfsu2.xyz provider selected. Installed the current debug APK (the new Network
+row: EA Nation / Local LAN / nfsu2.xyz). Results:
+
+- Support > Test nfsu2.xyz: welcome 10.77.11.66, 277 relayed LAN frames in
+  about eight seconds. TLS, hello, welcome and the native frame path work on
+  the phone.
+- Game launch: bridge welcome 10.77.18.70 (10.77.17.63 after a restart);
+  the native log showed 49k relayed frames while the game sat in its menus.
+- LAN menu opened; WSAStartup reports "LAN play uses the nfsu2.xyz switch".
+  The game created two real UDP sockets and sent its 384-byte NFSU2NA
+  advertisement from an **ephemeral** virtual port (51791) to
+  255.255.255.255:9999. It did not bind 9999, and the server list stayed empty.
+- Real hosts on the switch advertise 384-byte NFSU2NA packets as broadcasts
+  to port 9999. A client on an ephemeral socket would not hear them on
+  Windows either, unless the protocol replies unicast; none arrived. Added a
+  compatibility rule: a socket that broadcasts to 9999 also receives
+  broadcasts to 9999 on its ephemeral port (the game's discovery socket).
+  `tests/virtual_lan.cpp` covers it; **not yet verified on the phone** because
+  the connection dropped before the next run.
+- Still untested on hardware: Host LAN Server -> server.dll bind/listen ->
+  TCP join from a second client, and a race. The phone's touch is a relative
+  mouse and the menu timing is awkward through adb, so the Host button could
+  not be activated in this session.

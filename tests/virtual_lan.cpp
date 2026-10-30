@@ -131,6 +131,20 @@ int main() {
     vlan::incoming(clientSynAck.data(), clientSynAck.size());
     check(vlan::connectResult(30) == 0, "SYNACK establishes the client");
 
+    // A client's discovery socket often sends its broadcast from an ephemeral
+    // port yet still hears the hosts' 9999 announcements on that socket.
+    vlan::open(60, 1);
+    check(vlan::sendDatagram(60, reinterpret_cast<const uint8_t*>(peer), 4, 0xffffffffu, 9999) == 0,
+          "ephemeral discovery broadcast");
+    (void)next();
+    const char hostAdvert[] = "HOST";
+    auto hostBroadcast = frame(vlan::KindUdp, 0x0a4d094au, 0xffffffffu, 9999, 9999, vlan::UdpData, 0,
+                               hostAdvert, 4);
+    vlan::incoming(hostBroadcast.data(), hostBroadcast.size());
+    check(vlan::recvDatagram(60, buffer, sizeof buffer, source, sport, got, unreachable) == 0 &&
+          got == 4 && std::memcmp(buffer, hostAdvert, 4) == 0 && source == 0x0a4d094au,
+          "host broadcast reaches the discovery socket");
+
     // ICMP: an echo request to a peer goes out on the switch, and a reply
     // comes back to the raw socket with an IPv4 header.
     vlan::open(50, 4);
@@ -155,6 +169,7 @@ int main() {
     vlan::closeSocket(accepted, false);
     vlan::closeSocket(30, false);
     vlan::closeSocket(50, false);
+    vlan::closeSocket(60, false);
     if (failures) std::fprintf(stderr, "%d virtual LAN check(s) failed\n", failures);
     else std::puts("virtual LAN passed");
     return failures ? 1 : 0;
