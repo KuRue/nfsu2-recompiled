@@ -201,6 +201,19 @@ bool txRaw(uint8_t kind,uint32_t dst,uint16_t sport,uint16_t dport,uint8_t op,ui
     return true;
 }
 
+// Automatic answers (a port unreachable, a RST to a stray SYN, an echo reply)
+// share a small budget: someone on the public switch cannot make this phone
+// spend its upstream on answers to traffic the game never asked for.
+bool allowAuto(size_t length){
+    static Clock::time_point window{};
+    static size_t used=0;
+    auto now=Clock::now();
+    if(window.time_since_epoch().count()==0||now-window>=std::chrono::seconds(1)){window=now;used=0;}
+    if(used+length+64>32768)return false;
+    used+=length+64;
+    return true;
+}
+
 // ---- sockets -----------------------------------------------------------------
 VSock* find(uint32_t handle){
     auto found=socks.find(handle);
@@ -607,7 +620,7 @@ void deliverUdp(uint32_t src,uint16_t sport,uint32_t dst,uint16_t dport,const ui
             socket.qBytes+=length;socket.q.push_back(std::move(dgram));++delivered;
         }
     }
-    if(!delivered&&!broadcast){
+    if(!delivered&&!broadcast&&allowAuto(0)){
         // "ICMP port unreachable" from this browser: the sender's next recv
         // on a connected socket fails, as on a real network.
         txRaw(KindUdp,src,dport,sport,UdpUnreach,0,nullptr,0);
@@ -660,7 +673,7 @@ void incoming(const uint8_t* frame,size_t length){
                 }
             }
         }
-        if(payload[0]==8&&!broadcast){
+        if(payload[0]==8&&!broadcast&&allowAuto(payloadLength)){
             std::vector<uint8_t> reply(payload,payload+payloadLength);
             reply[0]=0;reply[1]=0;reply[2]=reply[3]=0;
             uint32_t sum=0;
@@ -686,7 +699,7 @@ void incoming(const uint8_t* frame,size_t length){
             if(conn)break;
             VSock* listener=findListener(vip,dport);
             if(!listener||listener->pending>=listener->backlog+4){
-                txRaw(KindTcp,src,dport,sport,TcpRst,cid,nullptr,0);
+                if(allowAuto(0))txRaw(KindTcp,src,dport,sport,TcpRst,cid,nullptr,0);
                 NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Virtual LAN: tcp %u.%u.%u.%u:%u -> %u refused",
                     (src>>24)&255,(src>>16)&255,(src>>8)&255,src&255,sport,dport);
                 break;
