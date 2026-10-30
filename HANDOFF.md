@@ -1525,3 +1525,22 @@ rings, SAVE/CANCEL hierarchy and the editor backdrop all read correctly;
 CANCEL closes the editor and returns to the race. Screenshots:
 /tmp/opencode/controls_theme_race_collapsed.png and
 /tmp/opencode/controls_theme_editor.png.
+
+## 2026-10-30: graphics settings overhaul proposal
+
+Added docs/design/NFSU2_GRAPHICS_SETTINGS_PLAN.md. The audit found four
+sources of confusion:
+- three kinds of preset mixed with ordinary rows (Frame profile, scene
+  bundles, Color grade);
+- the same live setting editable in both the launcher and the Graphics panel,
+  grouped differently;
+- names that describe implementation rather than effect (Lighting look,
+  Night effects, Treatment, Atmosphere, Reflections);
+- hidden `PERF_LEVEL`/`TINT` overrides still sent by displayOverrides().
+
+Proposed IA: Performance / Image / Scene / Textures / Display, concrete rows
+only, Frame profile scoped to resolution+FPS+frame queue, Color grade scoped
+to the final image, no Night effects/Atmosphere/Treatment settings. Scene gets
+World / Car / Light & weather subheaders. Launcher keeps launch-only rows and a
+read-only "Change in game" summary; Intro moves to Game. Dead display presets
+and hidden overrides are removed. Open decisions are listed in the document.
