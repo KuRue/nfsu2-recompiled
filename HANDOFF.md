@@ -1344,3 +1344,28 @@ the silver MenuDialog keeps dark body/actions. Verified the benchmark result
 dialog with a temporary report in the normal format (the launcher deletes it
 after display) and the live panel on the phone. No settings were changed by
 the synthetic report beyond the existing last-benchmark summary.
+
+## 2026-10-30: preview crash fix and warm/instant stills
+
+Root causes of the reported "crashed, clear cache" loop: rapid setting changes
+could stop/restart the preview while the old :preview game was still booting,
+and live display changes rewrote the game's g_* globals at Present, bypassing
+the game's reload path (Car shadow reproducibly SIGSEGV'd).
+
+Fixes:
+- VisualPreview is now single-flight: start/stop/apply states, debounced starts,
+  no APPLY before the first still, and a stop settle before any restart.
+- The last successful still is copied to cache/visual-preview-last.jpg and shown
+  immediately on later opens; the pane keeps it while the new render is prepared.
+- Leaving Visual settings keeps the paused preview warm for 60 s, so returning
+  is instant; onPause/game launch still stops it.
+- Display overrides are now part of the restart base; live g_* writes were
+  removed from runLauncherPreview. Post effects (bloom/look/atmosphere/treatment)
+  still apply live through environment settings.
+- HudDialog/result contrast fix retained.
+
+Verified on phone: three rapid preset changes before the first still produced no
+crash; Car shadow Off/Neon produced a clean stop/restart with the old still and
+"Updating…", no SIGSEGV; the next still arrived in 7.3 s; leaving and reopening
+Visual settings showed the still immediately. First boot of a brand-new preview
+combination still takes ~7.3 s; the pane is never blank.

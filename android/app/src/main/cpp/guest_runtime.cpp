@@ -643,20 +643,11 @@ unsigned queuePreviewLocal(std::vector<std::pair<std::string,std::string>> value
 }
 unsigned previewReadyLocal(){return previewReady.load();}
 struct DisplayVariable {const char* name;uint32_t address;};
-constexpr DisplayVariable displayVariables[]={
-    {"g_animatedtextureenable",0x870ce8},{"g_bleachbypassenable",0x870d00},{"g_cardamageenable",0x870ccc},
-    {"g_carenvironmentmapenable",0x870cb8},{"g_carenvironmentmapupdatedata",0x870cbc},{"g_carheadlightenable",0x870cc4},
-    {"g_carlightingenable",0x870cc8},{"g_carlodlevel",0x870cf8},{"g_carshadowenable",0x870cc0},{"g_crowdenable",0x870cd0},
-    {"g_depthoffieldenable",0x870cf0},{"g_fogenable",0x870cd8},{"g_horizonfogenable",0x870d0c},{"g_lightglowenable",0x870ce4},
-    {"g_lightstreaksenable",0x870ce0},{"g_motionblurenable",0x870cdc},{"g_overbrightenable",0x870cfc},
-    {"g_particlesystemenable",0x870cec},{"g_rainenable",0x870d10},{"g_roadreflectionenable",0x870cd4},
-    {"g_tintingenable",0x870d04},{"g_worldlodlevel",0x870cf4}};
 void runLauncherPreview(uint32_t player,uint32_t mode){
-    static unsigned racing=0,settle=0,applied=0;static bool showing=false;static uint32_t loaded[std::size(displayVariables)];
+    static unsigned racing=0,settle=0,applied=0;static bool showing=false;
     if(mode==2)++racing;
     if(!showing){
         if(racing<30)return;
-        for(size_t i=0;i<std::size(displayVariables);++i)loaded[i]=read32(displayVariables[i].address);
         State saved;saved.save();const uint32_t on=1;callGuest(0x501290u,&on,1,0,false);saved.load();
         showing=true;settle=0;applied=1;
         NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSPreview","showcase camera on");
@@ -665,9 +656,10 @@ void runLauncherPreview(uint32_t player,uint32_t mode){
     PreviewSettings next;
     {std::lock_guard<std::mutex> lock(previewMutex);if(previewPending.generation){next=std::move(previewPending);previewPending=PreviewSettings{};}}
     if(next.generation){
+        // Display g_* globals are applied by the isolated preview at boot from the
+        // launcher overrides. Rewriting them at Present bypasses the game's own
+        // reload path and crashed on car shadow; display changes restart instead.
         for(const auto& [name,value]:next.values)setenv(name.c_str(),value.c_str(),1);
-        for(size_t i=0;i<std::size(displayVariables);++i){uint32_t value=0;
-            write32(displayVariables[i].address,visualRegistryOverride(displayVariables[i].name,value)?value:loaded[i]);}
         applied=next.generation;settle=0;
     }
     // The first shot waits for the camera to come to rest; later ones only for the change.

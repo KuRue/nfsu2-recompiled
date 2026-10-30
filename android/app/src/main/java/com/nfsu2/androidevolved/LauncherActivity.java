@@ -897,13 +897,15 @@ public final class LauncherActivity extends Activity {
         if(visualPreview==null)visualPreview=new VisualPreview(this,(path,state)->{
             if(previewImage==null||previewStatus==null)return;
             previewStatus.setText(state);previewPath=path;
-            // The image needs no caption; the status line is for Preparing and errors.
-            if(path!=null){previewImage.setImageBitmap(android.graphics.BitmapFactory.decodeFile(path));previewImage.setVisibility(View.VISIBLE);previewStatus.setVisibility(View.GONE);
+            // Keep a real still visible while a newer one is prepared; the status line
+            // below it explains Preparing/Updating/errors instead of blanking the pane.
+            if(path!=null){previewImage.setImageBitmap(android.graphics.BitmapFactory.decodeFile(path));previewImage.setVisibility(View.VISIBLE);
+                previewStatus.setVisibility("Preview".equals(state)?View.GONE:View.VISIBLE);
                 previewImage.post(this::fitPreview);}
             else {previewImage.setImageDrawable(null);previewImage.setVisibility(View.GONE);previewStatus.setVisibility(View.VISIBLE);}
         });
         boolean visuals="graphics".equals(openGroup)||"display".equals(openGroup);
-        if(!visuals){visualPreview.hide();previewImage=null;previewStatus=null;}
+        if(!visuals){visualPreview.leave();previewImage=null;previewStatus=null;}
         if (playRow != null) playRow.setVisibility(openGroup == null ? View.VISIBLE : View.GONE);
         if (openGroup == null) { leftHome.setVisibility(View.VISIBLE); infoPanel.setVisibility(View.GONE); return; }
         leftHome.setVisibility(View.GONE); infoPanel.setVisibility(View.VISIBLE);
