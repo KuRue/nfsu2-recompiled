@@ -1467,3 +1467,26 @@ Diagnostics for the two open issues:
   arguments. `debug.nfs.ignorefpe 1` makes floating-point exception codes
   (0xC000008C..0xC0000093) return as if handled, for a controlled experiment;
   it is off by default. The drift-race reproduction still needs the phone.
+
+## 2026-10-30: on-device validation (phone 192.168.0.247)
+
+Quit flow: `debug.nfs.quit 1` (development hook, same path as the guest's
+ExitProcess) returned to LauncherActivity with the launcher main menu and Play
+button. The session marker was cleared; Resume was not offered. The hook is
+off by default.
+
+LAN: Main Menu > LAN opens LAN Server Select. Host LAN Server is a mouse-click
+button that opens the name dialog. With the default name, the host:
+- WSAStartup, chooses local 192.168.0.247 (Wi-Fi, not cellular),
+- creates UDP sockets, binds 0.0.0.0:9999,
+- sends a 384-byte advertisement to 255.255.255.255:9999,
+- receives its own advertisement and an external 15-byte UDP probe from
+  192.168.1.251 on the same socket,
+- holds the Wi-Fi multicast lock.
+So discovery and the host socket path work. A second game client on the same
+AP is still needed to confirm the server list and join; the empty list with
+only one host is expected.
+
+The drift-race -> Explore RaiseException did not reproduce during a Quick Race
+drift/drag attempt. The diagnostic RaiseException handler remains in the
+installed build and will print the exception code if it happens again.

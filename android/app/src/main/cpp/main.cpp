@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <cstdlib>
 #include <unistd.h>
+#include <sys/system_properties.h>
 #include "vertex_formats.h"
 #include "guest_memory.h"
 #include "game_data.h"
@@ -626,6 +627,11 @@ void android_main(android_app* app) {
         if (id >= 0 && source) source->process(app, source);
         applyDisplaySchedule(app);
         applyLanBroadcasts(app);
+        {static auto lastQuitCheck=std::chrono::steady_clock::time_point{};
+         auto now=std::chrono::steady_clock::now();
+         if(now-lastQuitCheck>=std::chrono::seconds(1)){lastQuitCheck=now;
+             char value[PROP_VALUE_MAX]{};__system_property_get("debug.nfs.quit",value);
+             if(std::atoi(value))requestGuestExit();}}
         if(guestExitRequested()&&!host.quitRequested){
             host.quitRequested=true;
             setGuestPaused(true);

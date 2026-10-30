@@ -1789,6 +1789,7 @@ std::string connectGuestRuntime(const char* executable) {
 }
 void requestGuestRuntimeStop() {stopRequested=true;}
 bool guestExitRequested() {return guestExitRequestedFlag.load(std::memory_order_acquire);}
+void requestGuestExit() {guestExitRequestedFlag.store(true,std::memory_order_release);}
 bool guestHasPresented() { return lastPresentMs.load() > 0; }
 void setGuestOverlayPaused(bool paused){
     overlayPaused.store(paused);
