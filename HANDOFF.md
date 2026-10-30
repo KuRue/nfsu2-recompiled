@@ -1565,3 +1565,13 @@ removed.
 Verified on phone: launcher sections and summary, Image/Scene tabs with
 World/Car/Light & weather headers, and Fog applying both fog globals live.
 Screenshots: /tmp/opencode/overhaul_*.png.
+
+## 2026-10-30: GitHub reports follow the build channel
+
+Diagnostics.ISSUES and the launcher's release-notes link now use
+BuildConfig.UPDATE_REPOSITORY instead of hardcoding codepdbh/nfsu2-recompiled.
+The debug/dev APK reports to KuRue/nfsu2-recompiled; the release channel keeps
+its configured upstream repository. Verified on the phone: the Support >
+Report issue flow logged
+"github.com/KuRue/nfsu2-recompiled/issues/new". The report dialog was opened;
+the phone went offline before it could be cancelled.

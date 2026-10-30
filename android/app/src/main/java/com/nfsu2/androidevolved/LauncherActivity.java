@@ -85,7 +85,7 @@ public final class LauncherActivity extends Activity {
                 .setPositiveButton("OK", (d, which) -> ReleaseUpdates.whatsNewSeen(this))
                 .setNeutralButton("View on GitHub", (d, which) -> {
                     ReleaseUpdates.whatsNewSeen(this);
-                    openUrl(Uri.parse("https://github.com/codepdbh/nfsu2-recompiled/releases/tag/v" + Uri.encode(version)));
+                    openUrl(Uri.parse("https://github.com/" + BuildConfig.UPDATE_REPOSITORY + "/releases/tag/v" + Uri.encode(version)));
                 })
                 .setOnCancelListener(d -> ReleaseUpdates.whatsNewSeen(this))
                 .show();
@@ -582,6 +582,7 @@ public final class LauncherActivity extends Activity {
                 File report = Diagnostics.createReport(this);
                 String location = Diagnostics.saveToDownloads(this, report);
                 Uri issue = Diagnostics.issueUri(this, crash, location);
+                android.util.Log.i("NFSU2", "Report issue: " + issue.getHost() + issue.getPath());
                 main.post(() -> {
                     refresh();
                     MenuTheme.dialog(this, "Report on GitHub")
