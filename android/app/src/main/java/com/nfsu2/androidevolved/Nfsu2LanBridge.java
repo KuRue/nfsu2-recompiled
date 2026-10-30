@@ -29,6 +29,7 @@ final class Nfsu2LanBridge {
         Context app = context.getApplicationContext();
         Handler main = new Handler(Looper.getMainLooper());
         AtomicBoolean saidWaiting = new AtomicBoolean();
+        AtomicBoolean saidFailure = new AtomicBoolean();
         SwitchSocket client = new SwitchSocket(URL, "NFSU2 Android", new SwitchSocket.Listener() {
             @Override public void onWelcome(int vip, int mask, String vipText, String token) {
                 Log.i(TAG, "on the nfsu2.xyz switch as " + vipText + " (mask " + SwitchSocket.ipText(mask) + ")");
@@ -44,6 +45,8 @@ final class Nfsu2LanBridge {
                 Log.i(TAG, text);
                 if (text.startsWith("The switch is full") && saidWaiting.compareAndSet(false, true))
                     main.post(() -> NeonToast.show(app, text));
+                else if (text.startsWith("switch error") && saidFailure.compareAndSet(false, true))
+                    main.post(() -> NeonToast.show(app, "nfsu2.xyz: connection failed, retrying"));
             }
 
             @Override public void onClosed(String reason) {

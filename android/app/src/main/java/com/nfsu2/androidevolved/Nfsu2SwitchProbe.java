@@ -14,6 +14,7 @@ final class Nfsu2SwitchProbe {
     private static final String URL = "wss://nfsu2.xyz/lan";
     private static SwitchSocket client;
     private static long frames;
+    private static String address = "";
 
     private Nfsu2SwitchProbe() {}
 
@@ -25,11 +26,13 @@ final class Nfsu2SwitchProbe {
             return;
         }
         frames = 0;
+        address = "";
         final long[] lastReport = {System.currentTimeMillis()};
         SwitchSocket socket = new SwitchSocket(URL, "NFSU2 Android probe", new SwitchSocket.Listener() {
             @Override public void onWelcome(int vip, int mask, String vipText, String token) {
-                listener.onStatus("On the switch as " + vipText + " / " + SwitchSocket.ipText(mask)
-                        + ". Waiting for LAN frames…");
+                address = vipText;
+                listener.onStatus("nfsu2.xyz " + vipText + " / " + SwitchSocket.ipText(mask)
+                        + " • waiting for LAN frames…");
             }
 
             @Override public void onFrame(byte[] frame) {
@@ -37,7 +40,8 @@ final class Nfsu2SwitchProbe {
                 long now = System.currentTimeMillis();
                 if (frames == 1 || now - lastReport[0] > 2000) {
                     lastReport[0] = now;
-                    listener.onStatus("LAN relay active: " + frames + " frame(s) received.");
+                    listener.onStatus("nfsu2.xyz " + (address.isEmpty() ? "" : address + " • ")
+                            + frames + " LAN frame(s) received.");
                 }
             }
 

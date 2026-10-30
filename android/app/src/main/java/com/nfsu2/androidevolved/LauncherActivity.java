@@ -933,7 +933,7 @@ public final class LauncherActivity extends Activity {
             case "graphics": text = "Resolution, frame rate and the game's own display effects."; break;
             case "display": text = "The same switches as the game's Customize page. The preset fills them in; individual rows override it."; break;
             case "controls": text = "Touch layout, triggers and vibration."; break;
-            case "game": text = "Language and the online server."; break;
+            case "game": text = "Language, network and the online server."; break;
             case "saves": text = "Back up or restore career saves."; break;
             case "support": text = "Updates, logs and diagnostics."; break;
             default: text = "";
