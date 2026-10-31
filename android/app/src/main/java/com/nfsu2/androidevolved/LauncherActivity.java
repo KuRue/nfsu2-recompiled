@@ -346,7 +346,8 @@ public final class LauncherActivity extends Activity {
                 for (GameOptions.Option option : GameOptions.ALL)
                     if (isControlOption(option) && !GameOptions.isDisplayOption(option))
                         optionsList.addView(optionCycleRow(option));
-                optionsList.addView(optionRow("Test vibration", "Controller / Phone", () -> {if(!PhoneFeedback.test(this))message("Vibration", "No vibration motor available.");}));
+                optionsList.addView(optionRow("Test traction", "Controller / Phone", () -> {if(!PhoneFeedback.test(this,1))message("Vibration", "No vibration motor available.");}));
+                optionsList.addView(optionRow("Test impact", "Controller / Phone", () -> {if(!PhoneFeedback.test(this,2))message("Vibration", "No vibration motor available.");}));
                 break;
             case "game": {
                 optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.NEARBY_CARS)));

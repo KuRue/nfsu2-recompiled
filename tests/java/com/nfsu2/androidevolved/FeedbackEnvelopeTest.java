@@ -10,10 +10,13 @@ public final class FeedbackEnvelopeTest {
         check(FeedbackEnvelope.amplitude(200,2,50)==100);
         check(FeedbackEnvelope.amplitude(255,1,0)==0);
         check(sum(FeedbackEnvelope.timings(0))==70);
-        check(sum(FeedbackEnvelope.timings(1))==80&&FeedbackEnvelope.amplitudes(1,150,0)[1]==0);
+        check(sum(FeedbackEnvelope.timings(1))==110&&FeedbackEnvelope.amplitudes(1,150,0).length==1);
         check(sum(FeedbackEnvelope.timings(2))==FeedbackEnvelope.IMPACT_WINDOW_MS);
         check(FeedbackEnvelope.amplitudes(2,200,0)[2]==0);
-        check(FeedbackEnvelope.timings(2)[2]>=150);
+        check(FeedbackEnvelope.timings(2)[0]>=30&&FeedbackEnvelope.timings(2)[2]>=240);
+        check(FeedbackEnvelope.motorAmplitude(1,0,255)==0);
+        check(FeedbackEnvelope.motorAmplitude(2,1,255)==0);
+        for(int channel=0;channel<3;channel++)for(int v:FeedbackEnvelope.amplitudes(channel,0,100))check(v==0);
         check(sum(FeedbackEnvelope.binaryTimings(2,150))==FeedbackEnvelope.IMPACT_WINDOW_MS);
         check(FeedbackEnvelope.amplitudes(0,40,200)[0]<=40);
         check(FeedbackEnvelope.amplitudes(0,40,0)[2]<40);

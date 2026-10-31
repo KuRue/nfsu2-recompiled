@@ -2104,3 +2104,20 @@ on-time by amplitude and shares240ms total. Updated envelope tests passed, APK
 assembleDebug passed1s, diff clean. Installed update on :38393 (see next note if
 installation still pending at handoff). Physical distinction needs user comparison.
 No emulator/detached processes started.
+
+
+## 2026-10-31 — Fully isolated traction/impact motors and direct tests (NOT installed)
+
+User still finds prior98d647e cues alike. Read latest prior PID789 log to
+/tmp/haptic-distinction-latest.log:14 impact events with some clusters, not continuous
+retriggering. No change to detection thresholds. New Java output: slip strong/weak0/100,
+110ms held envelope refreshed80ms (continuous finer texture); hits100/0,30ms lead-in,
+85ms thump,245ms tail,360ms Java priority. All-zero motor amplitudes now stay exactly
+zero (prior Math.max(1) taper no longer energizes disabled motors). Binary fallback
+retains distinct timing. Added Controls Test traction (600ms amplitude-controlled
+hold) and Test impact via the same play/CombinedVibration path, replacing generic test.
+Use stationary A/B comparison to separate driver/motor feel from event classification.
+Focused FeedbackEnvelopeTest and assembleDebug pass, diff clean. Phone dropped during
+turn; device_list no longer lists it; adb connect :38393 refused. APK NOT installed.
+Need current wireless ADB address from user, install then compare direct tests first.
+No emulator or detached process started. Docs updated with evidence/limitations.

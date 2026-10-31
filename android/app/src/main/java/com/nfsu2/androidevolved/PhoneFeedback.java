@@ -64,19 +64,22 @@ final class PhoneFeedback {
         if(controllerManager!=null)controllerManager.cancel();
         if(vibrator!=null)vibrator.cancel();
     }
-    private void play(int channel,int amplitude,int previous){
+    private VibrationEffect effect(int channel,int amplitude,int previous,int heldMs){
+        return VibrationEffect.createWaveform(heldMs>0?new long[]{heldMs}:FeedbackEnvelope.timings(channel),
+                heldMs>0?new int[]{amplitude}:FeedbackEnvelope.amplitudes(channel,amplitude,previous),-1);
+    }
+    private void play(int channel,int amplitude,int previous){play(channel,amplitude,previous,0);}
+    private void play(int channel,int amplitude,int previous,int heldMs){
         if(Build.VERSION.SDK_INT>=31&&controllerManager!=null){
             android.os.CombinedVibration.ParallelCombination combined=android.os.CombinedVibration.startParallel();
             for(int motor=0;motor<2;motor++){
                 int level=FeedbackEnvelope.motorAmplitude(channel,motor,amplitude);
                 int old=FeedbackEnvelope.motorAmplitude(channel,motor,previous);
-                combined.addVibrator(motor,VibrationEffect.createWaveform(FeedbackEnvelope.timings(channel),
-                        FeedbackEnvelope.amplitudes(channel,level,old),-1));
+                combined.addVibrator(motor,effect(channel,level,old,heldMs));
             }
             controllerManager.vibrate(combined.combine(),new android.os.VibrationAttributes.Builder()
                     .setUsage(android.os.VibrationAttributes.USAGE_MEDIA).build());
-        }else if(vibrator.hasAmplitudeControl())vibrator.vibrate(VibrationEffect.createWaveform(
-                FeedbackEnvelope.timings(channel),FeedbackEnvelope.amplitudes(channel,amplitude,previous),-1),attributes);
+        }else if(vibrator.hasAmplitudeControl())vibrator.vibrate(effect(channel,amplitude,previous,heldMs),attributes);
         else vibrator.vibrate(VibrationEffect.createWaveform(FeedbackEnvelope.binaryTimings(channel,amplitude),-1),attributes);
     }
     boolean available(){return vibrator!=null&&vibrator.hasVibrator();}
@@ -115,10 +118,11 @@ final class PhoneFeedback {
     }};
     void start(){if(enabled()&&!running){running=true;handler.post(poll);}}
     void stop(){running=false;handler.removeCallbacks(poll);cancelOutput();active=false;surfaceAmplitude=0;lastChannel=-1;lastImpact=-1;impactQuietUntil=0;stopSource.run();}
-    static boolean test(Context context){
+    static boolean test(Context context){return test(context,2);}
+    static boolean test(Context context,int channel){
         PhoneFeedback feedback=new PhoneFeedback(context,100,()->0,()->{});
-        Vibrator motor=feedback.vibrator;if(motor==null||!motor.hasVibrator())return false;
-        motor.vibrate(VibrationEffect.createOneShot(180,motor.hasAmplitudeControl()?110:VibrationEffect.DEFAULT_AMPLITUDE),
-                new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).build());return true;
+        if(!feedback.available())return false;
+        try{feedback.play(channel,180,0,channel==1?600:0);return true;}
+        catch(SecurityException|IllegalArgumentException e){feedback.cancelOutput();return false;}
     }
 }

@@ -98,3 +98,20 @@ ID can still interrupt with a fresh hit. Pause/route changes reset the hold.
 Binary fallback has one amplitude-scaled pulse and the same total quiet window.
 Envelope tests cover single-pulse tail and at least3:1 contrasting motor balance.
 This is a perceptual tuning change; event-detection thresholds remain unchanged.
+
+
+## Second follow-up: isolate output from detection
+
+User still finds the two cues alike. Latest prior session PID789 logs14 impact
+waveforms, with some short clusters but not continuous impact retriggering; this
+cannot establish correct event classification. Leave physics thresholds unchanged.
+Now slip uses only weak motor (0/100), refreshed80ms with110ms finite hold for
+continuous texture. Impacts use only strong motor (100/0),30ms quiet lead-in,
+85ms thump and245ms quiet tail,360ms protected window. Disabled motor amplitudes
+are exactly zero, including tapered paths. Scalar fallback retains sustained vs
+isolated timing; binary fallback stays amplitude-through-on-time.
+Controls now offers Test traction (600ms hold on amplitude-controlled motors) and
+Test impact (the actual impact envelope), both using the production output route.
+Use these stationary tests before attributing ambiguity to event detection.
+Build and focused envelope regressions pass. Phone :38393 disconnected/refuses
+connection: this version is NOT installed or physically checked yet.
