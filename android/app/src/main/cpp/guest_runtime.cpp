@@ -1903,6 +1903,10 @@ uint8_t* guestMemoryBase(){return memory?static_cast<uint8_t*>(memory->base()):n
 bool guestMemoryReadable(uint32_t address,size_t length){return memory&&memory->readable(address,length);}
 bool guestMemoryWritable(uint32_t address,size_t length){return memory&&memory->writable(address,length);}
 uint64_t guestMonotonicNs(){return uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());}
+bool guestSwitchActive(){return vlan::active();}
+bool guestSwitchSendRaw(uint8_t kind,uint32_t dst,uint16_t sport,uint16_t dport,const uint8_t* data,size_t length){
+    return vlan::sendRaw(kind,dst,sport,dport,data,length);
+}
 uint32_t guestCallRoam(uint32_t va,uint32_t ecx,uint32_t edx,const uint32_t* args,size_t count){
     State saved;saved.save();
     try{

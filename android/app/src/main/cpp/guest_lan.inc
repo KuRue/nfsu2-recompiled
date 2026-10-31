@@ -47,6 +47,8 @@
 #include <string>
 #include <vector>
 
+#include "roam/roam_switch.h"
+
 namespace vlan {
 using Clock=std::chrono::steady_clock;
 
@@ -213,6 +215,23 @@ bool allowAuto(size_t length){
     if(window.time_since_epoch().count()==0||now-window>=std::chrono::seconds(1)){window=now;used=0;}
     if(used+length+64>32768)return false;
     used+=length+64;
+    return true;
+}
+
+// One raw switch frame for another subsystem (free roam's NET_KIND_UDP).
+bool sendRaw(uint8_t kind,uint32_t dst,uint16_t sport,uint16_t dport,const uint8_t* data,size_t length){
+    std::lock_guard<std::mutex> lock(mu);
+    if(kind!=1)return txRaw(kind,dst,sport,dport,0,0,data,length);
+    // Free roam's NET_KIND_UDP frames have no LAN header: the switch header
+    // is followed directly by the N2FR datagram.
+    if(!online()||length>kMaxPayload||outbox.size()>=kOutboxMax)return false;
+    std::vector<uint8_t> frame(16+length);
+    frame[0]=1;frame[1]=frame[2]=frame[3]=0;
+    putBe32(&frame[4],vip);putBe32(&frame[8],dst);
+    putBe16(&frame[12],sport);putBe16(&frame[14],dport);
+    if(length)std::memcpy(&frame[16],data,length);
+    outbox.push_back(std::move(frame));
+    outCv.notify_one();
     return true;
 }
 
@@ -701,6 +720,10 @@ std::shared_ptr<VConn> findConn(uint32_t src,uint16_t sport,uint16_t dport,uint3
 void incoming(const uint8_t* frame,size_t length){
     if(length<24)return;
     uint8_t kind=frame[0];
+    // Free roam uses NET_KIND_UDP frames on the same switch; hand them to the
+    // roam session before taking this stack's lock (the session sends through
+    // sendRaw, so this order avoids a lock cycle with the game thread).
+    if(kind==1){roam_switch_receive(frame,length);return;}
     uint32_t src=be32(frame+4),dst=be32(frame+8);
     uint16_t sport=be16(frame+12),dport=be16(frame+14);
     uint8_t op=frame[16];

@@ -2,6 +2,7 @@
  * See roam_plat.h.  Host sockets only: this never goes through the guest's
  * Winsock HLE. */
 #include "roam_plat.h"
+#include "roam_switch.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +21,7 @@
 #include <net/if.h>
 
 static int             g_fd = -1;
+static int             g_switch;
 static pthread_t       g_thr;
 static int             g_thr_on;
 static atomic_int      g_stop;
@@ -204,9 +206,32 @@ static void *net_main(void *u){
     return 0;
 }
 
+static uint32_t be32(const uint8_t *p){ return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
+static uint16_t be16(const uint8_t *p){ return (uint16_t)((uint16_t)p[0] << 8 | p[1]); }
+static void switch_send(void *u, uint32_t ip, uint16_t port, const uint8_t *buf, int len){
+    (void)u;
+    if (len < 0) return;
+    roam_switch_send(ip, RC_DEFAULT_PORT, port, buf, (size_t)len);
+}
+static void switch_broadcast(void *u, uint16_t port, const uint8_t *buf, int len){
+    (void)u;
+    if (len < 0) return;
+    roam_switch_send(0xFFFFFFFFu, RC_DEFAULT_PORT, port, buf, (size_t)len);
+}
+
 int roam_plat_start(const roam_plat_cfg *cfg, rc_session *s){
     g_cfg = *cfg; g_s = s;
     memset(&g_st, 0, sizeof g_st);
+    g_switch = 0;
+    if (roam_switch_active()){
+        g_switch = 1;
+        s->conf.hub_ip = 0x0A4D00FDu;              /* the switch's free-roam hub */
+        s->conf.hub_port = cfg->port;
+        rc_io io = { 0, switch_send, switch_broadcast, io_event };
+        s->io = io;
+        fprintf(stderr, "[roam] nfsu2.xyz switch transport: hub 10.77.0.253:%u\n", cfg->port);
+        return 0;
+    }
     if (g_cfg.test_mode && g_cfg.discovery){
         fprintf(stderr, "[roam] LAN discovery DISABLED: automated run (test harness), no broadcast will be sent; "
                         "only loopback peers from NFSU2_ROAM_PEERS\n");
@@ -237,6 +262,10 @@ int roam_plat_start(const roam_plat_cfg *cfg, rc_session *s){
     return 0;
 }
 void roam_plat_stop(uint8_t reason){
+    if (g_switch){
+        roam_plat_lock(); if (g_s) rc_shutdown(g_s, reason); roam_plat_unlock();
+        g_switch = 0; return;
+    }
     if (!g_thr_on) return;
     roam_plat_lock(); rc_shutdown(g_s, reason); roam_plat_unlock();
     atomic_store(&g_stop, 1);
@@ -268,4 +297,28 @@ int roam_plat_parse_peers(const char *list, int test_mode, uint16_t defport, uin
         ip[n] = v; port[n] = (uint16_t)pt; n++;
     }
     return n;
+}
+
+/* One NET_KIND_UDP frame from the switch: 16-byte switch header (kind, source,
+ * destination, ports, big-endian), then the free-roam datagram. */
+void roam_switch_receive(const uint8_t *frame, size_t length){
+    if (!g_switch || !g_s || length < 16) return;
+    if (frame[0] != 1) return;
+    uint32_t src = be32(frame + 4);
+    uint16_t sport = be16(frame + 12);
+    const uint8_t *payload = frame + 16;
+    size_t n = length - 16;
+    if (n > RC_MAX_DGRAM) return;
+    roam_plat_lock();
+    rc_receive(g_s, src, sport, payload, (int)n, roam_plat_now_us());
+    roam_plat_unlock();
+}
+
+/* The switch transport has no receive thread: the game thread pumps the
+ * session's clock (HELLO to the hub each second, beacons, peer timeouts). */
+void roam_switch_pump(void){
+    if (!g_switch || !g_s) return;
+    roam_plat_lock();
+    rc_tick(g_s, roam_plat_now_us());
+    roam_plat_unlock();
 }

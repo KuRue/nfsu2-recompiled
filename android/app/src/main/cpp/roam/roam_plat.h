@@ -85,5 +85,4 @@ uint32_t roam_plat_crews(uint32_t crews[RC_CREW_MAX], uint32_t rgb[RC_CREW_MAX])
  * holds) */
 uint32_t roam_plat_room(char name[64]);
 const char *roam_ip_str(uint32_t ip, char *buf);   /* buf >= 16 */
-
 #endif

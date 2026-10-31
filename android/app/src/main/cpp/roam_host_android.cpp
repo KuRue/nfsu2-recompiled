@@ -19,6 +19,7 @@
 
 #include "guest_runtime.h"
 #include "roam/roam_host.h"
+#include "roam/roam_switch.h"
 
 extern "C" void roam_game_frame(CPU*);
 extern "C" void roam_game_hud(CPU*);
@@ -98,6 +99,13 @@ extern "C" void roam_carsfx_begin(const float*, const float*, const float*) {}
 extern "C" void roam_carsfx_car(uint32_t, const char*, const float*, const float*, const void*) {}
 extern "C" void roam_carsfx_end(void) {}
 
+extern "C" int roam_switch_active(void) { return guestSwitchActive() ? 1 : 0; }
+
+extern "C" int roam_switch_send(uint32_t dst, uint16_t sport, uint16_t dport,
+                                const uint8_t* data, size_t length) {
+    return guestSwitchSendRaw(1, dst, sport, dport, data, length) ? 1 : 0;
+}
+
 extern "C" int roam_no_profile(const char*) { return 0; }
 extern "C" int roam_drift_tuning(uint8_t*) { return 0; }
 
@@ -123,6 +131,7 @@ void roamGuestFrame() {
     if (!g_mem) g_mem = guestMemoryBase();
     if (!g_mem) return;
     CPU cpu{};
+    roam_switch_pump();
     roam_game_frame(&cpu);
     roam_game_hud(&cpu);
     ++roamFrames;
