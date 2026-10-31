@@ -14,13 +14,14 @@ import java.util.function.IntSupplier;
 final class PhoneFeedback {
     private final Vibrator handset;
     private Vibrator vibrator;
+    private VibratorManager controllerManager;
     private int targetDevice=-1;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final IntSupplier source;
     private final Runnable stopSource;
     private final int strength;
     private boolean running,active;
-    private int lastImpact=-1,surfaceAmplitude;
+    private int lastImpact=-1,surfaceAmplitude,lastChannel=-1;
     private long surfaceAt;
     private final AudioAttributes attributes=new AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
@@ -44,12 +45,39 @@ final class PhoneFeedback {
             android.view.InputDevice device=android.view.InputDevice.getDevice(id);
             if(!GamepadDevices.isPhysicalGamepad(device))continue;
             Vibrator candidate=controllerMotor(device);
-            android.util.Log.i("NFSU2","Controller feedback: "+device.getName()+" id="+id+" motor="+candidate.hasVibrator());
+            android.util.Log.i("NFSU2","Controller feedback: "+device.getName()+" id="+id+" motor="+candidate.hasVibrator()+" amplitude="+candidate.hasAmplitudeControl()+" motors="+(Build.VERSION.SDK_INT>=31?java.util.Arrays.toString(device.getVibratorManager().getVibratorIds()):"legacy"));
             if(candidate.hasVibrator()){next=candidate;nextDevice=id;name=device.getName();break;}
         }
+        cancelOutput();controllerManager=null;
+        if(Build.VERSION.SDK_INT>=31&&nextDevice>=0){
+            android.view.InputDevice device=android.view.InputDevice.getDevice(nextDevice);
+            if(device!=null){
+                VibratorManager manager=device.getVibratorManager();int[] motors=manager.getVibratorIds();
+                boolean strong=false,weak=false;for(int id:motors){strong|=id==0;weak|=id==1;}
+                if(strong&&weak&&manager.getVibrator(0).hasAmplitudeControl()&&manager.getVibrator(1).hasAmplitudeControl())controllerManager=manager;
+            }
+        }
+        vibrator=next;targetDevice=nextDevice;active=false;surfaceAmplitude=0;lastImpact=-1;lastChannel=-1;surfaceAt=0;
+        android.util.Log.i("NFSU2","Feedback output: "+name+" id="+targetDevice+" dual="+(controllerManager!=null));
+    }
+    private void cancelOutput(){
+        if(controllerManager!=null)controllerManager.cancel();
         if(vibrator!=null)vibrator.cancel();
-        vibrator=next;targetDevice=nextDevice;active=false;surfaceAmplitude=0;lastImpact=-1;surfaceAt=0;
-        android.util.Log.i("NFSU2","Feedback output: "+name+" id="+targetDevice);
+    }
+    private void play(int channel,int amplitude,int previous){
+        if(Build.VERSION.SDK_INT>=31&&controllerManager!=null){
+            android.os.CombinedVibration.ParallelCombination combined=android.os.CombinedVibration.startParallel();
+            for(int motor=0;motor<2;motor++){
+                int level=FeedbackEnvelope.motorAmplitude(channel,motor,amplitude);
+                int old=FeedbackEnvelope.motorAmplitude(channel,motor,previous);
+                combined.addVibrator(motor,VibrationEffect.createWaveform(FeedbackEnvelope.timings(channel),
+                        FeedbackEnvelope.amplitudes(channel,level,old),-1));
+            }
+            controllerManager.vibrate(combined.combine(),new android.os.VibrationAttributes.Builder()
+                    .setUsage(android.os.VibrationAttributes.USAGE_MEDIA).build());
+        }else if(vibrator.hasAmplitudeControl())vibrator.vibrate(VibrationEffect.createWaveform(
+                FeedbackEnvelope.timings(channel),FeedbackEnvelope.amplitudes(channel,amplitude,previous),-1),attributes);
+        else vibrator.vibrate(VibrationEffect.createWaveform(FeedbackEnvelope.binaryTimings(channel,amplitude),-1),attributes);
     }
     boolean available(){return vibrator!=null&&vibrator.hasVibrator();}
     boolean enabled(){return available()&&strength>0;}
@@ -57,14 +85,12 @@ final class PhoneFeedback {
         if(!running)return;
         if(!available()){handler.postDelayed(this,250);return;}
         int packet=source.getAsInt(),channel=(packet>>>8)&255,event=(packet>>>16)&127;
-        int amplitude=Math.min(255,(packet&255)*strength/100);
+        int amplitude=FeedbackEnvelope.amplitude(packet&255,channel,strength);
         if(channel==2&&amplitude>2){
             if(event!=lastImpact||!active){
                 lastImpact=event;surfaceAmplitude=0;
                 try{
-                    if(vibrator.hasAmplitudeControl())vibrator.vibrate(VibrationEffect.createWaveform(
-                            new long[]{15,65,45,35},new int[]{0,amplitude,0,Math.max(1,amplitude*2/3)},-1),attributes);
-                    else vibrator.vibrate(VibrationEffect.createWaveform(new long[]{15,Math.max(8,65*strength/100),45,Math.max(8,35*strength/100)},-1),attributes);
+                    play(2,amplitude,0);
                     active=true;android.util.Log.i("NFSU2","Physics impact waveform event="+event+" amplitude="+amplitude);
                 }catch(SecurityException|IllegalArgumentException e){stop();return;}
             }
@@ -72,29 +98,20 @@ final class PhoneFeedback {
         }
         if(amplitude>2){
             try{
-                boolean amplitudeControl=vibrator.hasAmplitudeControl();
                 if(!active)android.util.Log.i("NFSU2","Feedback playing device="+targetDevice+" amplitude="+amplitude);
-                if(channel==0&&amplitudeControl){
-                    long now=android.os.SystemClock.elapsedRealtime();
-                    if(!active||now-surfaceAt>=80){
-                        int previous=surfaceAmplitude>0?surfaceAmplitude:1;
-                        vibrator.vibrate(VibrationEffect.createWaveform(new long[]{35,50,70},
-                            new int[]{previous,Math.max(1,(previous+amplitude)/2),amplitude},-1),attributes);
-                        surfaceAmplitude=amplitude;surfaceAt=now;
-                    }
-                }else{
-                    surfaceAmplitude=0;
-                    vibrator.vibrate(VibrationEffect.createOneShot(amplitudeControl?65:Math.max(8,65*strength/100),
-                            amplitudeControl?amplitude:VibrationEffect.DEFAULT_AMPLITUDE),attributes);
+                long now=android.os.SystemClock.elapsedRealtime();
+                if(!active||lastChannel!=channel||now-surfaceAt>=80){
+                    play(channel,amplitude,surfaceAmplitude);
+                    surfaceAmplitude=channel==0?amplitude:0;surfaceAt=now;lastChannel=channel;
                 }
                 active=true;
             }
             catch(SecurityException|IllegalArgumentException e){stop();return;}
-        }else if(active){vibrator.cancel();active=false;surfaceAmplitude=0;}
+        }else if(active){cancelOutput();active=false;surfaceAmplitude=0;lastChannel=-1;}
         handler.postDelayed(this,40);
     }};
     void start(){if(enabled()&&!running){running=true;handler.post(poll);}}
-    void stop(){running=false;handler.removeCallbacks(poll);if(vibrator!=null)vibrator.cancel();active=false;surfaceAmplitude=0;lastImpact=-1;stopSource.run();}
+    void stop(){running=false;handler.removeCallbacks(poll);cancelOutput();active=false;surfaceAmplitude=0;lastChannel=-1;lastImpact=-1;stopSource.run();}
     static boolean test(Context context){
         PhoneFeedback feedback=new PhoneFeedback(context,100,()->0,()->{});
         Vibrator motor=feedback.vibrator;if(motor==null||!motor.hasVibrator())return false;

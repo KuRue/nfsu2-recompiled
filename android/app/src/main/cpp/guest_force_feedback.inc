@@ -35,7 +35,7 @@ bool readForceParameters(nfs_ff::Effect& e,uint32_t p,uint32_t flags){
         if(bytes<need||bytes>4096||!data||!memory->readable(data,bytes))return false;
         next.magnitude=int32_t(read32(data));next.offset=0;
         if(category==2){int64_t a=int32_t(read32(data)),b=int32_t(read32(data+4));next.magnitude=int32_t(std::max(a<0?-a:a,b<0?-b:b));}
-        if(category==3)next.offset=int32_t(read32(data+4));
+        if(category==3){next.offset=int32_t(read32(data+4));next.phase=read32(data+8);next.periodUs=read32(data+12);}
         if(category==4){
             uint32_t axes=std::max(1u,read32(p+28));if(axes>6||bytes<axes*24)return false;
             int64_t strongest=0;
@@ -49,7 +49,17 @@ bool readForceParameters(nfs_ff::Effect& e,uint32_t p,uint32_t flags){
             static unsigned loggedConditions=0;if(++loggedConditions<=8)NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Phone grip condition type=%08x force=%d",e.type,next.conditionForce);
         }
     }
-    e=next;return true;
+    e=next;
+    // Bounded diagnostic trace preserves what the PC game requested, before
+    // our scalar mixer/physics adaptation. One sample/type/second, at most120.
+    static std::array<uint64_t,11> traceAt{};static unsigned traced=0;
+    uint64_t now=feedbackNow();unsigned index=e.type-0x13541c20u;
+    if(g_cur_func&&index<traceAt.size()&&traced<120&&now-traceAt[index]>=1000){
+        traceAt[index]=now;++traced;
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","FFB trace caller=%08x type=%08x magnitude=%d offset=%d gain=%u durationUs=%u periodUs=%u phase=%u attackUs=%u fadeUs=%u condition=%d",
+            g_cur_func,e.type,e.magnitude,e.offset,e.gain,e.durationUs,e.periodUs,e.phase,e.attackUs,e.fadeUs,e.conditionForce);
+    }
+    return true;
 }
 void fillEffectInfo(uint32_t output,uint32_t type){
     std::memset(ptr(output,292),0,292);write32(output,292);auto guid=effectGuid(type);std::memcpy(ptr(output+4,16),guid.data(),16);

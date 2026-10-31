@@ -23,13 +23,15 @@ def main():
         java = ROOT / 'android/app/src/main/java/com/nfsu2/androidevolved'
         # SwitchSocket is the pure-Java nfsu2.xyz transport: no Android imports.
         run('javac', '-d', build, java / 'SwitchSocket.java')
-        run('javac', '-d', build, java / 'ReleaseVersion.java', java / 'BenchmarkReport.java', java / 'GraphicsDemand.java',
+        run('javac', '-d', build, java / 'ReleaseVersion.java', java / 'BenchmarkReport.java', java / 'GraphicsDemand.java', java / 'FeedbackEnvelope.java',
+            ROOT / 'tests/java/com/nfsu2/androidevolved/FeedbackEnvelopeTest.java',
             ROOT / 'tests/java/com/nfsu2/androidevolved/GraphicsDemandTest.java',
             ROOT / 'tests/java/com/nfsu2/androidevolved/ReleaseVersionTest.java',
             ROOT / 'tests/java/com/nfsu2/androidevolved/BenchmarkReportTest.java')
         run('java', '-cp', build, 'com.nfsu2.androidevolved.ReleaseVersionTest')
         run('java', '-cp', build, 'com.nfsu2.androidevolved.BenchmarkReportTest')
         run('java', '-cp', build, 'com.nfsu2.androidevolved.GraphicsDemandTest')
+        run('java', '-cp', build, 'com.nfsu2.androidevolved.FeedbackEnvelopeTest')
         # Parse scripts without creating tracked-tree bytecode or invoking builds/network.
         for name in ['phone_upstream.py', 'build_phone_update.py', 'check_phone_source.py']:
             path = ROOT / 'scripts' / name

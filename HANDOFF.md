@@ -2044,3 +2044,32 @@ log10:54:37 reports motor=true and Feedback output Xbox Wireless Controller id=2
 confirmation pending. Asked whether controller felt pulse. No actual in-game route test yet;
 user navigating Bluetooth settings and foreground changes, so avoid racing their interactions.
 No detached processes/emulator started. Android API docs checked for per-device motor support.
+
+
+## 2026-10-31 — Investigate original FFB; shorter curbs, stronger dual-motor traction
+
+User confirmed prior Xbox pulse, then reported curb rumble too long/slip too weak.
+Read REA skill and analyzed actual PC SPEED2.EXE SHA256f9dd86c... with Ghidra12.1.4.
+Found finite150ms/75ms-period20ms-fade path0x5c9760, indefinite variable periodic
+path0x5c9fd0 and condition effects. Driving-event identities and PS2 logic unknown.
+REA evidence snapshot build/verification/ffb-analysis-2026-10-31.rea.json,16 records;
+session closed and provider cleaned. Full findings/evidence IDs/primary Android links:
+docs/HAPTICS_CONTROLLER_ANALYSIS.md.
+
+Own mapping had180ms surface release plus155ms waveform and double-gated slip. Now
+surface release65ms,70ms taper; slip severity continuous native packet, single45/35ms
+output chatter,1.5x slip gain capped255. Impacts unchanged. Binary fallback on-time
+now scales by actual event amplitude. PhoneFeedback uses CombinedVibration when
+controller exposes standard0/1 amplitude-capable motors: strong/weak gains surface65/20,
+slip65/100,impact100/70. Same scalar fallback/lifecycle cancellation otherwise.
+Source AOSP EventHub maps0/1 to strong/weak; no trigger motor, frequency or tire-force
+claims. Added bounded original FFB trace with caller/type/magnitude/period/phase/envelope;
+filters caller0 startup checks, max120 one/type/sec. Physics remains selected.
+
+Build passed(final17s), full source suite including envelope+physics tests passed,
+legacy force tests passed after trace fields. Installed final APK on SM-S938U1 :38393,
+launched Play: PID25336 reports Xbox26 amplitude=true motors[0,1], dual=true. Final
+logs /tmp/haptic-final-phone.log. Asked user curb hop/sustained slide/wall comparison;
+feel and real combined-waveform dispatch during driving still pending. Previous simple
+controller pulse was physically confirmed. No new subjective result claimed.
+No emulator, server, recorder or detached log process started. Keep game ready for user.

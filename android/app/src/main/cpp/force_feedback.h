@@ -13,6 +13,7 @@ struct Effect {
     uint32_t owner=0,type=0,gain=10000,durationUs=0,startDelayUs=0;
     int32_t magnitude=0,offset=0;
     uint32_t attackUs=0,fadeUs=0,attackLevel=0,fadeLevel=0;
+    uint32_t periodUs=0,phase=0; // Retained game periodic parameters for trace/analysis.
     uint64_t start=0,end=0;
     int32_t conditionForce=0,lastConditionForce=0;
     unsigned lastCaptured=0;bool conditionSeen=false;

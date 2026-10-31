@@ -74,7 +74,7 @@ public:
         }
         c.suspensionRate=rate*.25f;
         float roughness=speed>2?clamp01((sharpRate*.25f-.35f)/1.2f):0;
-        surfaceFiltered+=(roughness-surfaceFiltered)*(dt/((roughness>surfaceFiltered?.10f:.18f)+dt));
+        surfaceFiltered+=(roughness-surfaceFiltered)*(dt/((roughness>surfaceFiltered?.10f:.065f)+dt));
         c.surface=unsigned(std::clamp(surfaceFiltered*45.f,0.f,45.f));
         float horizontalDV=std::hypot(dv[0],dv[1]);c.planarAcceleration=horizontalDV/dt;
         // Sudden planar impulses distinguish hits from ordinary braking/cornering.
@@ -90,8 +90,9 @@ public:
     uint32_t packet(uint64_t now)const{
         if(!channels.valid||now-lastUpdate>150)return 0;
         if(now<impactUntil)return impactStrength|(2u<<8)|(impactSequence<<16);
-        // Chatter is tied to slip, not steering angle. Surface stays low underneath.
-        unsigned slip=channels.grip>8&&now%150<90?channels.grip:0;
+        // Preserve continuous slip severity; the output layer shapes chatter once.
+        // Double gating here and in Android otherwise loses/masks grip cues.
+        unsigned slip=channels.grip>8?channels.grip:0;
         return slip>channels.surface?slip|(1u<<8):channels.surface;
     }
 };
