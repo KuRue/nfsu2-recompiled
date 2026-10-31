@@ -1912,3 +1912,19 @@ nameplate/map placement and HUD-update ordering remain unverified until that pho
 Existing main-loop calls roam_game_hud before render; do not claim a new after-HUD hook was added.
 Full phone source checks subsequently passed, including the repaired virtual-LAN standalone
 receiver regression. No emulator/background processes started for this names change.
+
+## 2026-10-31 — Phone verification: controls, online names and maps
+
+User confirmed saved progress and authorized installation/testing. Installed b916fb9 debug APK
+(includes d259fc1 controls) on SM-S938U1 :44329, opened Play and loaded the saved career back
+into Explore. :game PID 32051 joined nfsu2.xyz as 10.77.16.218; 35–38 nearby peers, no bad
+packets or D3D9 integration errors in the checked log. World map opened with KEYCODE_M:
+Players row present and hundreds of orange markers visibly plotted. Log at f=3113 says 766
+other players marked (hub knew 986 beyond nearby friends; map room limited to 766).
+
+Screenshot /tmp/online-test-return.png clearly shows Theeman2005 above a remote red car,
+correctly positioned at the left of the road, plus nearby orange minimap arrows. World-map
+proof /tmp/online-test-world-map.png. New silver touch navigation controls visible during
+startup /tmp/online-test-boot.png. Controls can hide with an active physical controller (existing
+behavior). Game left running in free roam; no emulator, recorder or background log process
+started. This supersedes the earlier pending-install/phone-verification notes.
