@@ -136,6 +136,15 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height) {
     wrf(0x007FA3C4u, 60.0f);
 }
 
+/* Dynamic names are projected in screen pixels, then normalized to 640x480.
+ * Unlike fixed HUD anchors they need the inverse of the horizontal HUD squeeze,
+ * not the minimap/edge-offset lookup. Keep the centre and vertical coordinate.
+ */
+void nfs_widescreen_marker(float* x, float* y) {
+    (void)y;
+    if (s_enabled && x) *x = 320.f + (*x - 320.f) * (480.f * s_aspect / 640.f);
+}
+
 int nfs_widescreen_hud_entries(void) { return (int)s_hud_count; }
 
 void nfs_widescreen_set_minimap_offset(float dy) { s_minimap_dy = dy; }

@@ -2180,6 +2180,15 @@ static void tag_far(char *tx, int cap, const char *name, int paused, float d){
     else snprintf(ds, sizeof ds, "%.1f km", (double)d / 1000.0);
     snprintf(tx, (size_t)cap, paused ? "%s (paused, %s)" : "%s (%s)", name, ds);
 }
+/* Android exposes the portable labels setting, not the old Online menu's
+ * player-names flag (which can be off for a single-player career). */
+static int names_enabled(void){
+#ifdef ROAM_HOST_ANDROID
+    return O.labels && g_in_roam;
+#else
+    return O.labels && g_in_roam && MR8(G_SHOW_NAMES);
+#endif
+}
 static void tags_update(CPU *c){
     uint32_t pl = rd32(G_PLAYER1), hud = pl && ok(pl, PL_HUD + 4u) ? rd32(pl + PL_HUD) : 0;
     uint32_t pkg = hud && ok(hud, 0x14) ? rd32(hud + 0x10u) : 0;
@@ -2189,7 +2198,7 @@ static void tags_update(CPU *c){
     }
     if (!hud || !ok(pkg, 0x20) || !g_gmem) return;
     uint32_t cam = rd32(G_VIEW1 + 0x40u);
-    int on = O.labels && g_in_roam && MR8(G_SHOW_NAMES) && ok(cam, 0x60) && hud_on_top(pkg);
+    int on = names_enabled() && ok(cam, 0x60) && hud_on_top(pkg);
     /* the cars a name shows on: in front of the camera, within 100 m (a
      * crew's at any distance) and on the screen; the nearest TAG_N of them
      * get one */
@@ -6090,7 +6099,7 @@ void roam_game_hud(CPU *c){
 
 /* photo mode (photo.c): whether friends' names can show here, and the names over their cars placed for photo mode's
  * camera (its frame of the front end, which draws them alone): the FE objects shown */
-int roam_game_names_here(void){ return O.on && g_net_ok && O.labels && g_in_roam && MR8(G_SHOW_NAMES); }
+int roam_game_names_here(void){ return O.on && g_net_ok && names_enabled(); }
 int roam_game_names(CPU *c, uint32_t *obj, int max){
     if (!roam_game_names_here()) return 0;
     tags_update(c);

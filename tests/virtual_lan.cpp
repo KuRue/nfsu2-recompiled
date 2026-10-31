@@ -7,6 +7,11 @@
 #include <cstdio>
 #include <cstdlib>
 
+// Free-roam kind-1 frames bypass the guest Winsock sockets. Keep a receiver
+// here so this standalone transport test covers the new dispatch boundary.
+static std::vector<uint8_t> roamFrame;
+extern "C" void roam_switch_receive(const uint8_t* data,size_t length){roamFrame.assign(data,data+length);}
+
 static int failures;
 static void check(bool ok, const char* what) {
     if (!ok) { std::fprintf(stderr, "FAIL: %s\n", what); ++failures; }
@@ -39,6 +44,10 @@ int main() {
     vlan::welcome(0x0a4d0947u, 0xffffe000u);
     check(vlan::online(), "online after the welcome");
     check(vlan::ownHost() == 0x0a4d0947u, "vip");
+
+    auto peerPacket=frame(1,0x0a4d0948u,vlan::ownHost(),9900,9900,0,0);
+    vlan::incoming(peerPacket.data(),peerPacket.size());
+    check(roamFrame==peerPacket,"free-roam frame delivered unchanged to the peer receiver");
 
     // UDP bind and broadcast: the sender gets its own copy, as Windows does.
     vlan::open(10, 1);

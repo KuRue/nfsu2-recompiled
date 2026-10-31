@@ -3,8 +3,8 @@
  * `roam_game.c` is shared with the Mac native port and the Windows ASI
  * companion.  It reaches the game only through the names in roam_host.h;
  * this file supplies them from the Android recomp: the guest arena, guest
- * calls with ECX/EDX, a monotonic clock, logging, and the first no-op
- * HUD/audio hooks.  The per-frame entry is called from the Present hook.
+ * calls with ECX/EDX, a monotonic clock, logging, and the HUD projection/audio hooks. The per-frame entry runs between game
+ * update and render on the guest thread.
  */
 #include <android/log.h>
 #include <sys/system_properties.h>
@@ -18,6 +18,7 @@
 #include <string>
 
 #include "guest_runtime.h"
+#include "nfs_widescreen.h"
 #include "roam/roam_host.h"
 #include "roam/roam_switch.h"
 
@@ -83,11 +84,10 @@ extern "C" unsigned roam_heap_mb(void) { return 0; }
 extern "C" uint64_t roam_now_ns(void) { return guestMonotonicNs(); }
 
 extern "C" void roam_hud_marker(float* x, float* y) {
-    if (x) *x = 0;
-    if (y) *y = 0;
+    nfs_widescreen_marker(x,y);
 }
 
-// The audio/HUD helpers are no-ops until the remote cars are visible.
+// Remote-car audio is separate from nameplate/map rendering.
 extern "C" int roam_horn_held(int) { return 0; }
 extern "C" int roam_horn_mine(void) { return 0; }
 extern "C" const char* roam_horn_name(int) { return ""; }

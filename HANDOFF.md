@@ -1888,3 +1888,27 @@ fixture logged scan 200 down then up, lime active state screenshot captured. Ima
 /tmp/nfsu2-controls-silver-final.png, /tmp/nfsu2-controls-editor-final.png,
 /tmp/nfsu2-controls-held-final.png. This was an isolated flat-background UI check, not in-game
 contrast/performance validation. Phone APK deliberately not installed while its session is live.
+
+## 2026-10-31 — Online nameplate positioning and visibility
+
+User requested names above remote players and markers on maps. The shared roam code already
+creates nearby minimap arrows and world-map Players/Players' races markers (Players defaults
+on). Found Android roam_hud_marker incorrectly writing both coordinates to zero. It now uses
+nfs_widescreen_marker: inverse horizontal HUD squeeze around the screen centre, preserving Y
+and bypassing fixed HUD/minimap anchor offsets. 4:3/16:9/phone forward-projection regression
+checks added to tests/widescreen_hud.c; manual cc test passes. Android nameplates now honor
+O.labels (default on) without the single-player career's legacy G_SHOW_NAMES flag suppressing
+them; other platforms retain their existing policy. Names still hide under menus and only
+nearby, visible, in-front cars qualify (existing 100 m cutoff for ordinary peers).
+
+Debug APK builds. Full source checks initially exposed a pre-existing standalone virtual_lan
+link failure after kind-1 roam dispatch was added; the test now supplies a recording receiver
+and checks peer frames arrive unchanged, rather than linking a no-op stub. No production
+transport changed. Portable README records the Android name visibility policy.
+
+Phone :44329 still has live :game PID 14086; no installation performed yet. Asked user whether
+progress is saved before installing (new APK also includes the touch control theme). Physical
+nameplate/map placement and HUD-update ordering remain unverified until that phone test.
+Existing main-loop calls roam_game_hud before render; do not claim a new after-HUD hook was added.
+Full phone source checks subsequently passed, including the repaired virtual-LAN standalone
+receiver regression. No emulator/background processes started for this names change.

@@ -11,6 +11,8 @@ void nfs_widescreen_init(const char* game_root);
 void nfs_widescreen_set_resolution(unsigned width, unsigned height);
 /* HUD offset entries loaded from the .dat (0: elements keep 4:3 anchors). */
 int nfs_widescreen_hud_entries(void);
+/* Projected 640x480 screen coordinates -> the corrected HUD plane. */
+void nfs_widescreen_marker(float* x, float* y);
 /* Vertical offset (480-line HUD units, negative = up) added to the minimap. */
 void nfs_widescreen_set_minimap_offset(float dy);
 /* Game frame pacing (the game caps itself at 60): fps >= 30 replaces its 1/60 s
