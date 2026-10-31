@@ -157,15 +157,7 @@ public final class GameActivity extends NativeActivity {
             android.view.InputDevice device=android.view.InputDevice.getDevice(id);
             if(device==null||device.isVirtual())continue;
             int sources=device.getSources();
-            boolean buttons=(sources&android.view.InputDevice.SOURCE_GAMEPAD)==android.view.InputDevice.SOURCE_GAMEPAD;
-            // Some fingerprint sensors advertise JOYSTICK with only a Z axis.
-            boolean stick=(sources&android.view.InputDevice.SOURCE_JOYSTICK)==android.view.InputDevice.SOURCE_JOYSTICK&&
-                    device.getMotionRange(android.view.MotionEvent.AXIS_X)!=null&&
-                    device.getMotionRange(android.view.MotionEvent.AXIS_Y)!=null;
-            boolean keys=(sources&android.view.InputDevice.SOURCE_KEYBOARD)==android.view.InputDevice.SOURCE_KEYBOARD&&
-                    device.getKeyboardType()!=android.view.InputDevice.KEYBOARD_TYPE_ALPHABETIC&&
-                    device.hasKeys(android.view.KeyEvent.KEYCODE_BUTTON_A)[0];
-            boolean pad=device.isExternal()&&(buttons||stick||keys);
+            boolean pad=GamepadDevices.isPhysicalGamepad(device);
             seen.append(seen.length()==0?"":"; ").append(device.getName()).append(" [").append(Integer.toHexString(sources))
                     .append(device.isExternal()?" external":" internal").append(pad?" pad":"").append(']');
             if(pad){connected=true;accepted.add(id);}
@@ -174,6 +166,11 @@ public final class GameActivity extends NativeActivity {
         // Only these devices may move the guest's stick or press its keys.
         int[] ids=new int[accepted.size()];for(int i=0;i<ids.length;++i)ids[i]=accepted.get(i);
         nativeGamepadDevices(ids);
+        if(phoneFeedback!=null){
+            phoneFeedback.updateDevices(ids);
+            nativePhoneFeedback(phoneFeedback.enabled());
+            if(foreground)phoneFeedback.start();
+        }
         if(touchControls!=null)touchControls.setGamepadConnected(connected);
         nativeGamepadConnected(connected);
     }

@@ -65,7 +65,7 @@ final class GameOptions {
             new Option(NEARBY_CARS,"Nearby cars","3",carCounts(),carCountLabels()),
             new Option(FEEDBACK_SOURCE, "Feedback source", "physics",
                     new String[] {"physics", "legacy"}, new String[] {"Physics", "Legacy"}),
-            new Option(FEEDBACK, "Phone vibration", "50",
+            new Option(FEEDBACK, "Vibration", "50",
                     new String[] {"0", "25", "50", "100"}, new String[] {"Off", "Light", "Medium", "Strong"}),
             new Option(PEDALS, "Controller pedals", "triggers",
                     new String[] {"triggers", "game"}, new String[] {"Triggers", "Game bindings"}),

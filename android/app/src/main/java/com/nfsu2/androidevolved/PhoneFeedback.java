@@ -10,9 +10,11 @@ import android.os.Vibrator;
 import android.os.VibratorManager;
 import java.util.function.IntSupplier;
 
-/** The handset motor, deliberately independent of a connected controller. */
+/** Physics feedback prefers a capable external gamepad, falling back to the handset. */
 final class PhoneFeedback {
-    private final Vibrator vibrator;
+    private final Vibrator handset;
+    private Vibrator vibrator;
+    private int targetDevice=-1;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final IntSupplier source;
     private final Runnable stopSource;
@@ -27,12 +29,33 @@ final class PhoneFeedback {
         return context.getSystemService(Vibrator.class);
     }
     PhoneFeedback(Context context,int strength,IntSupplier source,Runnable stopSource){
-        this.vibrator=motor(context);this.strength=strength;this.source=source;this.stopSource=stopSource;
+        this.handset=motor(context);this.vibrator=handset;this.strength=strength;this.source=source;this.stopSource=stopSource;
+        updateDevices(android.view.InputDevice.getDeviceIds());
+    }
+    @SuppressWarnings("deprecation")
+    private static Vibrator controllerMotor(android.view.InputDevice device){
+        return Build.VERSION.SDK_INT>=31?device.getVibratorManager().getDefaultVibrator():device.getVibrator();
+    }
+    void updateDevices(int[] ids){
+        Vibrator next=handset;int nextDevice=-1;String name="Phone";
+        // Retain the current capable controller if another pad is connected.
+        for(int pass=0;pass<2&&nextDevice<0;pass++)for(int id:ids){
+            if(pass==0&&id!=targetDevice)continue;
+            android.view.InputDevice device=android.view.InputDevice.getDevice(id);
+            if(!GamepadDevices.isPhysicalGamepad(device))continue;
+            Vibrator candidate=controllerMotor(device);
+            android.util.Log.i("NFSU2","Controller feedback: "+device.getName()+" id="+id+" motor="+candidate.hasVibrator());
+            if(candidate.hasVibrator()){next=candidate;nextDevice=id;name=device.getName();break;}
+        }
+        if(vibrator!=null)vibrator.cancel();
+        vibrator=next;targetDevice=nextDevice;active=false;surfaceAmplitude=0;lastImpact=-1;surfaceAt=0;
+        android.util.Log.i("NFSU2","Feedback output: "+name+" id="+targetDevice);
     }
     boolean available(){return vibrator!=null&&vibrator.hasVibrator();}
     boolean enabled(){return available()&&strength>0;}
     private final Runnable poll=new Runnable(){@Override public void run(){
         if(!running)return;
+        if(!available()){handler.postDelayed(this,250);return;}
         int packet=source.getAsInt(),channel=(packet>>>8)&255,event=(packet>>>16)&127;
         int amplitude=Math.min(255,(packet&255)*strength/100);
         if(channel==2&&amplitude>2){
@@ -50,7 +73,7 @@ final class PhoneFeedback {
         if(amplitude>2){
             try{
                 boolean amplitudeControl=vibrator.hasAmplitudeControl();
-                if(!active)android.util.Log.i("NFSU2","Phone vibration playing amplitude="+amplitude);
+                if(!active)android.util.Log.i("NFSU2","Feedback playing device="+targetDevice+" amplitude="+amplitude);
                 if(channel==0&&amplitudeControl){
                     long now=android.os.SystemClock.elapsedRealtime();
                     if(!active||now-surfaceAt>=80){
@@ -73,7 +96,8 @@ final class PhoneFeedback {
     void start(){if(enabled()&&!running){running=true;handler.post(poll);}}
     void stop(){running=false;handler.removeCallbacks(poll);if(vibrator!=null)vibrator.cancel();active=false;surfaceAmplitude=0;lastImpact=-1;stopSource.run();}
     static boolean test(Context context){
-        Vibrator motor=motor(context);if(motor==null||!motor.hasVibrator())return false;
+        PhoneFeedback feedback=new PhoneFeedback(context,100,()->0,()->{});
+        Vibrator motor=feedback.vibrator;if(motor==null||!motor.hasVibrator())return false;
         motor.vibrate(VibrationEffect.createOneShot(180,motor.hasAmplitudeControl()?110:VibrationEffect.DEFAULT_AMPLITUDE),
                 new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).build());return true;
     }

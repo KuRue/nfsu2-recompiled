@@ -2022,3 +2022,25 @@ comparison performed; cannot attribute FPS to this change. Initial/menu visuals 
 Phone left live in free roam for user feel/crowd test, car limit3 and FPS enabled. No emulator,
 background logcat, recorder, server or other detached process started. Supersedes prior
 not-installed status for cache, top-right FPS and full0–32 slider.
+
+
+## 2026-10-31 — Prefer controller vibration over handset
+
+User reported Xbox Bluetooth controller still vibrating phone. PhoneFeedback previously
+explicitly ignored controller motors. Now selects a capable external gamepad's per-device
+VibratorManager default motor (API31+) / getVibrator (older), with handset fallback when no
+controller reports vibration. Retains selected capable pad across additional pad connections.
+GameActivity refreshes route and native feedback enable on input device add/change/remove and
+resume; cancels previous output and resets envelope/event state when refreshing. Handles no
+motor without dereferencing null. Waveforms/physics/strength unchanged. Pause/stop cancels
+current motor. GamepadDevices shares existing physical input filtering with routing, excluding
+internal sensors/ordinary keyboards. Renamed Phone vibration to Vibration; Test vibration
+uses same controller-first route, label Controller / Phone.
+
+Debug APK build passed and installed on SM-S938U1 :38393. Test button exercised handset
+fallback before controller connection (log Phone id=-1). User says Bluetooth. Phone now lists
+Xbox Wireless Controller device25, external GAMEPAD/JOYSTICK, Bluetooth045E:0B13. Test pulse
+log10:54:37 reports motor=true and Feedback output Xbox Wireless Controller id=25. User feel
+confirmation pending. Asked whether controller felt pulse. No actual in-game route test yet;
+user navigating Bluetooth settings and foreground changes, so avoid racing their interactions.
+No detached processes/emulator started. Android API docs checked for per-device motor support.
