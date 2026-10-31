@@ -11,13 +11,17 @@ public final class FeedbackEnvelopeTest {
         check(FeedbackEnvelope.amplitude(255,1,0)==0);
         check(sum(FeedbackEnvelope.timings(0))==70);
         check(sum(FeedbackEnvelope.timings(1))==80&&FeedbackEnvelope.amplitudes(1,150,0)[1]==0);
-        check(sum(FeedbackEnvelope.timings(2))==160);
+        check(sum(FeedbackEnvelope.timings(2))==FeedbackEnvelope.IMPACT_WINDOW_MS);
+        check(FeedbackEnvelope.amplitudes(2,200,0)[2]==0);
+        check(FeedbackEnvelope.timings(2)[2]>=150);
+        check(sum(FeedbackEnvelope.binaryTimings(2,150))==FeedbackEnvelope.IMPACT_WINDOW_MS);
         check(FeedbackEnvelope.amplitudes(0,40,200)[0]<=40);
         check(FeedbackEnvelope.amplitudes(0,40,0)[2]<40);
         check(FeedbackEnvelope.binaryTimings(0,30)[1]<FeedbackEnvelope.binaryTimings(1,150)[1]);
         check(FeedbackEnvelope.motorAmplitude(1,1,200)>FeedbackEnvelope.motorAmplitude(1,0,200));
         check(FeedbackEnvelope.motorAmplitude(2,0,200)>FeedbackEnvelope.motorAmplitude(2,1,200));
-        check(FeedbackEnvelope.motorAmplitude(0,0,200)<FeedbackEnvelope.motorAmplitude(1,0,200)+1);
+        check(FeedbackEnvelope.motorAmplitude(1,1,200)>=3*FeedbackEnvelope.motorAmplitude(1,0,200));
+        check(FeedbackEnvelope.motorAmplitude(2,0,200)>=3*FeedbackEnvelope.motorAmplitude(2,1,200));
         for(int channel=0;channel<3;channel++)for(int a=3;a<=255;a++){
             long[] t=FeedbackEnvelope.timings(channel);int[] v=FeedbackEnvelope.amplitudes(channel,a,20);
             check(t.length==v.length);

@@ -2090,3 +2090,17 @@ impacts events24/25 logged166/228; straight/stopped samples return channels0/0;
 paused/frozen clock silences output. Confirms signal separation/output activity,
 not subjective improvement or event-perfect classification. Request how curb duration
 and slide strength felt before further tuning. No code/build/install needed this turn.
+
+
+## 2026-10-31 — Distinguish traction chatter from collisions
+
+User reports better overall haptics, remaining ambiguity between slip and hits.
+Changed only Java output: slip strong/weak25/100 vs previous65/100; impact100/25
+vs100/70. Impact now5ms lead-in,65ms single thump,170ms quiet tail (240ms total),
+replacing two taps. Java protects quiet tail beyond native210ms impact priority;
+fresh impact IDs still retrigger. Reset hold on stop/route refresh. Curb shaping,
+slip gain and physics detection unchanged. Binary fallback single pulse scales
+on-time by amplitude and shares240ms total. Updated envelope tests passed, APK
+assembleDebug passed1s, diff clean. Installed update on :38393 (see next note if
+installation still pending at handoff). Physical distinction needs user comparison.
+No emulator/detached processes started.

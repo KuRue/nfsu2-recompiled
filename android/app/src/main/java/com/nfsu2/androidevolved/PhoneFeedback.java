@@ -22,7 +22,7 @@ final class PhoneFeedback {
     private final int strength;
     private boolean running,active;
     private int lastImpact=-1,surfaceAmplitude,lastChannel=-1;
-    private long surfaceAt;
+    private long surfaceAt,impactQuietUntil;
     private final AudioAttributes attributes=new AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
     static Vibrator motor(Context context) {
@@ -57,7 +57,7 @@ final class PhoneFeedback {
                 if(strong&&weak&&manager.getVibrator(0).hasAmplitudeControl()&&manager.getVibrator(1).hasAmplitudeControl())controllerManager=manager;
             }
         }
-        vibrator=next;targetDevice=nextDevice;active=false;surfaceAmplitude=0;lastImpact=-1;lastChannel=-1;surfaceAt=0;
+        vibrator=next;targetDevice=nextDevice;active=false;surfaceAmplitude=0;lastImpact=-1;lastChannel=-1;surfaceAt=0;impactQuietUntil=0;
         android.util.Log.i("NFSU2","Feedback output: "+name+" id="+targetDevice+" dual="+(controllerManager!=null));
     }
     private void cancelOutput(){
@@ -91,11 +91,14 @@ final class PhoneFeedback {
                 lastImpact=event;surfaceAmplitude=0;
                 try{
                     play(2,amplitude,0);
+                    impactQuietUntil=android.os.SystemClock.elapsedRealtime()+FeedbackEnvelope.IMPACT_WINDOW_MS;
                     active=true;android.util.Log.i("NFSU2","Physics impact waveform event="+event+" amplitude="+amplitude);
                 }catch(SecurityException|IllegalArgumentException e){stop();return;}
             }
             handler.postDelayed(this,40);return;
         }
+        // Let the impact's quiet tail finish before road/slip chatter returns.
+        if(android.os.SystemClock.elapsedRealtime()<impactQuietUntil){handler.postDelayed(this,40);return;}
         if(amplitude>2){
             try{
                 if(!active)android.util.Log.i("NFSU2","Feedback playing device="+targetDevice+" amplitude="+amplitude);
@@ -111,7 +114,7 @@ final class PhoneFeedback {
         handler.postDelayed(this,40);
     }};
     void start(){if(enabled()&&!running){running=true;handler.post(poll);}}
-    void stop(){running=false;handler.removeCallbacks(poll);cancelOutput();active=false;surfaceAmplitude=0;lastChannel=-1;lastImpact=-1;stopSource.run();}
+    void stop(){running=false;handler.removeCallbacks(poll);cancelOutput();active=false;surfaceAmplitude=0;lastChannel=-1;lastImpact=-1;impactQuietUntil=0;stopSource.run();}
     static boolean test(Context context){
         PhoneFeedback feedback=new PhoneFeedback(context,100,()->0,()->{});
         Vibrator motor=feedback.vibrator;if(motor==null||!motor.hasVibrator())return false;

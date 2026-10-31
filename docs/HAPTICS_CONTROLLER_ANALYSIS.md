@@ -85,3 +85,16 @@ APK on :38393 selected dual output, then left running for user scenario testing.
 No subjective success claim for the new envelopes yet. Compare curb hop, sustained
 slide and wall, then inspect physics and original FFB trace around those scenarios.
 Exact PS2 characteristics and matched motor calibration remain outside this evidence.
+
+
+## User follow-up: distinguish slip from impacts
+
+User said overall feel improved, but traction and collisions still felt alike.
+Follow-up changes: slip motor balance25/100, impact100/25 (strong/weak), surface
+unchanged65/20. Impacts now one65ms thump after5ms lead-in, then170ms silence.
+The full240ms window is protected in Java even after the native210ms impact
+packet expires, so slip cannot immediately fill that quiet tail. A new impact
+ID can still interrupt with a fresh hit. Pause/route changes reset the hold.
+Binary fallback has one amplitude-scaled pulse and the same total quiet window.
+Envelope tests cover single-pulse tail and at least3:1 contrasting motor balance.
+This is a perceptual tuning change; event-detection thresholds remain unchanged.
