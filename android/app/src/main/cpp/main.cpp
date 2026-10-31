@@ -725,6 +725,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_nfsu2_androidevolved_GameActivity_na
     return jlong(guestPresentedFrameCount());
 }
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeNearbyCars(JNIEnv*,jclass,jint count){
-    const char* value=count==2?"2":count==5?"5":"3";
+    char value[12];
+    snprintf(value,sizeof(value),"%d",std::max(0,std::min(32,int(count))));
     setenv("NFSU2_ROAM_MAX_CARS",value,1);
 }

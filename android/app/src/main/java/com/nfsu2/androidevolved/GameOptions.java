@@ -48,9 +48,21 @@ final class GameOptions {
         return false;
     }
 
+    // The portable runtime has 32 remote-car slots; include zero for map-only play.
+    private static String[] carCounts(){
+        String[] values=new String[33];
+        for(int i=0;i<values.length;i++)values[i]=Integer.toString(i);
+        return values;
+    }
+    private static String[] carCountLabels(){
+        String[] labels=new String[33];
+        for(int i=0;i<labels.length;i++)labels[i]=i==0?"Map only":i==1?"1 car":i+" cars";
+        return labels;
+    }
+
     static final Option[] ALL = {
             new Option(FPS_COUNTER,"FPS counter","off",new String[]{"off","on"},new String[]{"Off","On"}),
-            new Option(NEARBY_CARS,"Nearby cars","3",new String[]{"2","3","5"},new String[]{"2 cars","3 cars","5 cars"}),
+            new Option(NEARBY_CARS,"Nearby cars","3",carCounts(),carCountLabels()),
             new Option(FEEDBACK_SOURCE, "Feedback source", "physics",
                     new String[] {"physics", "legacy"}, new String[] {"Physics", "Legacy"}),
             new Option(FEEDBACK, "Phone vibration", "50",

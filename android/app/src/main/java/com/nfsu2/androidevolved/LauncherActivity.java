@@ -385,9 +385,41 @@ public final class LauncherActivity extends Activity {
     }
 
     private View optionCycleRow(GameOptions.Option option) {
+        if(GameOptions.NEARBY_CARS.equals(option.key))return optionRow(option.title,
+                option.label(GameOptions.get(this,option.key)),this::chooseNearbyCars);
         return cycleRow(option.title, option.labels, option.values, GameOptions.get(this, option.key), GameOptions.get(this, option.key), value -> {
             GameOptions.set(this, option.key, value); refreshOptions();
         });
+    }
+
+    private void chooseNearbyCars(){
+        MenuPanel panel=new MenuPanel(this,"Nearby cars",true);
+        LinearLayout body=panel.body();
+        TextView value=label("",20,ACCENT,true);body.addView(value);
+        android.widget.SeekBar slider=new android.widget.SeekBar(this);
+        slider.setMax(32);slider.setProgress(Integer.parseInt(GameOptions.get(this,GameOptions.NEARBY_CARS)));
+        slider.setProgressTintList(android.content.res.ColorStateList.valueOf(ACCENT));
+        slider.setThumbTintList(android.content.res.ColorStateList.valueOf(ACCENT));
+        slider.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0x33262626));
+        value.setText(GameOptions.find(GameOptions.NEARBY_CARS).label(Integer.toString(slider.getProgress())));
+        slider.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener(){
+            public void onStartTrackingTouch(android.widget.SeekBar bar){}
+            public void onStopTrackingTouch(android.widget.SeekBar bar){}
+            public void onProgressChanged(android.widget.SeekBar bar,int progress,boolean user){
+                value.setText(GameOptions.find(GameOptions.NEARBY_CARS).label(Integer.toString(progress)));
+            }
+        });
+        body.addView(slider,new LinearLayout.LayoutParams(-1,dp(48)));
+        body.addView(label("Restart game to apply",13,TEXT,false));
+        Dialog picker=new Dialog(this);
+        Button apply=actionButton("Apply",true);
+        apply.setOnClickListener(v->{GameOptions.set(this,GameOptions.NEARBY_CARS,Integer.toString(slider.getProgress()));picker.dismiss();refreshOptions();});
+        body.addView(apply);
+        Button back=actionButton("‹  Back",false);back.setOnClickListener(v->picker.dismiss());body.addView(back);
+        picker.requestWindowFeature(Window.FEATURE_NO_TITLE);picker.setContentView(panel);
+        picker.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+        picker.show();picker.getWindow().setLayout(Math.min(dp(440),getResources().getDisplayMetrics().widthPixels-dp(64)),-2);
+        dialog=picker;
     }
 
     /** A setting row that opens a themed value picker instead of cycling. */

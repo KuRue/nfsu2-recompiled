@@ -51,7 +51,7 @@ public final class GameActivity extends NativeActivity {
         if(fpsText!=null&&now>fpsTime)fpsText.setText(String.format(java.util.Locale.US,"%.0f FPS",(frames-fpsFrames)*1000.0/(now-fpsTime)));
         fpsFrames=frames;fpsTime=now;
         if(fpsWindow!=null&&!fpsWindow.isShowing()&&hasWindowFocus())
-            fpsWindow.showAtLocation(getWindow().getDecorView(),Gravity.TOP|Gravity.CENTER_HORIZONTAL,0,dp(8));
+            fpsWindow.showAtLocation(getWindow().getDecorView(),Gravity.TOP|Gravity.RIGHT,dp(12),dp(4));
         performanceHandler.postDelayed(this,500);
     }};
     private void updateFpsCounter(){
@@ -60,9 +60,9 @@ public final class GameActivity extends NativeActivity {
             if(fpsWindow!=null)fpsWindow.dismiss();return;
         }
         if(fpsWindow==null){
-            fpsText=new TextView(this);fpsText.setText("— FPS");fpsText.setTextSize(13);
-            fpsText.setTypeface(MenuTheme.font(this,true));fpsText.setTextColor(getColor(R.color.menu_lime));
-            fpsText.setPadding(dp(10),dp(3),dp(10),dp(3));fpsText.setBackground(MenuTheme.action(this,true));
+            fpsText=new TextView(this);fpsText.setText("— FPS");fpsText.setTextSize(10);
+            fpsText.setTypeface(MenuTheme.font(this,true));fpsText.setTextColor(0xCCD4D7CB);
+            fpsText.setPadding(dp(3),dp(1),dp(3),dp(1));fpsText.setShadowLayer(dp(2),0,dp(1),0xDD000000);
             fpsWindow=new PopupWindow(fpsText,ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT,false);
             fpsWindow.setTouchable(false);
         }

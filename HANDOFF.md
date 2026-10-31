@@ -1959,3 +1959,16 @@ menus 120, crowded roam ~50–54 FPS); these are scene observations, not an opti
 assembleDebug and full scripts/check_phone_source.py passed; git diff --check clean. Latest
 APK installed. Phone left on launcher after final quit test. No emulator or detached background
 process started. Nearby-car setting requires a new game process; FPS visibility applies live.
+
+
+## 2026-10-31 — Subtle FPS display and full remote-car range
+
+FPS overlay now 10sp muted gray with a dark text shadow, top-right inset 12dp/4dp,
+without the outlined pill. Nearby cars now accepts every integer 0–32 (the native NSLOT
+capacity), default3 preserved. Launcher uses a themed SeekBar with Apply/Back; 0 says
+Map only. JNI clamps independently to0–32. Fresh game launch still required.
+assembleDebug and full check_phone_source.py passed; diff clean. Phone :44329 no longer
+connected, so APK is built but NOT installed or visually checked on this turn. No emulator
+or background server started. Further crowd optimization candidates: distance-based remote
+car LOD and reflection/shadow budgeting; not implemented/benchmarked here. Existing car LOD
+and reflection controls can reduce rendering cost without reducing the remote-car count.
