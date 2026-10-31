@@ -2073,3 +2073,8 @@ logs /tmp/haptic-final-phone.log. Asked user curb hop/sustained slide/wall compa
 feel and real combined-waveform dispatch during driving still pending. Previous simple
 controller pulse was physically confirmed. No new subjective result claimed.
 No emulator, server, recorder or detached log process started. Keep game ready for user.
+
+Follow-up live log at11:10:43–45 confirms real-game caller005c06a0 damper13541c28,
+gain10000/indefinite duration/condition6400. Java playing amplitudes70 and21 while
+dual route selected; no fatal error observed. Original effect trace and combined-output
+activity now observed during driving; perceptual confirmation still pending.
