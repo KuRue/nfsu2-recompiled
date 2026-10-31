@@ -1,4 +1,5 @@
 #include "d3d9_bridge.h"
+#include "render_state_cache.h"
 #include "d3d9_program_state.h"
 #include "d3d9_buffer_state.h"
 #include "graphics_texture.h"
@@ -41,6 +42,11 @@ enum class Kind:uint32_t {D3D9=1,Device=2,Texture=3,Cube=4,Surface=5,VertexBuffe
 struct Creation {uint32_t method=0;std::vector<uint32_t> args;std::vector<uint8_t> blob;};
 struct Object {IUnknown* native;Kind kind;uint32_t references=1;CompressedView compressed;uint32_t parent=0;uint32_t children=0;std::shared_ptr<Creation> creation;};
 std::unordered_map<uint32_t,Object> objects;
+nfs_d3d9::RenderStateCache renderStateCache;
+uint32_t renderStateDevice=0;
+std::map<uint32_t,bool> recordingDevices;
+bool renderStateCaching=true;
+
 #ifdef NFS_RESUMABLE
 std::map<uint32_t,nfs_d3d9::BufferShadow> bufferShadows;
 std::map<uint32_t,nfs_d3d9::TextureShadow> textureShadows;
@@ -119,6 +125,8 @@ std::string inventoryText(){
     return out;
 }
 void retireGuestObject(uint32_t address){
+    recordingDevices.erase(address);
+    if(renderStateDevice==address){renderStateCache.reset();renderStateDevice=0;}
 #ifdef NFS_RESUMABLE
     bufferShadows.erase(address);textureShadows.erase(address);
 #endif
@@ -185,6 +193,8 @@ void setD3D9Compatibility(bool cpuTextures,unsigned backBuffers){
 }
 void configureD3D9Bridge(void* base,uint32_t (*allocator)(uint32_t),void (*deallocator)(uint32_t)){
     guestBase=base;allocateGuest=allocator;freeGuest=deallocator;
+    const char* cacheOption=std::getenv("NFSU2_STATE_CACHE");
+    renderStateCaching=!cacheOption||std::strcmp(cacheOption,"0")!=0;
 #ifdef __ANDROID__
     // android_main provides a writable private cache before creating DXVK.
     // Other bring-up callers can still run without a writable working directory.
@@ -196,6 +206,7 @@ void configureD3D9Bridge(void* base,uint32_t (*allocator)(uint32_t),void (*deall
 #endif
 }
 void shutdownD3D9Bridge(){
+    renderStateCache.reset();renderStateDevice=0;recordingDevices.clear();
 #ifdef NFS_RESUMABLE
     bufferShadows.clear();textureShadows.clear();
 #endif
@@ -353,12 +364,21 @@ uint32_t dispatchGuestD3D9Call(uint32_t token,const uint32_t* args,uint32_t* arg
         throw std::runtime_error("Invalid guest D3D9 COM object");
     }
     auto object=entry->native;
+    if(kind==2&&renderStateDevice!=args[0]){
+        renderStateCache.setRecording(recordingDevices.count(args[0])!=0);renderStateDevice=args[0];
+    }
+    // State-block Apply changes device state behind the scalar setter hooks.
+    if(kind==11&&method==5)renderStateCache.invalidate();
     // Android may replace ANativeWindow after backgrounding, even at the same
     // pointer address. Override the destination with this surface generation so
     // DXVK recreates its presenter while keeping the game's device/resources.
     if((kind==2&&method==17)||(kind==13&&method==3)){
         *argumentCount=kind==2?5:6;auto window=dxvkAndroidGetWindowHandle();
         if(!window||deviceResetPending)return D3DERR_DEVICELOST;
+        static unsigned cacheFrames=0;
+        if(kind==2&&++cacheFrames%600==0)
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Render-state cache: %llu/%llu native setters skipped (cumulative)",
+                (unsigned long long)renderStateCache.skipped,(unsigned long long)renderStateCache.calls);
         auto source=static_cast<const RECT*>(pointer(args[1])),destination=static_cast<const RECT*>(pointer(args[2]));
         auto dirty=static_cast<const RGNDATA*>(pointer(args[4]));
         return kind==2?static_cast<IDirect3DDevice9*>(object)->Present(source,destination,window,dirty):
@@ -437,7 +457,7 @@ uint32_t dispatchGuestD3D9Call(uint32_t token,const uint32_t* args,uint32_t* arg
     if(kind==2){auto device=static_cast<IDirect3DDevice9*>(object);switch(method){
         case 9:{*argumentCount=2;D3DDEVICE_CREATION_PARAMETERS p{};HRESULT status=device->GetCreationParameters(&p);if(SUCCEEDED(status)){write(args[1],p.AdapterOrdinal);write(args[1]+4,p.DeviceType);write(args[1]+8,0xf0000301);write(args[1]+12,p.BehaviorFlags);}return status;}
         case 13:{*argumentCount=3;auto p=presentation(args[1]);IDirect3DSwapChain9* result=nullptr;HRESULT status=device->CreateAdditionalSwapChain(&p,&result);write(args[2],SUCCEEDED(status)?wrap(result,Kind::SwapChain):0);return status;}
-        case 16:{*argumentCount=2;auto p=presentation(args[1]);HRESULT status=D3DERR_DEVICELOST;
+        case 16:{*argumentCount=2;renderStateCache.invalidate();auto p=presentation(args[1]);HRESULT status=D3DERR_DEVICELOST;
             // DXVK throws (DxvkError) when it cannot rebuild the swap chain; Windows
             // would report a lost device, which the game retries (Mali G615 report).
             // The old Android window can stay busy for a moment: retry once before giving up.
@@ -446,6 +466,7 @@ uint32_t dispatchGuestD3D9Call(uint32_t token,const uint32_t* args,uint32_t* arg
                     NFS_RUNTIME_LOG(ANDROID_LOG_ERROR,"NFSU2","D3D9 Reset raised a DXVK error (attempt %d)",attempt+1);status=D3DERR_DEVICELOST;
                     if(!attempt)std::this_thread::sleep_for(std::chrono::milliseconds(100));}
             }
+            if(SUCCEEDED(status)){renderStateCache.reset();recordingDevices.erase(args[0]);}
             deviceResetPending=status==D3DERR_DEVICELOST;
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","D3D9 Reset backbuffer %ux%u result=%08x",p.BackBufferWidth,p.BackBufferHeight,uint32_t(status));return status;}
         case 23:{*argumentCount=9;if(args[8])throw std::runtime_error("Shared texture handle pending");if(!args[7])return D3DERR_INVALIDCALL;
@@ -719,6 +740,7 @@ void validateD3D9DeviceStates(const std::vector<nfs_d3d9::DeviceState>& states){
     }
 }
 void restoreD3D9DeviceStates(const std::vector<nfs_d3d9::DeviceState>& states){
+    renderStateCache.reset();renderStateDevice=0;recordingDevices.clear();
     validateD3D9DeviceStates(states);BridgeMapper map;
     for(const auto& state:states)nfs_d3d9::applyDevice(static_cast<IDirect3DDevice9*>(objects.at(state.device).native),state,map);
 }

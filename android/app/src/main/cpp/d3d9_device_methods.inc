@@ -48,17 +48,17 @@ case 53:{*argumentCount=3;return device->LightEnable(static_cast<DWORD>(args[1])
 case 54:{*argumentCount=3;return device->GetLightEnable(static_cast<DWORD>(args[1]),static_cast<WINBOOL*>(pointer(args[2])));}
 case 55:{*argumentCount=3;return device->SetClipPlane(static_cast<DWORD>(args[1]),static_cast<const float*>(pointer(args[2])));}
 case 56:{*argumentCount=3;return device->GetClipPlane(static_cast<DWORD>(args[1]),static_cast<float*>(pointer(args[2])));}
-case 57:{*argumentCount=3;return device->SetRenderState(static_cast<D3DRENDERSTATETYPE>(args[1]),static_cast<DWORD>(args[2]));}
+case 57:{*argumentCount=3;auto apply=[&](){return device->SetRenderState(static_cast<D3DRENDERSTATETYPE>(args[1]),static_cast<DWORD>(args[2]));};return renderStateCaching?renderStateCache.render(args[1],args[2],apply):apply();}
 case 58:{*argumentCount=3;return device->GetRenderState(static_cast<D3DRENDERSTATETYPE>(args[1]),static_cast<DWORD*>(pointer(args[2])));}
 case 59:{*argumentCount=3;IDirect3DStateBlock9* object2=nullptr;HRESULT status=device->CreateStateBlock(static_cast<D3DSTATEBLOCKTYPE>(args[1]),args[2]?&object2:nullptr);if(args[2])write(args[2],SUCCEEDED(status)?wrap(object2,Kind::StateBlock):0);return status;}
-case 60:{*argumentCount=1;return device->BeginStateBlock();}
-case 61:{*argumentCount=2;IDirect3DStateBlock9* object1=nullptr;HRESULT status=device->EndStateBlock(args[1]?&object1:nullptr);if(args[1])write(args[1],SUCCEEDED(status)?wrap(object1,Kind::StateBlock):0);return status;}
+case 60:{*argumentCount=1;HRESULT status=device->BeginStateBlock();if(SUCCEEDED(status)){recordingDevices[args[0]]=true;renderStateCache.setRecording(true);}return status;}
+case 61:{*argumentCount=2;IDirect3DStateBlock9* object1=nullptr;HRESULT status=device->EndStateBlock(args[1]?&object1:nullptr);if(SUCCEEDED(status)){recordingDevices.erase(args[0]);renderStateCache.setRecording(false);}if(args[1])write(args[1],SUCCEEDED(status)?wrap(object1,Kind::StateBlock):0);return status;}
 case 62:{*argumentCount=2;return device->SetClipStatus(static_cast<const D3DCLIPSTATUS9*>(pointer(args[1])));}
 case 63:{*argumentCount=2;return device->GetClipStatus(static_cast<D3DCLIPSTATUS9*>(pointer(args[1])));}
 case 64:{*argumentCount=3;IDirect3DBaseTexture9* object2=nullptr;HRESULT status=device->GetTexture(static_cast<DWORD>(args[1]),args[2]?&object2:nullptr);if(args[2])write(args[2],SUCCEEDED(status)?logicalTexture(object2):0);return status;}
 case 65:{*argumentCount=3;return device->SetTexture(static_cast<DWORD>(args[1]),sampledTexture(args[2]));}
 case 66:{*argumentCount=4;return device->GetTextureStageState(static_cast<DWORD>(args[1]),static_cast<D3DTEXTURESTAGESTATETYPE>(args[2]),static_cast<DWORD*>(pointer(args[3])));}
-case 67:{*argumentCount=4;return device->SetTextureStageState(static_cast<DWORD>(args[1]),static_cast<D3DTEXTURESTAGESTATETYPE>(args[2]),static_cast<DWORD>(args[3]));}
+case 67:{*argumentCount=4;auto apply=[&](){return device->SetTextureStageState(static_cast<DWORD>(args[1]),static_cast<D3DTEXTURESTAGESTATETYPE>(args[2]),static_cast<DWORD>(args[3]));};return renderStateCaching?renderStateCache.stage(args[1],args[2],args[3],apply):apply();}
 case 68:{*argumentCount=4;return device->GetSamplerState(static_cast<DWORD>(args[1]),static_cast<D3DSAMPLERSTATETYPE>(args[2]),static_cast<DWORD*>(pointer(args[3])));}
 case 69:{*argumentCount=4;return filteredSampler(device,static_cast<DWORD>(args[1]),static_cast<D3DSAMPLERSTATETYPE>(args[2]),static_cast<DWORD>(args[3]));}
 case 70:{*argumentCount=2;return device->ValidateDevice(static_cast<DWORD*>(pointer(args[1])));}

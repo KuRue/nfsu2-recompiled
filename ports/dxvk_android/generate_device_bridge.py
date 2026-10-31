@@ -14,6 +14,10 @@ kinds = {"IDirect3D9": "D3D9", "IDirect3DDevice9": "Device", "IDirect3DTexture9"
          "IDirect3DSwapChain9": "SwapChain", "IDirect3DVolumeTexture9": "VolumeTexture"}
 # Handwritten resource/lifetime hooks, kept in regenerated output.
 custom = {
+    57: 'case 57:{*argumentCount=3;auto apply=[&](){return device->SetRenderState(static_cast<D3DRENDERSTATETYPE>(args[1]),static_cast<DWORD>(args[2]));};return renderStateCaching?renderStateCache.render(args[1],args[2],apply):apply();}',
+    67: 'case 67:{*argumentCount=4;auto apply=[&](){return device->SetTextureStageState(static_cast<DWORD>(args[1]),static_cast<D3DTEXTURESTAGESTATETYPE>(args[2]),static_cast<DWORD>(args[3]));};return renderStateCaching?renderStateCache.stage(args[1],args[2],args[3],apply):apply();}',
+    60: 'case 60:{*argumentCount=1;HRESULT status=device->BeginStateBlock();if(SUCCEEDED(status)){recordingDevices[args[0]]=true;renderStateCache.setRecording(true);}return status;}',
+    61: 'case 61:{*argumentCount=2;IDirect3DStateBlock9* object1=nullptr;HRESULT status=device->EndStateBlock(args[1]?&object1:nullptr);if(SUCCEEDED(status)){recordingDevices.erase(args[0]);renderStateCache.setRecording(false);}if(args[1])write(args[1],SUCCEEDED(status)?wrap(object1,Kind::StateBlock):0);return status;}',
     3: 'case 3:{*argumentCount=1;return deviceResetPending?D3DERR_DEVICENOTRESET:device->TestCooperativeLevel();}',
     30: 'case 30:{*argumentCount=5;disablePackedTexture(args[3]);return device->UpdateSurface(nativeObject<IDirect3DSurface9>(args[1]),static_cast<const RECT*>(pointer(args[2])),nativeObject<IDirect3DSurface9>(args[3]),static_cast<const POINT*>(pointer(args[4])));}',
     31: 'case 31:{*argumentCount=3;HRESULT status=device->UpdateTexture(nativeObject<IDirect3DBaseTexture9>(args[1]),nativeObject<IDirect3DBaseTexture9>(args[2]));if(SUCCEEDED(status))copyPackedTexture(args[1],args[2]);return status;}',

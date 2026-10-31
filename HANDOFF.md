@@ -1972,3 +1972,34 @@ connected, so APK is built but NOT installed or visually checked on this turn. N
 or background server started. Further crowd optimization candidates: distance-based remote
 car LOD and reflection/shadow budgeting; not implemented/benchmarked here. Existing car LOD
 and reflection controls can reduce rendering cost without reducing the remote-car count.
+
+
+## 2026-10-31 — Rendering overhead optimization without reducing cars
+
+Added scalar render/texture-stage state deduplication at the D3D9 bridge. Identical successful
+setters return D3D_OK without a native DXVK call/device lock. This targets CPU submission
+overhead in crowded scenes, preserving geometry, draw calls, textures and the selected car
+count. No measured phone FPS improvement yet; GPU geometry/shading work is unchanged.
+
+Cache stores only scalar values: 256 render entries, 8x64 texture-stage entries. Failed
+native calls invalidate the entry; unsupported indices always reach native validation.
+Recording Begin/EndStateBlock is tracked per device (even across switches), never skips
+recorded setters, and invalidates on successful Begin/End. StateBlock Apply invalidates
+before calling native. Device switch, retirement, Reset, shutdown and snapshot restore
+invalidate appropriately; successful reset clears recording state. POINTSIZE and adaptive
+tessellation states bypass deduplication because DXVK supports vendor extension commands
+there (confirmed from local pinned DXVK source). No sampler/resource/shader caching added.
+
+Log every600 device Presents reports cumulative skipped/native setter opportunities for
+next real-device profiling. NFSU2_STATE_CACHE=0 bypasses caching for controlled A/B testing.
+Generator custom hooks updated and regenerated output compared byte-for-byte with checked-in
+.inc. New standalone render_state_cache test covers duplicates, banks, failures, recording,
+invalidation, unsupported indices and vendor commands; added to phone source suite.
+
+assembleDebug passed (final10s). Full check_phone_source.py passed; final vendor-exclusion
+change rechecked via standalone test. tests/android_graphics/run.sh passed all memory, COM,
+program/buffer/texture/device capture+restore tests using SDK CMake in PATH. diff check clean.
+No adb device connected, so APK NOT installed and visual/performance behavior NOT verified on
+phone. Includes preceding small top-right FPS and0–32 car slider build. No emulator, server,
+watcher or other detached process started. Next: reconnect phone, compare crowded scene with
+cache on/off and inspect skip counts; distance-based remote LOD remains future work.
