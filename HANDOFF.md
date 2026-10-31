@@ -1847,3 +1847,28 @@ Next:
    (Mac) path: `NOPP=0`, all friends' cars outside the car index, and the
    texture override for paint slots.
 3. Then verify a second client sees the box's car and both move.
+
+## 2026-10-31: free roam verified on the emulator
+
+The TV box went off the LAN after the new APK was installed (see above), so
+the same arm64 build was tested on `s25u_sim` with the full 2.6 GB game folder
+and the `ku` profile restored from `/tmp/nfsu2_box_appdata`:
+
+- The game reached the title, loaded the profile, and entered a new career's
+  free roam at the airport. The main-loop hook ran at ~15 FPS in the menus
+  and 1-2 FPS in the world under software Vulkan with 36 peers.
+- The hub listed 36 players (`stats: 36 friend(s)`), mostly Mac clients.
+  Friend cars loaded and became ready:
+  `slot 4: Yim10939's SENTRA ready after 17 frames (9659 ms)`,
+  `slot 3: oprhan's 350Z ready after 8 frames (4608 ms)`, etc. No
+  `Invalid D3D9 COM object` appeared; the Present-dispatch crash is gone.
+- Two friend cars were visible at the airport: a green 350Z beside the player
+  and another ahead. Holding the gas pedal moved the player to 8 MPH.
+- `tx` reached 50,667 packets / 6.8 MB and `rx` 249,701 packets with no bad
+  or version errors. The 20 Hz SNAP stream from 36 peers is heavy on the
+  emulator; an ARMv7 box needs a lower `NFSU2_ROAM_MAX_PLAYERS` / max-cars
+  setting for usable frame times.
+
+The TV box still needs a physical power-cycle; `192.168.1.188` has no ARP
+entry and refuses ADB. The phone `192.168.1.169` is reachable but its ADB TCP
+ports refuse connections.
