@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Optional native graphics enhancements
 
 The launcher exposes independent Texture packs, Texture filtering, Sharpening,

@@ -1,3 +1,5 @@
+> Design/research record, not a list of shipped features. See the [current guides](../README.md).
+
 # Launcher visual preview — implementation proposal
 
 User wants a real game-rendered preview in the left settings pane that updates with each change.

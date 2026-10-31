@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Android runtime 0.6.0 — 2026-10-08
 
 Includes [0.5.0 memory protection and profile storage](ANDROID_PROFILES_MEMORY_TEST.md).

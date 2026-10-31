@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Live session resume and remaining save-state work
 
 Phone0.14.13 fixes the launcher killing its existing :game process on Resume.

@@ -2184,3 +2184,35 @@ troubleshooting and build/dependency instructions. Historical docs currently des
 abandoned preview/older option names/phone-presets branch and need reconciliation.
 Do not present experimental snapshots or32bit source target as shipped capabilities.
 No emulator, watcher/server or detached task process started.
+
+
+## 2026-10-31 — Documentation overhaul for v0.14.14
+
+User continued after release, authorizing documentation phase. Replaced stale giant
+README (which claimed no public releases) with current quick start, release identity,
+features/limits, guide map and credits. Added docs/README index, INSTALLATION, CONTROLS,
+GRAPHICS, MULTIPLAYER, TROUBLESHOOTING and BUILDING guides. Rewrote current STATUS,
+ANDROID_UPDATES and FORK_MAINTENANCE. Current instructions checked against Java/native
+source, Gradle/manifest, release metadata and build scripts: actual data/save/backup
+paths, direct control map/right-stick/R3, fixed-strength haptic tests, live/streaming/
+NEXT START graphics, network distinctions, no durable snapshots, no32bit releaseasset.
+Build guide includes pinned pcrecomp14patches, local EXE normalization/seeds/lift/display
+patch, pinned DXVK prepare/shaders, native prerequisites and auditable signing process.
+Do not claim fresh-clone rebuild or reproducibility; commands syntax/path-checked.
+
+Preserved old README/update/maintenance/status pages in docs/archive with repaired
+relative links and clear archive banner. Other technical/history/design pages retain
+full content, prefixed with current-guide links and scope warnings. Release notes
+unchanged. DXVK README points to new build guide. No product code/signing/version changes.
+Validated166local links,7image refs across docs;89current-guide links incl heading anchors
+checked during drafting.11current shell examples bash-n, embedded Python AST and actual
+repository command paths checked. git diff --check passed. No runtime rebuild needed
+for documentation. No device interaction, emulator or background task started.
+
+GitHub default branch android/phone-presets was still5b6401e (afterv0.14.13), while
+release work lived on android/visual-effects. Fetched both; origin/android/phone-presets
+is ancestor ofHEAD. Push docs/current code normally to both branches using a fast-forward
+of canonical defaultbranch, so landing page and config/phone-update.json remain accurate.
+No default-branch rename, history rewrite, release-tag or APK modification. Default
+branch CI now follows current release source. Next user task can focus on their deferred
+controller-pointer and isolated haptic pattern tests; docs state that coverage pending.

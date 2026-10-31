@@ -1,3 +1,5 @@
+> Design/research record, not a list of shipped features. See the [current guides](../README.md).
+
 # Native free roam with other players
 
 Status: implemented through the host layer, the main-loop hook and the

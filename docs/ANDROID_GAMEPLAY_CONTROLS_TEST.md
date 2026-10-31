@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Android gameplay / controls 0.10.0 — 2026-10-08
 
 The generated audio callback changes described in

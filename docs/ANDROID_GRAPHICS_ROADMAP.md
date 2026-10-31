@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Native Android graphics upgrades
 
 Historical assessment from the English UI update, 2026-10-26.

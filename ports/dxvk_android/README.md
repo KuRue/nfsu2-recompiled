@@ -22,7 +22,7 @@ python3 ports/dxvk_android/shaders.py build/dxvk-source
 This generates and validates 54 built-in shaders for Vulkan 1.1. Application
 CMake links the prepared backend into `libnfsu2_android.so`. The locally lifted
 game sources and patched pcrecomp runtime must also exist as described in the
-project README. Build caches, shaders and fetched source are not committed.
+[build guide](../../docs/BUILDING.md). Build caches, shaders and fetched source are not committed.
 
 Changes include ARM64 intrinsics/spin-wait fallbacks, Android window/surface
 integration, conditional BC texture support, and a separate 32-bit guest COM

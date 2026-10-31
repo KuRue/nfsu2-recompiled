@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Android ARM64 / Vulkan 1.1
 
 Current runtime: [0.4.0 input/audio/device status](ANDROID_INPUT_AUDIO_TEST.md).

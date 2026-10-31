@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Differential test report
 
 Two levels, both "compare against a reference x86, not against expectations".

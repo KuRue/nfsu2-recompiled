@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Audio and frame pacing follow-up (2026-10-15)
 
 Tester reports affect all three PC ports, including Dimensity 9300/8400 and

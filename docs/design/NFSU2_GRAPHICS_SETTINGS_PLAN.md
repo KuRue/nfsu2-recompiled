@@ -1,3 +1,5 @@
+> Design/research record, not a list of shipped features. See the [current guides](../README.md).
+
 # Graphics settings overhaul — proposal
 
 Status: implemented 2026-10-30.

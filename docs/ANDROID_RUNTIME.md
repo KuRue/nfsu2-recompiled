@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Portable guest integration
 
 Current status: [0.4.0 device report](ANDROID_INPUT_AUDIO_TEST.md). Portable

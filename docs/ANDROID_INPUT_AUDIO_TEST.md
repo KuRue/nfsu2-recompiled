@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Android runtime 0.4.0 — 2026-10-07
 
 For subsequent profile-folder and memory protection work, see

@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # PC force feedback and Android controller output — 2026-10-31
 
 The user reports overlong curb rumble and weak traction feedback with an Xbox controller.

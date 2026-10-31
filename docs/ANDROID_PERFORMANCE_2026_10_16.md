@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Android race performance, 16 October 2026
 
 Testers with recent phones (Dimensity 9300/8500, Snapdragon 8 Gen 3) reported

@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # PS2 reference and next haptics architecture
 
 2026-10-26: user reports the revised DirectInput-to-phone mapping still feels the

@@ -1,87 +1,84 @@
-# Phone fork updates
+# Signed updates and upstream review
 
-The phone app lives in KuRue/nfsu2-recompiled on android/phone-presets. Upstream
-is codepdbh/nfsu2-recompiled. Keep phone changes in the fork; never replace the
-phone branch with upstream main. The older KuRue/nfsu2-android repository is a
-historical wrapper/handoff project, not this native app's update source.
+This guide is for maintainers. Players should follow
+[Installation → Update](INSTALLATION.md#update-an-existing-installation).
 
-## Check and review upstream
+The canonical fork branch is `android/phone-presets`. Current release work also
+lives on `android/visual-effects`; upstream remains
+[codepdbh/nfsu2-recompiled](https://github.com/codepdbh/nfsu2-recompiled).
+The separate KuRue/nfsu2-android repository is a historical wrapper/handoff project.
 
-From a clean phone checkout:
+## Review upstream without replacing the fork
 
-```
+From a clean canonical-branch checkout:
+
+```sh
 python3 scripts/phone_upstream.py
 python3 scripts/phone_upstream.py --prepare ../nfsu2-upstream-review
 ```
 
-The check fetches upstream/main and reports commit divergence. Prepare creates
-an integration branch/worktree at the committed phone HEAD; it does not merge,
-push, build or publish. It refuses dirty/wrong-branch preparation. Review the
-reported upstream commit in that worktree, merge it there, resolve conflicts,
-and test before merging the integration branch back into the phone branch.
-Retain the exact upstream commit in the review notes. Never auto-merge game code.
-Generated sources and local dependencies are not copied to a new worktree: follow
-the README build pipeline there with the required local game input and prepared
-pcrecomp/DXVK dependencies. There is no new upstream-only commit as of2026-10-26
-(a8c7a39ce7b75b7a49368445a9a2b7ca5cf6e1f3), so no integration was needed today.
+The first command fetches upstream/main and reports divergence. `--prepare` creates
+an isolated integration worktree from the current committed phone HEAD and refuses
+a dirty or wrong-branch checkout. It does not merge, build, push or publish.
+Review the reported upstream commit, merge in that worktree, resolve conflicts,
+and test before integrating back. Never reset/force-push the phone branch to upstream.
 
-## Build a reviewable phone APK
+Worktrees do not inherit untracked game C, prepared dependencies or signing files.
+Follow [Building](BUILDING.md) and keep proprietary artifacts local.
 
-On this prepared Linux build machine (Python3.11+, JDK17, SDK build-tools36.0.0,
-NDK28.2.13676358, CMake3.30.5), commit changes, then run:
+## Build an auditable signed artifact
 
-```
-python3 scripts/build_phone_update.py --version-code 26 --version-name 0.14.11
-```
+Commit the intended version/defaults and release notes before building. On the
+maintained build machine with the existing signing key and prerequisites:
 
-Use an increasing Android version code for subsequent releases. The script uses
-the existing local generated C, sibling pcrecomp, prepared build/dxvk-source and
-the existing ~/.android/debug.keystore. These are required local prerequisites;
-a clean GitHub checkout alone cannot build the game. No game inputs, lifted C,
-textures, keystore or APK are committed. Do not upload proprietary build logs or
-inputs to public CI. Do not run another Gradle build concurrently.
-
-The script builds one ARM64 debug-channel APK, verifies the package and pinned
-certificate in config/phone-update.json, and archives APK/build log/manifest under
-ignored build/phone-artifacts/<code>-<commit>/. The manifest records APK SHA256,
-source/upstream commits and dependency commits/dirty flags. It is an auditable
-local build process, not a promise of bit-for-bit reproducibility across machines.
-The output is neither installed nor published. Reusing the same destination is
-refused. A changed signer is an error, never something to bypass for convenience.
-
-## Preserve data and signing identity
-
-The installed phone channel is com.nfsu2.androidevolved.dev. Its signer certificate
-SHA256 is pinned in config/phone-update.json. Keep a secure backup of the existing
-private keystore outside Git; a replacement key cannot update this installed app.
-The current channel uses a debug key and remains a private development channel.
-A future public production signing/channel decision must be explicit.
-
-Install a verified APK over the current app, without uninstalling or clearing data:
-
-```
-adb -s PHONE_SERIAL install -r build/phone-artifacts/CODE-COMMIT/NFSU2-phone-dev-arm64.apk
+```sh
+# Example for a release after v0.14.14; choose the actual unused version/code.
+python3 scripts/build_phone_update.py --version-code 30 --version-name 0.14.15
 ```
 
-Matching package/signature preserves app preferences/private data; game saves and
-texture packs remain under /sdcard/nfsu2. Back up saves before a game-code update:
-an upstream change can alter save compatibility even when Android preserves files.
-Archive the last working APK and manifest. On this debuggable channel an older
-APK may be restored with `adb install -r -d OLD.apk`; Android may refuse a downgrade.
-Do not uninstall to work around a refusal: that can delete private settings. Restoring
-an APK does not undo save changes; restoring backups is a separate explicit action.
+The script refuses a dirty source tree, missing key/prerequisites, mismatched
+package/certificate/version, concurrent artifact build or reused destination.
+It builds the ARM64 debug channel, verifies its identity/signature, and archives
+APK, build log and manifest under `build/phone-artifacts/CODE-COMMIT/`.
+The manifest records source/upstream/dependency identities and APK SHA256. This is
+an auditable local build, not a bit-for-bit reproducibility claim.
 
-## In-app checks and publishing boundary
+The certificate is pinned in [config/phone-update.json](../config/phone-update.json).
+Use the existing private key outside Git. A new debug keystore cannot update the
+published package. Never commit/upload keys, game inputs, generated C or proprietary
+build logs. The current public fork releases remain debug-signed development builds.
+A production signing identity would be a separate migration decision.
 
-Debug phone builds check releases in KuRue/nfsu2-recompiled, with cache isolated
-from upstream. They open the fork release page for manual review, not an arbitrary
-APK asset. Stable numeric tags such as v0.14.11 are compared with the base installed
-version, ignoring only our fixed development suffix. Prereleases are excluded.
-Release notes resolve the base tag. The upstream production build keeps its original
-update source. No release exists in our fork yet; the app reports none available.
+## Install and roll back
 
-After device validation, a manually approved release can attach the verified
-phone APK, checksum and clear package/channel notes. Do not attach an upstream
-production APK to a phone-channel release. Publishing is not part of these scripts.
-Future automation can run source checks without proprietary inputs; public APK CI
-requires a separate decision about private inputs and signing credentials.
+Back up regular career saves and stop the game before an install that would
+interrupt it. Install without uninstalling or clearing data:
+
+```sh
+adb -s PHONE_SERIAL install -r /path/to/verified.apk
+```
+
+Same package/signature preserves Android preferences/private data. Keep the previous
+APK and manifest. For this debuggable channel, `adb install -r -d OLD.apk` may permit
+a downgrade; Android can refuse it. Do not uninstall as a workaround without
+understanding data loss. Downgrading an APK does not roll back save-file changes.
+
+## Publish deliberately
+
+Use explicit repository arguments: this checkout's implicit `gh` repository may
+resolve to upstream rather than the fork.
+
+1. Run relevant source/graphics checks and device tests. Record what is still unverified.
+2. Verify versionCode increases, package/signature continuity, supported ABI and ZIP integrity.
+3. Write notes against the **last fork release**, including upgrade steps and known limits.
+4. Commit/push source, tag the exact artifact source commit and attach only intended assets.
+5. Upload to a draft in `KuRue/nfsu2-recompiled`; compare remote asset sizes/digests with local files.
+6. Publish with the user's authorization, verify the latest-release metadata and public download,
+   then record tag, source hash, signer, checksums, tests and limitations.
+
+v0.14.14 ships APK, SHA256SUMS, build manifest and a copy of comprehensive notes.
+Source checks do not automatically publish APKs. In-app checks open the fork release
+page for manual review/install; development suffixes are ignored when comparing
+stable numeric release versions. Experimental prereleases are not normal update targets.
+
+[Index](README.md) · [Maintenance](FORK_MAINTENANCE.md)

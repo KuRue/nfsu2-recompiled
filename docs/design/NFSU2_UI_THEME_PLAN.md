@@ -1,3 +1,5 @@
+> Design/research record, not a list of shipped features. See the [current guides](../README.md).
+
 # NFSU2 native UI theme audit and plan
 
 2026-10-29. Evaluated native HEAD d3ee5a4, its launcher/control/dialog/benchmark source,

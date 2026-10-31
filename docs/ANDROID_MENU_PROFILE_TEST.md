@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Android runtime 0.7.0 — 2026-10-08
 
 Continues the [resolution/input work](ANDROID_RESOLUTION_INPUT_TEST.md)

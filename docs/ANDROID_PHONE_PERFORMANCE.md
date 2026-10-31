@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Phone performance pass — 2026-10-26
 
 Samsung SM-S938U1 (Adreno830), existing Balanced75%/60 configuration.

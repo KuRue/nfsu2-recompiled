@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Android issue review, 16 October 2026
 
 Reviewed 662 available Underground 2 issues including comments, alongside

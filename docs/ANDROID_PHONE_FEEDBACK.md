@@ -1,3 +1,5 @@
+> Technical record: this page may describe an earlier build or an experiment. Use the [current documentation index](README.md) for installation and supported behavior.
+
 # Phone vibration from game force feedback
 
 The newer default is [vehicle-physics feedback](ANDROID_PHYSICS_HAPTICS.md).
