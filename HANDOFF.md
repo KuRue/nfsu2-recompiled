@@ -2121,3 +2121,24 @@ Focused FeedbackEnvelopeTest and assembleDebug pass, diff clean. Phone dropped d
 turn; device_list no longer lists it; adb connect :38393 refused. APK NOT installed.
 Need current wireless ADB address from user, install then compare direct tests first.
 No emulator or detached process started. Docs updated with evidence/limitations.
+
+
+## 2026-10-31 — Reconnected40533; controller-only menu pointer
+
+User supplied :40533 and asked about mouse/touch-only Quit Game. Connected and
+installed pendingc027f96 haptics first, then built/installed this combined update.
+No universal focus setting found in local port path; current menu keyboard/joystick
+mapping cannot reach some PC mouse controls. Added always-on menu-only right-stick
+pointer and R3 left-click fallback via existing setGuestPointer. D-pad/left/A/B
+unchanged; driving right-stick axes and R3 lookback preserved. Suppress menu R3 and
+right-stick joystick delivery to avoid conflicts. Pure GamepadCursor handles18%
+deadzone, squared rate, clamped coordinates/elapsed,120Hz cap and click transitions;
+resets on driving/pause; cleared pad state releases on disconnect. Controls left pane
+explains mapping. No guest binary patch/new setting.
+
+assembleDebug14s and full check_phone_source.py pass including new gamepad_cursor
+regression and adjusted menu button-suppression expectation. diff clean. Installed
+final APK on SM-S938U1 :40533, launched Play. No NFSU2 error log in checked tail.
+Physical right-stick/R3 on Quit Game still needs user test; don't claim all menus
+validated. Haptics Test traction/Test impact now installed too. No emulator, server
+or other detached task process started. Docs updated.

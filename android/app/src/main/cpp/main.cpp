@@ -25,6 +25,7 @@
 #include "d3d9_bridge.h"
 #include "guest_boot_worker.h"
 #include "gamepad_input.h"
+#include "gamepad_cursor.h"
 #include "vulkan_driver.h"
 #include "nfs_widescreen.h"
 
@@ -385,6 +386,7 @@ struct Host {
     GuestBootWorker& guestWorker=processGuestWorker();
 };
 static GamepadInput gamepad;
+static GamepadCursor gamepadCursor;
 // Device ids the Java side accepted as real gamepads (updateGamepads). Events
 // from anything else never reach the pad: several MediaTek phones expose
 // sensors and side keys as joysticks whose X axis rests off centre.
@@ -415,7 +417,7 @@ static void onCommand(android_app* app, int32_t command) {
         // Returning to gameplay after an app switch should land on the pause
         // menu, not resume driving mid-corner; remember the guest was live.
         if (guestHasPresented()) pauseReturnPending = true;
-        setGuestPaused(true);gamepad.releaseAll(setPadKey);clearGuestInput();h.resumed = false; h.renderer.stop();acknowledgeD3D9Surface(false);setD3D9HostWindow(nullptr);
+        setGuestPaused(true);gamepadCursor.reset(setGuestPointer);gamepad.releaseAll(setPadKey);clearGuestInput();h.resumed = false; h.renderer.stop();acknowledgeD3D9Surface(false);setD3D9HostWindow(nullptr);
     }
     if (command == APP_CMD_TERM_WINDOW || command == APP_CMD_WINDOW_RESIZED || command == APP_CMD_INIT_WINDOW) {
         displayWindowEpoch.fetch_add(1,std::memory_order_release);
@@ -647,6 +649,7 @@ void android_main(android_app* app) {
         ANativeActivity_finish(app->activity);
         host.failed = true;
     }
+    auto cursorTick=std::chrono::steady_clock::now();
     while (!app->destroyRequested) {
         int events; android_poll_source* source = nullptr;
         const bool active = host.resumed && app->window && !host.failed && !host.quitRequested;
@@ -673,6 +676,9 @@ void android_main(android_app* app) {
         gamepad.setKeyEmulation(!guestGamepadInUse());if(gamepad.refresh(guestDrivingControls(),setPadKey))publishPad();
         if (app->destroyRequested) break;
         if (!host.resumed || !app->window || host.failed || host.quitRequested) continue;
+        auto cursorNow=std::chrono::steady_clock::now();
+        float cursorSeconds=std::chrono::duration<float>(cursorNow-cursorTick).count();cursorTick=cursorNow;
+        gamepadCursor.update(guestDrivingControls(),cursorSeconds,gamepad.cursorX(),gamepad.cursorY(),gamepad.cursorClick(),setGuestPointer);
         try {
             setD3D9HostWindow(app->window);
             if(d3d9RequestsSurface()){host.renderer.stop();acknowledgeD3D9Surface(true);}

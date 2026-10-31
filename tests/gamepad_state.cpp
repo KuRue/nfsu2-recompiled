@@ -26,7 +26,7 @@ int main(){
     pad.button(GamepadState::Y,true,true,send);require(keys[0x1c]&&!(pad.padState().buttons&(1u<<3)));
     pad.button(GamepadState::ThumbR,true,true,send);require(keys[0x30]&&!(pad.padState().buttons&(1u<<9)));
     pad.refresh(false,send);require(!keys[0x2e]&&!keys[0x1c]&&!keys[0x30]);
-    require((pad.padState().buttons&((1u<<2)|(1u<<3)|(1u<<9)))==((1u<<2)|(1u<<3)|(1u<<9)));
+    require((pad.padState().buttons&((1u<<2)|(1u<<3)|(1u<<9)))==((1u<<2)|(1u<<3)));
     pad.refresh(true,send);require(keys[0x2e]&&keys[0x1c]&&keys[0x30]);
     pad.releaseAll(send);require(!keys[0x2e]&&!keys[0x1c]&&!keys[0x30]&&pad.padState().buttons==0);
     pad.setKeyEmulation(true);pad.button(GamepadState::Y,true,true,send);require(keys[0x1c]&&!keys[0x30]);

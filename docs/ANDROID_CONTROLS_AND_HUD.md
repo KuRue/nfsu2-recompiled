@@ -71,3 +71,21 @@ Menus retain the normal joystick face buttons. Mode changes, disconnect and paus
 release held actions. Existing triggers and A/B joystick bindings are preserved.
 Tests cover both input modes, held-button mode transitions, duplicate suppression
 and release. Physical free-roam interaction confirmation is still required.
+
+
+### Controller pointer in PC menus (2026-10-31)
+
+D-pad/left stick and A/B retain menu navigation. Right stick moves the game's
+mouse pointer; R3 (right-stick click) left-clicks. This reaches controls such as
+Quit Game that are outside ordinary menu focus. Always enabled in non-driving
+game screens; no setting to enable. During driving, right stick is still the
+normal joystick axis and R3 still looks back. Android launcher/dialogs retain
+Android focus navigation. This does not claim every PC dialog has been audited.
+
+Pointer motion has18% dead zone, squared response for precision, bounded0–1
+coordinates and120Hz maximum updates. R3 and right-stick axes are withheld from
+the menu joystick path to prevent duplicate actions. Driving/pause/disconnect
+release clicks; pointer elapsed time is bounded after suspension. Regression tests
+cover dead zone, limits, held clicks, mode switch/release, invalid axis and long gaps.
+Build/full source checks passed; installed on SM-S938U1 :40533. Physical controller
+Quit Game confirmation remains pending.

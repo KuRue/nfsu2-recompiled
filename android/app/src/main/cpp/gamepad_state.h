@@ -24,9 +24,12 @@ public:
     // false while the game reads the pad as a DirectInput joystick.
     void setTriggerFallback(bool enabled){triggerFallback_=enabled;}
     void setKeyEmulation(bool emulate){emulate_=emulate;}
+    float cursorX()const{return rightX_;}
+    float cursorY()const{return rightY_;}
+    bool cursorClick()const{return buttons_[ThumbR];}
     GuestPadState padState()const{
         GuestPadState state;
-        state.leftX=stickX_;state.leftY=stickY_;state.rightX=rightX_;state.rightY=rightY_;
+        state.leftX=stickX_;state.leftY=stickY_;state.rightX=driving_?rightX_:0;state.rightY=driving_?rightY_:0;
         state.leftTrigger=std::fmax(leftTrigger_,buttons_[L2]?1.f:0.f);
         state.rightTrigger=std::fmax(rightTrigger_,buttons_[R2]?1.f:0.f);
         static constexpr Button order[]={A,B,X,Y,L1,R1,Select,Start,ThumbL,ThumbR};
@@ -35,7 +38,7 @@ public:
             // The game's own joystick defaults (from 2004, by button number) put
             // shifting on Back/Start, so no button is delivered to the joystick.
             if(driving_)continue;
-            if(buttons_[order[i]])state.buttons|=1u<<i;
+            if(order[i]!=ThumbR&&buttons_[order[i]])state.buttons|=1u<<i;
         }
         state.hatX=buttons_[Left]||hatX_<-.5f?-1:buttons_[Right]||hatX_>.5f?1:0;
         state.hatY=buttons_[Up]||hatY_<-.5f?-1:buttons_[Down]||hatY_>.5f?1:0;
