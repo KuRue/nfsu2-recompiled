@@ -2003,3 +2003,22 @@ No adb device connected, so APK NOT installed and visual/performance behavior NO
 phone. Includes preceding small top-right FPS and0–32 car slider build. No emulator, server,
 watcher or other detached process started. Next: reconnect phone, compare crowded scene with
 cache on/off and inspect skip counts; distance-based remote LOD remains future work.
+
+
+## 2026-10-31 — Installed cache/overlay/slider on phone :38393
+
+Connected SM-S938U1 192.168.1.169:38393, no live :game process before install. Installed
+1df505b debug APK via agent-device. Verified Nearby cars slider selected7 (screenshot
+/tmp/cache-slider-seven.png), cancelled and confirmed saved3 unchanged. Small gray top-right
+FPS visually verified in main menu /tmp/cache-game3.png and free roam /tmp/cache-roam.png.
+Loaded saved career via Resume Career > Garage > Explore. No visual state corruption seen.
+
+Live :game PID1555. Logs /tmp/cache-phone.log: cache27813161/30771558 skipped, then
+40185661/43658282 (~92% cumulative tracked scalar setters skipped; latter delta ~96%).
+This measures native setter suppression, NOT an FPS gain or reduction in total guest calls.
+Roam scene around52–54k guest graphics calls/frame; observations after initial loading
+~76–110FPS, loading sample40FPS; bridge ~3.3–3.8ms/frame afterward. No matched cache-off
+comparison performed; cannot attribute FPS to this change. Initial/menu visuals stable.
+Phone left live in free roam for user feel/crowd test, car limit3 and FPS enabled. No emulator,
+background logcat, recorder, server or other detached process started. Supersedes prior
+not-installed status for cache, top-right FPS and full0–32 slider.
