@@ -27,6 +27,18 @@ bool guestGamepadInUse();
 // Launcher option; only before the guest boots.
 void setGuestWidescreen(bool enabled);
 void setGuestOnlineServer(const std::string& host);
+// Free-roam host bridge (roam_host_android.cpp): guest memory and calls for
+// the portable roam_game.c, and the per-Present game hook.
+uint8_t* guestMemoryBase();
+bool guestMemoryReadable(uint32_t address,size_t length);
+bool guestMemoryWritable(uint32_t address,size_t length);
+// Calls a guest function with ECX/EDX set and restores the whole guest state
+// afterwards (the callee may use any calling convention).
+uint32_t guestCallRoam(uint32_t function,uint32_t ecx,uint32_t edx,const uint32_t* args,size_t count);
+uint64_t guestMonotonicNs();
+void setGuestRoamEnabled(bool enabled);
+bool guestRoamEnabled();
+void roamGuestFrame();
 // "ea", "lan" or "nfsu2": the virtual LAN backend is enabled for nfsu2 only.
 void setGuestNetworkProvider(const std::string& provider);
 // The Java /lan client: welcome, a binary switch frame, or the link closing.

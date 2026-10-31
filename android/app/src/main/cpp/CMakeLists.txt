@@ -121,9 +121,15 @@ endif()
 add_library(nfsu2_diagnostics SHARED gpu_probe.cpp vulkan_driver.cpp)
 target_link_libraries(nfsu2_diagnostics PRIVATE android log dl)
 target_compile_options(nfsu2_diagnostics PRIVATE -O2 -Wall -Wextra -Werror -Wno-missing-field-initializers)
-add_library(nfsu2_android SHARED main.cpp guest_runtime.cpp performance_hint.cpp d3d9_bridge.cpp vulkan_driver.cpp "${NFS_ROOT}/src/runtime/overrides.c" "${NFS_ROOT}/src/runtime/widescreen.c" $<TARGET_OBJECTS:nfs_guest>)
+add_library(nfsu2_android SHARED main.cpp guest_runtime.cpp performance_hint.cpp d3d9_bridge.cpp vulkan_driver.cpp roam_host_android.cpp roam/roam_core.c roam/roam_game.c roam/roam_bsd_android.c "${NFS_ROOT}/src/runtime/overrides.c" "${NFS_ROOT}/src/runtime/widescreen.c" $<TARGET_OBJECTS:nfs_guest>)
 target_include_directories(nfsu2_android SYSTEM PRIVATE "${DXVK_SOURCE}/include/native"
   "${DXVK_SOURCE}/include/native/windows" "${DXVK_SOURCE}/include/native/directx")
+target_include_directories(nfsu2_android PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/roam")
+# The portable free-roam game side is shared with the Mac/Windows hosts; the
+# Android build takes its Windows-compatible (non-Mac) paths for now, and its
+# 7k lines are upstream code with their own warning level.
+set_source_files_properties(roam/roam_core.c roam/roam_game.c roam/roam_bsd_android.c
+  PROPERTIES COMPILE_DEFINITIONS "ROAM_HOST_ANDROID=1;ROAM_HOST_WIN=1" COMPILE_OPTIONS "-w")
 target_include_directories(nfsu2_android PRIVATE "${PCRECOMP}/runtime/recomp32" "${PCRECOMP}/runtime/win32hle" "${NFS_ROOT}/src/runtime")
 # SPEED2.EXE build the generated code was lifted from (scripts/run_lift.py reads
 # the same NFSU2_EXE_BUILD environment variable). Empty = the documented build.
@@ -164,7 +170,7 @@ if(ANDROID_ABI STREQUAL "armeabi-v7a" AND NFS_ARMV7_TUNE)
     target_compile_options(nfsu2_android PRIVATE -mcpu=${NFS_ARMV7_TUNE} -mfpu=neon-vfpv4)
 endif()
 target_link_options(nfsu2_android PRIVATE "-uANativeActivity_onCreate")
-target_link_libraries(nfsu2_android PRIVATE native_app_glue android log vulkan dxvk_android aaudio dl)
+target_link_libraries(nfsu2_android PRIVATE native_app_glue android log vulkan dxvk_android aaudio dl m)
 if(NFS_GUEST_LTO)
     target_link_options(nfsu2_android PRIVATE -flto=thin "-Wl,--thinlto-jobs=4"
         "-Wl,--thinlto-cache-dir=${CMAKE_BINARY_DIR}/thinlto-cache")

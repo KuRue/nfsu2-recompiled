@@ -741,7 +741,7 @@ void applyPendingDisplay(){
 }
 }
 void d3dDispatch(){
-    if(d3dToken==0x7e002110u)maybeAutopilot();
+    if(d3dToken==0x7e002110u){maybeAutopilot();roamGuestFrame();}
 #ifdef __ANDROID__
     // Development: `debug.nfs.d3dinventory 1` logs live D3D objects by kind and pool every 10 s.
     if(d3dToken==0x7e002110u){static auto last=std::chrono::steady_clock::time_point{};auto now=std::chrono::steady_clock::now();
@@ -1899,6 +1899,23 @@ bool guestDisplaySchedule(unsigned& contentFps,unsigned& panelHz,unsigned& gener
     return first!=0&&first==second;
 }
 bool guestLanBroadcasts(){return lanBroadcastWanted.load(std::memory_order_acquire);}
+uint8_t* guestMemoryBase(){return memory?static_cast<uint8_t*>(memory->base()):nullptr;}
+bool guestMemoryReadable(uint32_t address,size_t length){return memory&&memory->readable(address,length);}
+bool guestMemoryWritable(uint32_t address,size_t length){return memory&&memory->writable(address,length);}
+uint64_t guestMonotonicNs(){return uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());}
+uint32_t guestCallRoam(uint32_t va,uint32_t ecx,uint32_t edx,const uint32_t* args,size_t count){
+    State saved;saved.save();
+    try{
+        recomp_func_t fn=recomp_lookup_manual(va);if(!fn)fn=recomp_lookup(va);
+        if(!fn)fn=recomp_lookup_import(va);
+        if(!fn)throw GuestStop("No guest function at "+hex(va));
+        for(size_t i=count;i--;){g_esp-=4;write32(g_esp,args[i]);}
+        g_esp-=4;write32(g_esp,RECOMP_RETADDR);
+        g_ecx=ecx;g_edx=edx;
+        fn();
+        uint32_t result=g_eax;saved.load();return result;
+    }catch(...){saved.load();throw;}
+}
 void setGuestBenchmark(unsigned seconds,const std::string& reportPath,const std::string& resolution){
     std::lock_guard<std::mutex> lock(benchmarkMutex);
     benchmarkSeconds=seconds>=5&&seconds<=120?seconds:0;
