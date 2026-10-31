@@ -19,8 +19,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 /**
- * On-screen controls drawn as icons, in the style of the MW port: round buttons, pedals and a steering
- * stick, no captions. One surface tracks independent fingers so steering and pedals can be held together.
+ * On-screen icon controls with the launcher's black frames, silver sheets and lime selection.
+ * Pedals and an analogue steering stick retain their own visual cues. One surface tracks independent fingers so steering and pedals can be held together.
  */
 final class RacingControlsView extends View {
     interface Keys { void set(int scan, boolean down); }
@@ -42,6 +42,7 @@ final class RacingControlsView extends View {
     private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
+    private final RectF controlFace = new RectF(), controlFrame = new RectF();
     private final ArrayList<Control> controls = new ArrayList<>();
     private final HashMap<Integer, Control> fingers = new HashMap<>();
     private boolean racing;
@@ -86,7 +87,7 @@ final class RacingControlsView extends View {
         whiteSoft=(white&0x00FFFFFF)|0xB3000000;
         ink=MenuTheme.color(getContext(),R.color.menu_ink);
         inkSoft=(ink&0x00FFFFFF)|0xCC000000;
-        panel=0xCC202420;
+        panel=MenuTheme.color(context,R.color.menu_sheet);
         barFill=0xE6101010;
         barStroke=(accent&0x00FFFFFF)|0x66000000;
         line.setStyle(Paint.Style.STROKE);line.setStrokeCap(Paint.Cap.ROUND);line.setStrokeJoin(Paint.Join.ROUND);
@@ -247,32 +248,43 @@ final class RacingControlsView extends View {
     private void drawControl(Canvas canvas,Control c) {
         boolean on=c.held>0, picked=editing&&c==selected;
         float cx=c.area.centerX(),cy=c.area.centerY(),r=Math.min(c.area.width(),c.area.height())/2;
-        int iconInk=on?ink:(white&0x00FFFFFF)|0xE6000000;
+        int iconInk=ink;
         line.setStrokeWidth(Math.max(1.6f,r*.06f));
+        // The menu's rounded black frame and independent silver sheet, kept inside
+        // the existing hit area. The wheel retains its round analogue vocabulary.
+        boolean wheel=c.shape==WHEEL;
+        float corner=Math.min(8f,r*.25f),inset=Math.max(3f,r*.12f);
+        controlFrame.set(c.area);
+        if(!wheel&&c.shape!=PEDAL){
+            // The existing round hit test stays unchanged: all painted corners fit
+            // inside it, with a forgiving touch margin around the visible frame.
+            controlFrame.inset(r*.15f,r*.15f);corner=r*.3f;
+        }
+        fill.setColor(barFill);
+        if(wheel)canvas.drawCircle(cx,cy,r,fill);
+        else canvas.drawRoundRect(controlFrame,corner,corner,fill);
+        controlFace.set(controlFrame);controlFace.inset(inset,inset);
+        fill.setColor(on?(accent&0x00FFFFFF)|0xE0000000:panel);
+        if(wheel)canvas.drawCircle(cx,cy,r-inset,fill);
+        else canvas.drawRoundRect(controlFace,corner*.7f,corner*.7f,fill);
+        line.setColor(picked?white:on||c.scan==BAR?accent:barStroke);
+        line.setStrokeWidth(picked||on?2f:1f);
+        if(wheel)canvas.drawCircle(cx,cy,r-1,line);
+        else canvas.drawRoundRect(controlFrame,corner,corner,line);
         if(c.shape==PEDAL) {
-            float corner=c.area.width()*.28f;
-            fill.setColor((c.color&0x00FFFFFF)|(on?0xD0000000:0x99000000));
-            canvas.drawRoundRect(c.area,corner,corner,fill);
-            line.setColor(picked?white:on?accent:whiteSoft);
-            canvas.drawRoundRect(c.area,corner,corner,line);
-            // Grip ridges like a real pedal, then the direction it drives.
-            line.setColor(on?inkSoft:(white&0x00FFFFFF)|0x66000000);
-            float span=c.area.width()*.28f;
+            // Restrained inset grip lines; gas/brake keep their direction icons.
+            line.setColor(inkSoft);line.setStrokeWidth(1.5f);
+            float span=c.area.width()*.25f;
             for(int i=0;i<4;++i){float y=c.area.top+c.area.height()*(.52f+i*.11f);canvas.drawLine(cx-span,y,cx+span,y,line);}
             line.setColor(iconInk);line.setStrokeWidth(Math.max(2.4f,c.area.width()*.06f));
             chevron(canvas,cx,c.area.top+c.area.height()*.27f,c.area.width()*.22f,c.icon.equals("gas"));
             return;
         }
-        fill.setColor(0x55000000);canvas.drawCircle(cx,cy+r*.06f,r,fill);
-        fill.setColor(on?(accent&0x00FFFFFF)|0xD0000000:panel);canvas.drawCircle(cx,cy,r,fill);
-        int ring=faceColor(c);
-        line.setColor(picked?white:on?accent:c.scan==BAR?accent:ring!=0?ring:whiteSoft);
-        canvas.drawCircle(cx,cy,r-line.getStrokeWidth()/2,line);
         if(c.shape==WHEEL) {
             fill.setColor(on?accent:0xCC2A2E28);
             float knob=r*.4f,kx=cx+c.steering*(r-knob);
-            canvas.drawCircle(kx,cy,knob,fill);line.setColor(whiteSoft);canvas.drawCircle(kx,cy,knob,line);
-            line.setColor((white&0x00FFFFFF)|0x80000000);chevronSide(canvas,cx-r*.78f,cy,r*.12f,true);chevronSide(canvas,cx+r*.78f,cy,r*.12f,false);
+            canvas.drawCircle(kx,cy,knob,fill);line.setColor(inkSoft);canvas.drawCircle(kx,cy,knob,line);
+            line.setColor(inkSoft);chevronSide(canvas,cx-r*.78f,cy,r*.12f,true);chevronSide(canvas,cx+r*.78f,cy,r*.12f,false);
             return;
         }
         line.setColor(iconInk);fill.setColor(iconInk);line.setStrokeWidth(Math.max(2.2f,r*.1f));
@@ -369,7 +381,9 @@ final class RacingControlsView extends View {
     }
     private void glyph(Canvas canvas,String value,float x,float y,float size,boolean on) {glyph(canvas,value,x,y,size,on,0);}
     private void glyph(Canvas canvas,String value,float x,float y,float size,boolean on,int color) {
-        text.setTextSize(size);text.setColor(on?ink:color!=0?color:white);
+        text.setTextSize(size);text.setColor(color!=0&&!on?color:ink);
+        // Controller identity colors sit on a dark medallion, avoiding pastel-on-silver.
+        if(color!=0&&!on){fill.setColor(barFill);canvas.drawCircle(x,y,size*.64f,fill);}
         canvas.drawText(value,x,y-(text.ascent()+text.descent())/2,text);
     }
     private void drawToolbarButton(Canvas canvas,RectF area,String label) {

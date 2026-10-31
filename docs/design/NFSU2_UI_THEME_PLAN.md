@@ -228,3 +228,11 @@ editor actions are outlined with SAVE as the lime primary and the rest as white
 secondary actions. Idle faces are darker with soft white rings, held controls
 use lime, and editor selection is white. Pedal red/green and controller face
 colors remain semantic. Hitboxes and saved layouts are unchanged.
+
+### 2026-10-31 — Controls use the menu sheet vocabulary
+
+Touch buttons/pedals use black rounded frames, translucent menu_sheet faces, dark icon ink and
+lime pressed states. The steering disc remains circular. Controller identity colors are kept
+on small dark medallions. Ordinary painted corners remain inside the unchanged round hit areas.
+Use the debug-only ControlsThemePreviewActivity for isolated visual checks without starting or
+interrupting a game. Real gameplay contrast still needs checking before claiming phone validation.

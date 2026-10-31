@@ -1872,3 +1872,19 @@ and the `ku` profile restored from `/tmp/nfsu2_box_appdata`:
 The TV box still needs a physical power-cycle; `192.168.1.188` has no ARP
 entry and refuses ADB. The phone `192.168.1.169` is reachable but its ADB TCP
 ports refuse connections.
+
+## 2026-10-31 — Touch controls match silver launcher sheets
+
+RacingControlsView now uses rounded black frames and independent translucent silver faces,
+dark icon ink, lime held states, and the existing white editor selection. Pedals share the
+same treatment with inset grip lines; the analogue wheel stays round. Colored Xbox/PS glyphs
+have small dark medallions for contrast. Normal rounded frames fit entirely within existing
+round hit zones; mappings, hit tests, saved layouts and input code unchanged. Paint/RectF reused.
+
+Added debug-only ControlsThemePreviewActivity (no game boot; separate fixture preferences) to
+verify the actual view without closing the phone's running free-roam session (PID 14086 on
+:44329). Build passed. Emulator s25u_sim: inspected classic controls/dock/editor and held gas;
+fixture logged scan 200 down then up, lime active state screenshot captured. Images:
+/tmp/nfsu2-controls-silver-final.png, /tmp/nfsu2-controls-editor-final.png,
+/tmp/nfsu2-controls-held-final.png. This was an isolated flat-background UI check, not in-game
+contrast/performance validation. Phone APK deliberately not installed while its session is live.
