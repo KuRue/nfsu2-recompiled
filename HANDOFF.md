@@ -2078,3 +2078,15 @@ Follow-up live log at11:10:43–45 confirms real-game caller005c06a0 damper13541
 gain10000/indefinite duration/condition6400. Java playing amplitudes70 and21 while
 dual route selected; no fatal error observed. Original effect trace and combined-output
 activity now observed during driving; perceptual confirmation still pending.
+
+
+## 2026-10-31 — User completed dual-motor driving trace
+
+User replied Done to curb/slide/wall test, without subjective comparison. Read PID25336
+logcat to /tmp/haptic-drive-result.log.214 valid1Hz physics samples, grip peak209,
+surface peak22;25 impact waveforms amplitudes157–255. Final slide11:14:31–32 shows
+wheel slip0.946 / lateral angle75.68°, grip209/surface0, packets channel1. Final
+impacts events24/25 logged166/228; straight/stopped samples return channels0/0;
+paused/frozen clock silences output. Confirms signal separation/output activity,
+not subjective improvement or event-perfect classification. Request how curb duration
+and slide strength felt before further tuning. No code/build/install needed this turn.
