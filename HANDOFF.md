@@ -2142,3 +2142,45 @@ final APK on SM-S938U1 :40533, launched Play. No NFSU2 error log in checked tail
 Physical right-stick/R3 on Quit Game still needs user test; don't claim all menus
 validated. Haptics Test traction/Test impact now installed too. No emulator, server
 or other detached task process started. Docs updated.
+
+
+## 2026-10-31 — v0.14.14 published; documentation overhaul next
+
+User explicitly authorized review/comprehensive release notes/publishing. Reviewed full
+fork range v0.14.13..a4ab6c8 (86 commits incl handoff history), final source diff and
+latest option/runtime paths. Use explicit gh -R KuRue/nfsu2-recompiled: gh's implicit
+repo here resolves upstream, whose v0.14.12 is NOT our baseline. Last fork release
+v0.14.13 tag7ec05d3. Bumped defaults to versionCode29/versionName0.14.14, enabled
+source-check workflow on android/visual-effects, comprehensive notes at
+docs/releases/v0.14.14.md (~10KB, all final features + validation/known limits).
+
+Release source0140051f13e8596705fcce86f784b914961b4572, annotated tagv0.14.14.
+Built via scripts/build_phone_update.py --version-code29 --version-name0.14.14
+(actual arguments spaced); archive build/phone-artifacts/29-0140051f13e8.
+Packagecom.nfsu2.androidevolved.dev, version0.14.14-phone-dev-physics, ARM64 only,
+NFS_RESUMABLE remainsOFF. Certificatea143c5d... matched both pinned config AND
+previous downloaded v0.14.13 APK. APK68893464bytes, SHA256
+e5f1be36c5d4ddee5c4d68d1a3484586223ae6e2bc7f33959011a009b9406cea.
+No EXE in ZIP; onlyarm64-v8a; ZIP integrity passed. Full source, graphics memory/
+COM/program/buffer/texture/device suites and supported-game preflight passed.
+Build10s. No measured universal FPS gain claimed, latest haptics/pointer subjective
+coverage explicitly qualified. Asked user controller-pointer Quit Game test via
+async question; response not received before publication. No last-minute phone
+install: game PID31340 active on :40533, avoid interrupting their test.
+
+Published latest stable (not draft/prerelease):
+https://github.com/KuRue/nfsu2-recompiled/releases/tag/v0.14.14
+Assets: NFSU2-AndroidEvolved-v0.14.14-arm64.apk, NFSU2-v0.14.14-build-manifest.json,
+NFSU2-v0.14.14-release-notes.md, NFSU2-v0.14.14-SHA256SUMS.txt.
+All four remote asset SHA256/size/state verified against local files before
+publishing; release body matched tracked notes. Latest release API correct;
+public APK HEAD returnedHTTP200. Files staged under build/releases/v0.14.14.
+
+User says documentation redo after release. Not done in this release pass.
+Next audit/rewrite should replace stale README/update docs and consolidate current
+install/update identity, supported game inputs, controllers/cursor, graphics
+live-vs-next-start, network modes/free roam, haptics/test buttons, known limits,
+troubleshooting and build/dependency instructions. Historical docs currently describe
+abandoned preview/older option names/phone-presets branch and need reconciliation.
+Do not present experimental snapshots or32bit source target as shipped capabilities.
+No emulator, watcher/server or detached task process started.
