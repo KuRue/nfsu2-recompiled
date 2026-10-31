@@ -38,7 +38,7 @@ uint32_t guestCallRoam(uint32_t function,uint32_t ecx,uint32_t edx,const uint32_
 uint64_t guestMonotonicNs();
 void setGuestRoamEnabled(bool enabled);
 bool guestRoamEnabled();
-void roamGuestFrame();
+extern "C" void roamGuestFrame();
 bool guestSwitchActive();
 bool guestSwitchSendRaw(uint8_t kind,uint32_t dst,uint16_t sport,uint16_t dport,const uint8_t* data,size_t length);
 // "ea", "lan" or "nfsu2": the virtual LAN backend is enabled for nfsu2 only.

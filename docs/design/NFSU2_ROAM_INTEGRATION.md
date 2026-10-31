@@ -1,8 +1,9 @@
 # Native free roam with other players
 
-Status: design, not implemented. This is the path for nfsu2.xyz free roam in
-the native Android app, reusing the browser/Mac free-roam code instead of
-rewriting it.
+Status: implemented through the host layer, the main-loop hook and the
+nfsu2.xyz switch transport; remote cars are not yet visually verified on the
+TV box.  This is the path for nfsu2.xyz free roam in the native Android app,
+reusing the browser/Mac free-roam code instead of rewriting it.
 
 ## What already exists
 
@@ -34,7 +35,7 @@ executable SHA on the device before relying on every address.
 ```
  guest game (lifted x86 -> ARM)
         |
-        |  per-frame hook (Present first, 0x581475 later)
+        |  per-frame hook (0x581475, the game main loop)
         v
  roam_game_frame(CPU*)  --- guest memory --->  game state, CreateCar, SetRideInfo
         |
@@ -69,11 +70,14 @@ can define an empty `CPU` struct and ignore the pointer.
 
 ### 2. Per-frame hook
 
-- **PoC:** call `roam_game_frame()` from `d3dDispatch` at Present
+- **PoC (replaced):** call `roam_game_frame()` from `d3dDispatch` at Present
   (`0x7e002110`), on the guest thread, after the game has updated the world.
   Remote car poses then appear one frame later; acceptable.
-- **Final:** add a `recomp_hook` site at `0x00581475` (the browser/Mac hook,
-  between World::DoTimestep and the camera/render) through `config/hooks.txt`
+- **Implemented:** a `recomp_hook` site at `0x00581475` (the browser/Mac hook,
+  between World::DoTimestep and the camera/render) in `config/hooks.txt`;
+  `src/runtime/widescreen.c` calls the Android host's `roamGuestFrame()`.
+  Present runs `maybeAutopilot()` only.  The lift must be regenerated after
+  changing the hook list (`scripts/run_lift.py lift ...`).
   and the lift/build pipeline. This removes the one-frame lag and matches the
   tested upstream timing.
 
@@ -128,7 +132,10 @@ The hook must do nothing unless the game is in free roam:
   `G_PLAYER1`) before porting the car slots.
 - **Guest calls:** `rh_call` is thiscall/cdecl with arbitrary ECX/EDX; the
   current `callGuest` has no ECX/EDX variant, so add `callGuestEx` and tests.
-- **Hook timing:** Present is safe but one frame late; the 0x581475 site needs
+- **Hook timing:** Present ran inside the D3D9 Present dispatch and a friend's
+  car load during career loading crashed with an invalid D3D9 COM object
+  (IndexBuffer token on a Device). The 0x581475 main-loop site is now used;
+  it needs
   a re-lift or a generated-code patch.
 - **Transport:** nfsu2.xyz's switch routes by VIP; the hub is not a normal UDP
   server. Keep the real-LAN path as the reference test.

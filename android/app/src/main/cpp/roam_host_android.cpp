@@ -126,7 +126,7 @@ void setGuestRoamEnabled(bool enabled) {
     if (enabled && !g_mem) g_mem = guestMemoryBase();
 }
 
-void roamGuestFrame() {
+extern "C" void roamGuestFrame() {
     if (!guestRoamEnabled()) return;
     if (!g_mem) g_mem = guestMemoryBase();
     if (!g_mem) return;

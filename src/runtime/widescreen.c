@@ -24,6 +24,9 @@
 
 typedef struct { float pos_x, pos_y, offset_x, offset_y; } hud_entry;
 #include "hud_defaults.inc"
+#ifdef __ANDROID__
+void roamGuestFrame(void);
+#endif
 static hud_entry s_hud[256];
 static unsigned s_hud_count;
 static int s_enabled;
@@ -89,12 +92,12 @@ static void adjust_mem_pair(uint32_t vx, uint32_t vy) {
  * SPEED2.EXE build, chosen at lift and compile time with NFSU2_EXE_BUILD:
  * the documented build (default, README "Tested Game Build") or f4bb0d99
  * (R36S port, PR #683), whose code sits at other addresses. */
-enum { HUD_A0, HUD_74A, HUD_84, HUD_94, HUD_74B, HUD_1A0, HUD_GLOBAL, MIRROR_R1, MIRROR_L1, MIRROR_L2, MIRROR_R2, BORDER_38, BORDER_48, BORDER_2C, BORDER_3C, RADAR_W30, RADAR_W40, RADAR_H44, RADAR_H54, HUD_HOOK, BLIPS_HOOK, HUD_HOOK2, STOP_SIGN, FMV_QUAD, FOV_SCALE, FOV_CONST1, FOV_CONST2, FOV_CONST3, FRAME_TIME, SITE_COUNT };
+enum { HUD_A0, HUD_74A, HUD_84, HUD_94, HUD_74B, HUD_1A0, HUD_GLOBAL, MIRROR_R1, MIRROR_L1, MIRROR_L2, MIRROR_R2, BORDER_38, BORDER_48, BORDER_2C, BORDER_3C, RADAR_W30, RADAR_W40, RADAR_H44, RADAR_H54, HUD_HOOK, BLIPS_HOOK, HUD_HOOK2, STOP_SIGN, FMV_QUAD, FOV_SCALE, FOV_CONST1, FOV_CONST2, FOV_CONST3, FRAME_TIME, ROAM_HOOK, SITE_COUNT };
 static const uint32_t k_sites[SITE_COUNT] = {
 #if defined(NFSU2_EXE_F4BB0D99)
-    0x0051B05Fu, 0x0053655Cu, 0x0053672Du, 0x0053695Du, 0x00536CA5u, 0x0050B099u, 0x0048B5D4u, 0x005CBDCDu, 0x005CBDDDu, 0x005CBDEDu, 0x005CBDFDu, 0x005CBBC9u, 0x005CBBD9u, 0x005CBB5Du, 0x005CBB75u, 0x005C6F3Eu, 0x005C6F4Eu, 0x005C6F56u, 0x005C6F66u, 0x0051AE28u, 0x0051D2E5u, 0x004C6589u, 0x00504D5Fu, 0x005366C2u, 0x005C7C34u, 0x005C7CBEu, 0x005C7CD0u, 0x005C7CF5u, 0x005D2962u,
+    0x0051B05Fu, 0x0053655Cu, 0x0053672Du, 0x0053695Du, 0x00536CA5u, 0x0050B099u, 0x0048B5D4u, 0x005CBDCDu, 0x005CBDDDu, 0x005CBDEDu, 0x005CBDFDu, 0x005CBBC9u, 0x005CBBD9u, 0x005CBB5Du, 0x005CBB75u, 0x005C6F3Eu, 0x005C6F4Eu, 0x005C6F56u, 0x005C6F66u, 0x0051AE28u, 0x0051D2E5u, 0x004C6589u, 0x00504D5Fu, 0x005366C2u, 0x005C7C34u, 0x005C7CBEu, 0x005C7CD0u, 0x005C7CF5u, 0x005D2962u, 0xFFFFFFFFu,
 #else
-    0x0051B3CFu, 0x005368CCu, 0x00536A9Du, 0x00536CCDu, 0x00537015u, 0x0050B4F9u, 0x0048B644u, 0x005CC0FDu, 0x005CC10Du, 0x005CC11Du, 0x005CC12Du, 0x005CBEF9u, 0x005CBF09u, 0x005CBE8Du, 0x005CBEA5u, 0x005C726Eu, 0x005C727Eu, 0x005C7286u, 0x005C7296u, 0x0051B198u, 0x0051D655u, 0x004C6759u, 0x0050516Fu, 0x00536A32u, 0x005C7F64u, 0x005C7FEEu, 0x005C8000u, 0x005C8025u, 0x005D2C12u,
+    0x0051B3CFu, 0x005368CCu, 0x00536A9Du, 0x00536CCDu, 0x00537015u, 0x0050B4F9u, 0x0048B644u, 0x005CC0FDu, 0x005CC10Du, 0x005CC11Du, 0x005CC12Du, 0x005CBEF9u, 0x005CBF09u, 0x005CBE8Du, 0x005CBEA5u, 0x005C726Eu, 0x005C727Eu, 0x005C7286u, 0x005C7296u, 0x0051B198u, 0x0051D655u, 0x004C6759u, 0x0050516Fu, 0x00536A32u, 0x005C7F64u, 0x005C7FEEu, 0x005C8000u, 0x005C8025u, 0x005D2C12u, 0x00581475u,
 #endif
 };
 #if defined(NFSU2_EXE_F4BB0D99)
@@ -162,12 +165,19 @@ static void set_esp_float(uint32_t offset, float value) { wrf(g_esp + offset, va
 void recomp_hook(uint32_t va) {
     int site = 0;
     while (site < SITE_COUNT && k_sites[site] != va) ++site;
-    if (!s_enabled && site != FRAME_TIME) return;
+    if (!s_enabled && site != FRAME_TIME && site != ROAM_HOOK) return;
     { static int trace = -1; static uint32_t seen[SITE_COUNT]; static int count;
       if (trace < 0) trace = getenv("NFSU2_WS_TRACE") != NULL;   /* first hit of each site */
       if (trace) { int k; for (k = 0; k < count && seen[k] != va; ++k) ;
           if (k == count && count < SITE_COUNT) { seen[count++] = va; printf("[WS] hook %08x esp=%08x\n", va, g_esp); fflush(stdout); } } }
     switch (site) {
+    /* Free roam: run the game side between update and render, on the guest
+     * thread (the hook the Mac port uses; the Android host supplies it). */
+    case ROAM_HOOK:
+#ifdef __ANDROID__
+        roamGuestFrame();
+#endif
+        break;
     /* HUD anchors: `mov [esp+N], 320.0` -> fHudPosX (pattern offsets 4/7). */
     case HUD_A0: set_esp_float(0xA0, s_hud_pos_x); break;
     case HUD_74A: set_esp_float(0x74, s_hud_pos_x); break;

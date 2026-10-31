@@ -1793,3 +1793,57 @@ Without UG2_Speech.big the frontend crashed with SIGSEGV; with the English
 speech bank and its index it boots. 34 MB free after the copy, so the full
 MOVIES/TEXPACKS/pfdata set needs ~2 GB freed (preinstalled streaming apps) or
 an external USB volume.
+
+## 2026-10-31: free roam on the switch, and the main-loop hook
+
+The portable free-roam game side now runs on Android against the nfsu2.xyz
+switch, not just real LAN:
+
+- `roam_host_android.cpp` supplies the `roam_host.h` API from the recomp:
+  guest memory (`g_mem`), `guestCallRoam` (ECX/EDX + stack arguments, whole
+  guest state restored), `debug.nfs.roam.*` system properties, logging, and
+  no-op HUD/horn/carsfx helpers. It compiles with `ROAM_HOST_WIN` +
+  `ROAM_HOST_ANDROID` for now, so the first build uses the game's parked
+  opponent cars (5 remote cars, `MAX_CARS=5`).
+- `roam_bsd_android.c` is the BSD socket transport with the switch path:
+  when the nfsu2.xyz provider is active it installs a switch `io.send` and
+  sets the hub to `10.77.0.253:47210`; `roam_switch_receive` takes kind-1
+  frames (16-byte switch header, no LAN header) and feeds `rc_receive`.
+- `guest_lan.inc` routes kind-1 frames to `roam_switch_receive` before taking
+  the virtual-LAN lock, and `sendRaw` writes the 16-byte header directly
+  (source/destination VIP, source/destination port, then `N2FR`).
+- The switch has no receive thread of its own, so the first build sent only
+  the initial 2 packets: the hub answered 12 lists and then went silent.
+  `roam_switch_pump()` is now called from the frame hook; the hub answers
+  continuously (59+ lists, 30+ HELLOs in 30 s) and the earlier "hub silent,
+  N HELLOs ignored" line is gone.
+- `roam_game_frame` moved out of the D3D9 Present dispatch to the game's
+  main-loop hook at `0x00581475` (the same site the Mac port uses). The
+  Present path was crashing while loading a career with friends nearby:
+  `Invalid D3D9 COM call object=... token=7e007020 kind=7 method=2
+  actualKind=2`, i.e. an IndexBuffer wrapper used after a Device took its
+  guest address. `config/hooks.txt` now lists `0x00581475`,
+  `src/runtime/widescreen.c` calls `roamGuestFrame()` there, and the
+  generated code was re-lifted; Present still runs `maybeAutopilot()` only.
+  Regenerate with
+  `build/venv/bin/python scripts/run_lift.py lift work/SPEED2.analysis.exe work/catalog.json src/recomp/gen`
+  and then `python3 scripts/patch_display_menu.py`.
+
+Device state at the end of the session: the TV box (`192.168.1.188`) installed
+the new 150 MB debug APK, started, reached the title screen and ran the
+main-loop hook for ~740 frames; the hub answered. A touch and the on-screen
+check were sent to continue the profile, and the box then disappeared from
+the LAN (`No route to host`, no ARP entry) while the ADB shell was blocked.
+It needs a physical power-cycle; the phone (`192.168.1.169`) is reachable but
+its ADB TCP ports refuse connections. Remote-car spawn and the career-load
+crash fix are therefore unverified.
+
+Next:
+1. Power-cycle the box, load Career > Load Game > `ku`, and watch
+   `adb logcat -s NFSU2Roam` for `JOIN`, `slot ...: loading`, and
+   `friend(s)` once `G_FLOW=6`.
+2. If the D3D9 COM crash returns at the main-loop hook, switch the Android
+   build from the Windows plugin path (`ROAM_HOST_WIN`) to the portable
+   (Mac) path: `NOPP=0`, all friends' cars outside the car index, and the
+   texture override for paint slots.
+3. Then verify a second client sees the box's car and both move.
