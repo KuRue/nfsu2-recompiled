@@ -1928,3 +1928,34 @@ proof /tmp/online-test-world-map.png. New silver touch navigation controls visib
 startup /tmp/online-test-boot.png. Controls can hide with an active physical controller (existing
 behavior). Game left running in free roam; no emulator, recorder or background log process
 started. This supersedes the earlier pending-install/phone-verification notes.
+
+
+## 2026-10-31 — Crowded online performance, clean quit, softer surfaces, FPS
+
+Phone profiling showed crowded scenes around 40–49k graphics calls/frame versus ~17k in
+lighter scenes; roam bookkeeping averaged only ~0.3–0.4ms. Added Game > Nearby cars (2/3/5,
+default 3 instead of 5), applied at fresh game launch. Other peers remain on the map. Android
+serializes heavy remote-car/texture loads to one per frame instead of two. This reduces the
+render/load budget; no matched-scene before/after FPS gain has been measured.
+
+Implemented user32 DestroyWindow (destroy notifications, handle removal, invalid-handle error)
+and normal CRT-return exit signaling. Keep NativeActivity lifecycle polling after guest quit,
+then close only the completed :game process with an independent Java timer. LAN callbacks and
+queued toasts check running, avoiding a connection-retry toast during intentional shutdown.
+Final installed APK tested through the actual Main Menu > Quit Game confirmation on SM-S938U1
+192.168.1.169:44329: returned to launcher Play, no error screen, and pidof :game returned empty.
+Proof /tmp/quit-final.png. Earlier build also exercised ExitProcess(0) from 0075d419.
+
+Surface feedback uses 100ms attack / 180ms release smoothing, amplitude capped at 45 instead
+of 65, and amplitude-controlled phone motors blend surface updates over a waveform rather
+than repeatedly starting crisp short pulses. Grip and impacts retain their strengths/priority.
+Physics haptics regression passes; actual sidewalk feel still requires user comparison.
+
+Added optional Graphics setup > FPS counter, also live in the in-game Performance panel.
+Measures successful D3D9 Presents over elapsed time every 500ms; pauses sampling in background.
+Default off, left ON on this phone. Verified actual changing values (loading 8, title 30,
+menus 120, crowded roam ~50–54 FPS); these are scene observations, not an optimization benchmark.
+
+assembleDebug and full scripts/check_phone_source.py passed; git diff --check clean. Latest
+APK installed. Phone left on launcher after final quit test. No emulator or detached background
+process started. Nearby-car setting requires a new game process; FPS visibility applies live.

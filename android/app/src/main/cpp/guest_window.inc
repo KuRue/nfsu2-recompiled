@@ -15,6 +15,13 @@ uint32_t windowMessage(uint32_t handle,uint32_t message,uint32_t wparam,uint32_t
     auto window=windows.find(handle);if(window==windows.end())return 0;
     return callGuest(window->second.procedure,{handle,message,wparam,lparam});
 }
+void destroyWindow(){
+    uint32_t handle=arg(0);
+    if(!windows.count(handle)){lastError=1400;ret(0,1);return;}
+    windowMessage(handle,2,0,0);       // WM_DESTROY: the game posts WM_QUIT.
+    windowMessage(handle,0x82,0,0);    // WM_NCDESTROY while HWND is still valid.
+    windows.erase(handle);ret(1,1);
+}
 void createWindowEx(){
     const GuestWindowClass* cls=nullptr;uint32_t name=arg(1);
     if(name<=0xffff){for(auto& record:windowClasses)if(record.second.atom==name){cls=&record.second;break;}}

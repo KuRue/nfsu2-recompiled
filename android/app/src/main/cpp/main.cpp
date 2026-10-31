@@ -649,7 +649,7 @@ void android_main(android_app* app) {
     }
     while (!app->destroyRequested) {
         int events; android_poll_source* source = nullptr;
-        const bool active = host.resumed && app->window && !host.failed;
+        const bool active = host.resumed && app->window && !host.failed && !host.quitRequested;
         int id = ALooper_pollOnce(active ? (d3d9RequestsSurface()?16:0) : -1, nullptr, &events, reinterpret_cast<void**>(&source));
         if (id >= 0 && source) source->process(app, source);
         applyDisplaySchedule(app);
@@ -665,12 +665,14 @@ void android_main(android_app* app) {
             host.renderer.stop();
             __android_log_print(ANDROID_LOG_INFO,"NFSU2","Guest quit requested; returning to the launcher");
             notifyGameExit(app);
-            break;
+            // Keep pumping NativeActivity lifecycle commands until Java finishes.
+            // Returning here leaves onPause waiting for a thread that no longer polls.
+            continue;
         }
         if(gamepadsRemoved.exchange(false)){gamepad.releaseAll(setPadKey);publishPad();}
         gamepad.setKeyEmulation(!guestGamepadInUse());if(gamepad.refresh(guestDrivingControls(),setPadKey))publishPad();
         if (app->destroyRequested) break;
-        if (!host.resumed || !app->window || host.failed) continue;
+        if (!host.resumed || !app->window || host.failed || host.quitRequested) continue;
         try {
             setD3D9HostWindow(app->window);
             if(d3d9RequestsSurface()){host.renderer.stop();acknowledgeD3D9Surface(true);}
@@ -717,4 +719,12 @@ void android_main(android_app* app) {
     host.renderer.stop();
     acknowledgeD3D9Surface(false);setD3D9HostWindow(nullptr);
     benchmarkApp=nullptr;
+}
+
+extern "C" JNIEXPORT jlong JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFrameCount(JNIEnv*,jclass){
+    return jlong(guestPresentedFrameCount());
+}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeNearbyCars(JNIEnv*,jclass,jint count){
+    const char* value=count==2?"2":count==5?"5":"3";
+    setenv("NFSU2_ROAM_MAX_CARS",value,1);
 }

@@ -33,20 +33,22 @@ final class Nfsu2LanBridge {
         SwitchSocket client = new SwitchSocket(URL, "NFSU2 Android", new SwitchSocket.Listener() {
             @Override public void onWelcome(int vip, int mask, String vipText, String token) {
                 Log.i(TAG, "on the nfsu2.xyz switch as " + vipText + " (mask " + SwitchSocket.ipText(mask) + ")");
+                if(!running)return;
                 nativeSwitchWelcome(vip, mask);
-                main.post(() -> NeonToast.show(app, "nfsu2.xyz: on the virtual LAN as " + vipText));
+                main.post(() -> {if(running)NeonToast.show(app, "nfsu2.xyz: on the virtual LAN as " + vipText);});
             }
 
             @Override public void onFrame(byte[] frame) {
-                nativeSwitchFrame(frame);
+                if(running)nativeSwitchFrame(frame);
             }
 
             @Override public void onStatus(String text) {
                 Log.i(TAG, text);
+                if(!running)return;
                 if (text.startsWith("The switch is full") && saidWaiting.compareAndSet(false, true))
-                    main.post(() -> NeonToast.show(app, text));
+                    main.post(() -> {if(running)NeonToast.show(app, text);});
                 else if (text.startsWith("switch error") && saidFailure.compareAndSet(false, true))
-                    main.post(() -> NeonToast.show(app, "nfsu2.xyz: connection failed, retrying"));
+                    main.post(() -> {if(running)NeonToast.show(app, "nfsu2.xyz: connection failed, retrying");});
             }
 
             @Override public void onClosed(String reason) {

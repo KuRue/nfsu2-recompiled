@@ -18,7 +18,8 @@ final class PhoneFeedback {
     private final Runnable stopSource;
     private final int strength;
     private boolean running,active;
-    private int lastImpact=-1;
+    private int lastImpact=-1,surfaceAmplitude;
+    private long surfaceAt;
     private final AudioAttributes attributes=new AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
     static Vibrator motor(Context context) {
@@ -36,7 +37,7 @@ final class PhoneFeedback {
         int amplitude=Math.min(255,(packet&255)*strength/100);
         if(channel==2&&amplitude>2){
             if(event!=lastImpact||!active){
-                lastImpact=event;
+                lastImpact=event;surfaceAmplitude=0;
                 try{
                     if(vibrator.hasAmplitudeControl())vibrator.vibrate(VibrationEffect.createWaveform(
                             new long[]{15,65,45,35},new int[]{0,amplitude,0,Math.max(1,amplitude*2/3)},-1),attributes);
@@ -50,15 +51,27 @@ final class PhoneFeedback {
             try{
                 boolean amplitudeControl=vibrator.hasAmplitudeControl();
                 if(!active)android.util.Log.i("NFSU2","Phone vibration playing amplitude="+amplitude);
-                vibrator.vibrate(VibrationEffect.createOneShot(amplitudeControl?65:Math.max(8,65*strength/100),
-                        amplitudeControl?amplitude:VibrationEffect.DEFAULT_AMPLITUDE),attributes);active=true;
+                if(channel==0&&amplitudeControl){
+                    long now=android.os.SystemClock.elapsedRealtime();
+                    if(!active||now-surfaceAt>=80){
+                        int previous=surfaceAmplitude>0?surfaceAmplitude:1;
+                        vibrator.vibrate(VibrationEffect.createWaveform(new long[]{35,50,70},
+                            new int[]{previous,Math.max(1,(previous+amplitude)/2),amplitude},-1),attributes);
+                        surfaceAmplitude=amplitude;surfaceAt=now;
+                    }
+                }else{
+                    surfaceAmplitude=0;
+                    vibrator.vibrate(VibrationEffect.createOneShot(amplitudeControl?65:Math.max(8,65*strength/100),
+                            amplitudeControl?amplitude:VibrationEffect.DEFAULT_AMPLITUDE),attributes);
+                }
+                active=true;
             }
             catch(SecurityException|IllegalArgumentException e){stop();return;}
-        }else if(active){vibrator.cancel();active=false;}
+        }else if(active){vibrator.cancel();active=false;surfaceAmplitude=0;}
         handler.postDelayed(this,40);
     }};
     void start(){if(enabled()&&!running){running=true;handler.post(poll);}}
-    void stop(){running=false;handler.removeCallbacks(poll);if(vibrator!=null)vibrator.cancel();active=false;lastImpact=-1;stopSource.run();}
+    void stop(){running=false;handler.removeCallbacks(poll);if(vibrator!=null)vibrator.cancel();active=false;surfaceAmplitude=0;lastImpact=-1;stopSource.run();}
     static boolean test(Context context){
         Vibrator motor=motor(context);if(motor==null||!motor.hasVibrator())return false;
         motor.vibrate(VibrationEffect.createOneShot(180,motor.hasAmplitudeControl()?110:VibrationEffect.DEFAULT_AMPLITUDE),

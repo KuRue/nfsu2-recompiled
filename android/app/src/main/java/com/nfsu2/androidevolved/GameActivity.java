@@ -40,6 +40,35 @@ public final class GameActivity extends NativeActivity {
             performanceHandler.postDelayed(this,10000);
         }
     };
+    private static native long nativeFrameCount();
+    private static native void nativeNearbyCars(int count);
+    private PopupWindow fpsWindow;
+    private TextView fpsText;
+    private long fpsFrames,fpsTime;
+    private final Runnable fpsSample=new Runnable(){@Override public void run(){
+        if(!foreground||!GameOptions.get(GameActivity.this,GameOptions.FPS_COUNTER).equals("on"))return;
+        long now=android.os.SystemClock.elapsedRealtime(),frames=nativeFrameCount();
+        if(fpsText!=null&&now>fpsTime)fpsText.setText(String.format(java.util.Locale.US,"%.0f FPS",(frames-fpsFrames)*1000.0/(now-fpsTime)));
+        fpsFrames=frames;fpsTime=now;
+        if(fpsWindow!=null&&!fpsWindow.isShowing()&&hasWindowFocus())
+            fpsWindow.showAtLocation(getWindow().getDecorView(),Gravity.TOP|Gravity.CENTER_HORIZONTAL,0,dp(8));
+        performanceHandler.postDelayed(this,500);
+    }};
+    private void updateFpsCounter(){
+        performanceHandler.removeCallbacks(fpsSample);
+        if(!foreground||!GameOptions.get(this,GameOptions.FPS_COUNTER).equals("on")){
+            if(fpsWindow!=null)fpsWindow.dismiss();return;
+        }
+        if(fpsWindow==null){
+            fpsText=new TextView(this);fpsText.setText("— FPS");fpsText.setTextSize(13);
+            fpsText.setTypeface(MenuTheme.font(this,true));fpsText.setTextColor(getColor(R.color.menu_lime));
+            fpsText.setPadding(dp(10),dp(3),dp(10),dp(3));fpsText.setBackground(MenuTheme.action(this,true));
+            fpsWindow=new PopupWindow(fpsText,ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT,false);
+            fpsWindow.setTouchable(false);
+        }
+        fpsFrames=nativeFrameCount();fpsTime=android.os.SystemClock.elapsedRealtime();
+        performanceHandler.postDelayed(fpsSample,500);
+    }
     private boolean requested;
     private boolean foreground;
     private PhoneFeedback phoneFeedback;
@@ -199,6 +228,7 @@ public final class GameActivity extends NativeActivity {
     /** The panel writes the same preferences the launcher reads, then applies them live. */
     private void applyGraphicsSetting(String key, String value) {
         switch (key) {
+            case GameOptions.FPS_COUNTER: updateFpsCounter(); break;
             case GameOptions.RESOLUTION: {
                 DisplayMetrics metrics = new DisplayMetrics();
                 getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
@@ -354,6 +384,7 @@ public final class GameActivity extends NativeActivity {
         nativeResolution(launch.getIntExtra("renderWidth", size[0]), launch.getIntExtra("renderHeight", size[1]));
         String language = launch.getStringExtra("language");
         nativeLanguage(language != null ? language : GameOptions.language(this));
+        nativeNearbyCars(Integer.parseInt(GameOptions.get(this,GameOptions.NEARBY_CARS)));
         nativeFrameLimit(launch.getIntExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS))));
         int benchmarkSeconds = launch.getIntExtra("benchmarkSeconds", 0);
         if (benchmarkSeconds > 0) {
@@ -464,6 +495,12 @@ public final class GameActivity extends NativeActivity {
             if (touchControls != null) touchControls.releaseAll();
             startActivity(new Intent(this, LauncherActivity.class)
                     .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+            // This process owns the completed guest session. An independent timer
+            // cannot be blocked by NativeActivity's synchronous lifecycle callbacks.
+            new Thread(()->{
+                try{Thread.sleep(750);}catch(InterruptedException ignored){}
+                android.os.Process.killProcess(android.os.Process.myPid());
+            },"Game exit").start();
             finish();
         });
     }
@@ -566,6 +603,7 @@ public final class GameActivity extends NativeActivity {
     }
     @Override protected void onPause() {
         foreground=false;
+        updateFpsCounter();
         performanceHandler.removeCallbacks(performanceSample);
         if(phoneFeedback!=null)phoneFeedback.stop();
         applyLanBroadcasts(nativeLanBroadcasts());
@@ -581,6 +619,7 @@ public final class GameActivity extends NativeActivity {
     @Override protected void onResume() {
         super.onResume();
         foreground=true;
+        updateFpsCounter();
         performanceHandler.removeCallbacks(performanceSample);performanceHandler.post(performanceSample);
         if(phoneFeedback!=null)phoneFeedback.start();
         applyLanBroadcasts(nativeLanBroadcasts());

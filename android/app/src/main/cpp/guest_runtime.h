@@ -8,6 +8,7 @@ std::string connectGuestRuntime(const char* executable);
 void requestGuestRuntimeStop();
 // True when the guest called ExitProcess; the host returns to the launcher.
 bool guestExitRequested();
+uint64_t guestPresentedFrameCount();
 // Development hook: same path as the guest ExitProcess.
 void requestGuestExit();
 void setGuestPaused(bool paused);

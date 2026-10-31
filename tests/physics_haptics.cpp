@@ -12,7 +12,7 @@ int main(){
     s=car();h.stop();h.update(s,t);for(unsigned i=0;i<60;++i){s.velocity[1]=8;advance(h,s,t);}check(h.channels.grip>100&&h.channels.slipAngle>20);
     s=car();h.stop();h.update(s,t);s.wheels.fill(0);s.brake=1;for(unsigned i=0;i<60;++i){advance(h,s,t);}check(h.channels.grip>150);
     s=car(1);s.throttle=1;s.wheels.fill(60);h.stop();h.update(s,t);for(unsigned i=0;i<60;++i){advance(h,s,t);}check(h.channels.grip>150);
-    s=car();h.stop();h.update(s,t);for(unsigned i=0;i<10;++i){s.suspension.fill(i%2?.05f:0.f);advance(h,s,t);}check(h.channels.surface>20&&(h.packet(t)>>8&255)!=2);
+    s=car();h.stop();h.update(s,t);for(unsigned i=0;i<10;++i){s.suspension.fill(i%2?.05f:0.f);advance(h,s,t);}check(h.channels.surface>20&&h.channels.surface<=45&&(h.packet(t)>>8&255)!=2);
     // Smooth hills/weight transfer should not buzz; sharp curbs still do above.
     s=car();h.stop();h.update(s,t);
     for(unsigned i=0;i<300;++i){

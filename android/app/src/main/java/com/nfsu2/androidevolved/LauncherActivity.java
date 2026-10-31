@@ -329,6 +329,7 @@ public final class LauncherActivity extends Activity {
                         name -> { GameOptions.applyPhonePreset(this, PhonePreset.valueOf(name)); refreshOptions(); }));
                 optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.RESOLUTION)));
                 optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.FPS)));
+                optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.FPS_COUNTER)));
                 optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.LATENCY)));
                 optionsList.addView(sectionHeader("Launch-only"));
                 optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.WIDESCREEN)));
@@ -348,6 +349,7 @@ public final class LauncherActivity extends Activity {
                 optionsList.addView(optionRow("Test vibration", "Phone motor", () -> {if(!PhoneFeedback.test(this))message("Phone vibration", "This device has no vibration motor.");}));
                 break;
             case "game": {
+                optionsList.addView(optionCycleRow(GameOptions.find(GameOptions.NEARBY_CARS)));
                 List<String[]> found = allowed() ? languages() : new ArrayList<>();
                 if (!found.isEmpty()) {
                     String[] values = new String[found.size()], labels = new String[found.size()];

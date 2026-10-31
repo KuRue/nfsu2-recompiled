@@ -217,6 +217,7 @@ std::atomic<bool> guestPaused{false};
 // finishes GameActivity and returns to the launcher instead of showing a stop
 // overlay and leaving the process on a dead frame.
 std::atomic<bool> guestExitRequestedFlag{false};
+std::atomic<uint64_t> presentedFrameCount{0};
 // Paused only by an in-game overlay (the Graphics panel). The Android main
 // loop clears guestPaused on every resumed iteration, so it cannot use that.
 std::atomic<bool> overlayPaused{false};
@@ -772,6 +773,7 @@ void d3dDispatch(){
         methodTime[((token-0x7e000000u)/16u)&4095u]+=token==0x7e002110u?spent:spent*64;}
     if(token==0x7e002110u){NFS_PROBE("Present");NFS_CAPTURE_CHECK("Present");applyPendingDisplay();nfs_widescreen_apply_frame_rate();lastPresentMs=steadyMs();startStallWatch();}
     if(token==0x7e002110u&&result==0){
+        presentedFrameCount.fetch_add(1,std::memory_order_relaxed);
         samplePhysicsForPhone();
         static FramePacer pacer;
         auto now=std::chrono::steady_clock::now();
@@ -1771,6 +1773,7 @@ std::string connectGuestRuntime(const char* executable) {
         fresh.load();
         NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Entering actual lifted CRT entry %08x",entry);
         uint32_t result=callGuest(entry,{});
+        if(result==0)requestGuestExit();
         joinGuestThreads(guard);machineLease=nullptr;shutdownGuestSound();
 #if defined(__ANDROID__) || defined(NFS_D3D9_BACKEND)
         shutdownD3D9Bridge();
@@ -1790,6 +1793,7 @@ std::string connectGuestRuntime(const char* executable) {
 void requestGuestRuntimeStop() {stopRequested=true;}
 bool guestExitRequested() {return guestExitRequestedFlag.load(std::memory_order_acquire);}
 void requestGuestExit() {guestExitRequestedFlag.store(true,std::memory_order_release);}
+uint64_t guestPresentedFrameCount(){return presentedFrameCount.load(std::memory_order_relaxed);}
 bool guestHasPresented() { return lastPresentMs.load() > 0; }
 void setGuestOverlayPaused(bool paused){
     overlayPaused.store(paused);

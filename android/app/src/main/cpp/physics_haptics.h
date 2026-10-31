@@ -74,8 +74,8 @@ public:
         }
         c.suspensionRate=rate*.25f;
         float roughness=speed>2?clamp01((sharpRate*.25f-.35f)/1.2f):0;
-        surfaceFiltered+=(roughness-surfaceFiltered)*std::min(1.f,dt*14.f);
-        c.surface=unsigned(std::clamp(surfaceFiltered*65.f,0.f,65.f));
+        surfaceFiltered+=(roughness-surfaceFiltered)*(dt/((roughness>surfaceFiltered?.10f:.18f)+dt));
+        c.surface=unsigned(std::clamp(surfaceFiltered*45.f,0.f,45.f));
         float horizontalDV=std::hypot(dv[0],dv[1]);c.planarAcceleration=horizontalDV/dt;
         // Sudden planar impulses distinguish hits from ordinary braking/cornering.
         // Predominantly vertical curb/landing shocks remain surface feedback.

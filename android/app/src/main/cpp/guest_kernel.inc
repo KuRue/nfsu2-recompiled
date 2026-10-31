@@ -480,7 +480,7 @@ const std::map<std::string,recomp_func_t> windowFunctions={
     {"SetForegroundWindow",setForegroundWindow},
     {"BeginPaint",beginPaint},{"EndPaint",endPaint},
     {"AdjustWindowRect",adjustWindowRect},{"ShowWindow",showWindow},{"SetWindowPos",setWindowPos},{"UpdateWindow",updateWindow},
-    {"RegisterClassExA",registerClassEx},{"CreateWindowExA",createWindowEx},{"DefWindowProcA",defaultWindowProc},
+    {"RegisterClassExA",registerClassEx},{"CreateWindowExA",createWindowEx},{"DestroyWindow",destroyWindow},{"DefWindowProcA",defaultWindowProc},
     {"GetWindowLongA",getWindowLong},{"SetWindowLongA",setWindowLong},
     {"LoadIconA",loadIcon},{"LoadCursorA",loadCursor},
     {"GetDesktopWindow",desktopHandle},{"GetWindowRect",windowRect},

@@ -20,6 +20,7 @@ final class GameOptions {
         }
     }
 
+    static final String FPS_COUNTER="fps_counter", NEARBY_CARS="nearby_cars";
     static final String RESOLUTION = "resolution", FPS = "fps", FRAME_PACE = "frame_pace", WIDESCREEN = "widescreen", LATENCY = "latency",
             FEEDBACK_SOURCE = "phone_feedback_source", FEEDBACK = "phone_feedback", PEDALS = "controller_pedals", TEXTURES = "textures", HD_PACKS = "hd_packs", FILTERING = "filtering", SHARPEN = "sharpen", BLOOM = "bloom", LOOK = "lighting_look", REFLECTIONS = "reflection_quality", MINIMAP = "minimap", INTRO = "intro", LANGUAGE = "language",
             WORLD_DETAIL = "world_detail", CAR_DETAIL = "car_detail",
@@ -48,6 +49,8 @@ final class GameOptions {
     }
 
     static final Option[] ALL = {
+            new Option(FPS_COUNTER,"FPS counter","off",new String[]{"off","on"},new String[]{"Off","On"}),
+            new Option(NEARBY_CARS,"Nearby cars","3",new String[]{"2","3","5"},new String[]{"2 cars","3 cars","5 cars"}),
             new Option(FEEDBACK_SOURCE, "Feedback source", "physics",
                     new String[] {"physics", "legacy"}, new String[] {"Physics", "Legacy"}),
             new Option(FEEDBACK, "Phone vibration", "50",

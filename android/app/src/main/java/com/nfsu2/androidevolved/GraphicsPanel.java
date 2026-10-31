@@ -26,7 +26,7 @@ final class GraphicsPanel {
 
     private static final String PRESET = "performance_preset";
     private static final String[][] CATEGORIES = {
-            {"Performance", PRESET, GameOptions.RESOLUTION, GameOptions.FPS, GameOptions.FRAME_PACE, GameOptions.LATENCY},
+            {"Performance", PRESET, GameOptions.RESOLUTION, GameOptions.FPS, GameOptions.FPS_COUNTER, GameOptions.FRAME_PACE, GameOptions.LATENCY},
             {"Image", GameOptions.LOOK, GameOptions.BLOOM, GameOptions.SHARPEN},
             {"Scene", "#World", GameOptions.WORLD_DETAIL, GameOptions.CROWD, GameOptions.PARTICLES,
                     "#Car", GameOptions.CAR_DETAIL, GameOptions.CAR_SHADOW, GameOptions.CAR_HEADLIGHT,

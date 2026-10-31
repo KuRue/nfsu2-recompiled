@@ -5496,7 +5496,13 @@ static int loads_waiting(void){
  * frame: 32 friends arriving at once made 29 cars in one frame (112 ms), and
  * in a crowd coming and going (roam_crowd_busy.txt) 116 frames of 3,600
  * took 3 to 6 of them */
+#ifdef ROAM_HOST_ANDROID
+// Serialize expensive car/texture work on phones; avoid combining two loading
+// spikes in one frame. Network peers and map markers are unaffected.
+#define HEAVY_PER_FRAME 1
+#else
 #define HEAVY_PER_FRAME 2
+#endif
 static int g_heavy;
 static int heavy_take(void){
     if (g_heavy >= HEAVY_PER_FRAME) return 0;
